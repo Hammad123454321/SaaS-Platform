@@ -1,0 +1,59 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+backend/venv/
+ai_service/venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/.swc/
+frontend/.vercel/
+frontend/dist/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Env / Secrets
+.env
+backend/.env
+ai_service/.env
+*.env
+
+# Logs
+*.log
+logs/
+
+# Coverage / Reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Docker
+db_data/
+
+# Tooling
+.ruff_cache/
+.cache/
+.pytest_cache/
+
+

@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "ai-service"
+version = "0.1.0"
+description = "Generic AI service for chat, actions proposal, and embeddings indexing."
+authors = ["SaaS Team <dev@saas.local>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.5"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+pydantic = "^2.9.2"
+pydantic-settings = "^2.6.1"
+httpx = "^0.27.2"
+pyjwt = "^2.10.1"
+cryptography = "^43.0.1"
+transformers = "^4.44.2"
+# torch is required for transformers; install separately to match your runtime (cpu/cuda)
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+ruff = "^0.7.2"
+black = "^24.10.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "B", "UP", "N", "S", "DTZ"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+

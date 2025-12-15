@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+.bg-radial {
+  background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.15), transparent 25%),
+    radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.15), transparent 25%),
+    radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.12), transparent 30%),
+    #0b1220;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.parallax {
+  background-attachment: fixed;
+}
+
+:root {
+  --brand-color: #0ea5e9;
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, var(--brand-color), #0ea5e9, #2563eb);
+}
+

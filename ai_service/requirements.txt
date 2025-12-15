@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+httpx
+pyjwt
+cryptography
+tiktoken
+transformers
+# structlog for logging
+structlog
+protobuf
+sentencepiece
+# Install torch separately to match your runtime (cpu/cuda), e.g.:
+# pip install torch --index-url https://download.pytorch.org/whl/cpu
+
