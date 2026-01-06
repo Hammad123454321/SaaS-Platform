@@ -1,10 +1,12 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useSearchParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { api } from "@/lib/api";
 
-export default function ResetConfirmPage() {
+function ResetConfirmPageInner() {
   const search = useSearchParams();
   const router = useRouter();
   const token = search.get("token") || "";
@@ -58,6 +60,14 @@ export default function ResetConfirmPage() {
         {message && <p className="mt-4 text-center text-sm text-gray-100">{message}</p>}
       </div>
     </div>
+  );
+}
+
+export default function ResetConfirmPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[80vh] items-center justify-center text-white">Loading...</div>}>
+      <ResetConfirmPageInner />
+    </Suspense>
   );
 }
 

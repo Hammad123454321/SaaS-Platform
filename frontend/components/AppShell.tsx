@@ -24,14 +24,43 @@ export function AppShell({ children }: Props) {
   useEffect(() => {
     const bootstrap = async () => {
       const tokenStr: any = accessToken ?? "";
-      if (!tokenStr) return; // nothing to do if not logged in
+      if (!tokenStr) {
+        // Redirect to login if no token (unless already on auth pages)
+        if (typeof window !== "undefined" && 
+            !window.location.pathname.startsWith("/login") && 
+            !window.location.pathname.startsWith("/signup") &&
+            !window.location.pathname.startsWith("/reset")) {
+          window.location.href = "/login";
+        }
+        return;
+      }
       try {
+        // Refresh user info if missing
+        if (!user) {
+          const me = await api.get("/auth/me");
+          setSession({
+            accessToken,
+            refreshToken: useSessionStore.getState().refreshToken,
+            user: {
+              email: me.data.email,
+              is_super_admin: me.data.is_super_admin,
+              roles: me.data.roles || [],
+            },
+          });
+        }
+        // Load entitlements if not loaded
         if (entitlements.length === 0) {
           const res = await api.get("/entitlements");
           setEntitlements(res.data);
         }
-      } catch (err) {
-        clearSession(); // invalid token; reset
+      } catch (err: any) {
+        // If 401, clear session and redirect
+        if (err?.response?.status === 401) {
+          clearSession();
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
+        }
       }
     };
     bootstrap();
@@ -44,6 +73,9 @@ export function AppShell({ children }: Props) {
       // ignore
     } finally {
       clearSession();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
     }
   };
 
@@ -58,14 +90,18 @@ export function AppShell({ children }: Props) {
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-100">
           <Palette className="h-4 w-4 text-emerald-300" />
-          {user?.email ?? "Guest"}
+          <span className="font-medium">{user?.email ?? "Guest"}</span>
+          {user?.is_super_admin && (
+            <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-semibold text-yellow-300">
+              Super Admin
+            </span>
+          )}
           <button
             onClick={handleLogout}
-            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-cyan-400 hover:bg-white/10"
+            className="flex items-center gap-2 rounded-lg border border-red-400/50 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-300 transition hover:border-red-400 hover:bg-red-500/20"
           >
-            <div className="flex items-center gap-1">
-              <LogOut className="h-3 w-3" /> Sign out
-            </div>
+            <LogOut className="h-4 w-4" />
+            <span>Logout</span>
           </button>
         </div>
       </header>
@@ -83,15 +119,33 @@ export function AppShell({ children }: Props) {
             </Link>
           );
         })}
+        {/* Super Admin Navigation */}
         {user?.is_super_admin && (
           <>
+            <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/admin/tenants">
+              Tenants
+            </Link>
             <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/billing">
               Billing
             </Link>
+          </>
+        )}
+        {/* Company Admin Navigation */}
+        {(user?.roles?.includes("company_admin") || user?.roles?.includes("admin")) && !user?.is_super_admin && (
+          <>
+            <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/admin/users">
+              Users
+            </Link>
             <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/onboarding">
-              Onboarding
+              Settings
             </Link>
           </>
+        )}
+        {/* All authenticated users can access AI */}
+        {user && enabledModules.includes("ai") && (
+          <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/modules/ai">
+            AI Chat
+          </Link>
         )}
       </nav>
 

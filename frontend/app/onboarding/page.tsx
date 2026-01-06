@@ -25,8 +25,29 @@ export default function OnboardingPage() {
   const [branding, setBranding] = useState({ color: "#0ea5e9", logoUrl: "" });
   const [submitting, setSubmitting] = useState(false);
 
-  const next = () => setStep(step === "company" ? "modules" : step === "modules" ? "branding" : "branding");
-  const prev = () => setStep(step === "branding" ? "modules" : "company");
+  const next = () => {
+    if (step === "company") {
+      if (!company.name || !company.industry) {
+        alert("Please fill in company name and industry before proceeding.");
+        return;
+      }
+      setStep("modules");
+    } else if (step === "modules") {
+      if (selectedModules.length === 0) {
+        alert("Please select at least one module.");
+        return;
+      }
+      setStep("branding");
+    }
+  };
+  
+  const prev = () => {
+    if (step === "branding") {
+      setStep("modules");
+    } else if (step === "modules") {
+      setStep("company");
+    }
+  };
 
   const toggleModule = (code: string) => {
     setSelectedModules((prev) =>
@@ -35,6 +56,15 @@ export default function OnboardingPage() {
   };
 
   const handleSubmit = async () => {
+    if (!company.name || !company.industry) {
+      alert("Please fill in all company information.");
+      return;
+    }
+    if (selectedModules.length === 0) {
+      alert("Please select at least one module.");
+      return;
+    }
+    
     setSubmitting(true);
     try {
       await api.post("/onboarding", {
@@ -44,7 +74,8 @@ export default function OnboardingPage() {
       });
       setBrandingStore(branding);
       router.push("/dashboard");
-    } catch (err) {
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || "Failed to save onboarding. Please try again.");
       console.error(err);
     } finally {
       setSubmitting(false);

@@ -1,17 +1,26 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useSessionStore } from "@/lib/store";
 
 export default function LoginPage() {
   const router = useRouter();
-  const setSession = useSessionStore((s) => s.setSession);
+  const searchParams = useSearchParams();
+  const { setSession, accessToken } = useSessionStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (accessToken) {
+      const redirect = searchParams.get("redirect") || "/dashboard";
+      router.push(redirect);
+    }
+  }, [accessToken, router, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,12 +34,20 @@ export default function LoginPage() {
       setSession({
         accessToken: res.data.access_token,
         refreshToken: res.data.refresh_token,
-        user: { email: me.data.email, is_super_admin: me.data.is_super_admin, roles: me.data.roles },
+        user: { 
+          email: me.data.email, 
+          is_super_admin: me.data.is_super_admin, 
+          roles: me.data.roles || [] 
+        },
       });
       setMessage("Success! Redirecting...");
-      router.push("/dashboard");
+      // Redirect to original destination or dashboard
+      const redirect = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => {
+        router.push(redirect);
+      }, 500);
     } catch (err: any) {
-      setMessage(err?.response?.data?.detail ?? "Login failed");
+      setMessage(err?.response?.data?.detail ?? "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }

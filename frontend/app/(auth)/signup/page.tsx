@@ -28,8 +28,11 @@ export default function SignupPage() {
         refreshToken: res.data.refresh_token,
         user: { email: me.data.email, is_super_admin: me.data.is_super_admin, roles: me.data.roles },
       });
-      setMessage("Workspace created! Redirecting...");
-      router.push("/dashboard");
+      setMessage("Workspace created! Setting up your account...");
+      // Redirect to onboarding for new tenants after a brief delay
+      setTimeout(() => {
+        router.push("/onboarding");
+      }, 1000);
     } catch (err: any) {
       setMessage(err?.response?.data?.detail ?? "Signup failed");
     } finally {

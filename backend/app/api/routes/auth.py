@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 import secrets
+import logging
 
 from app.config import settings
 from app.core.security import (
@@ -62,7 +63,7 @@ def _validate_password_strength(password: str) -> None:
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def signup(payload: SignupRequest, response: Response, session: Session = Depends(get_session)) -> TokenResponse:
+async def signup(payload: SignupRequest, response: Response, session: Session = Depends(get_session)) -> TokenResponse:
     _validate_password_strength(payload.password)
 
     tenant = Tenant(name=payload.tenant_name)
@@ -100,7 +101,19 @@ def signup(payload: SignupRequest, response: Response, session: Session = Depend
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tenant or user already exists.",
         ) from exc
+    
     session.refresh(user)
+
+    # Provision user to enabled modules (if any are enabled)
+    # Note: By default modules are disabled, so this won't run initially
+    # But if modules are enabled later, users will be provisioned
+    try:
+        from app.services.module_onboarding import provision_user_to_modules
+        await provision_user_to_modules(session, user, payload.password)
+    except Exception as e:
+        # Log but don't fail signup if module provisioning fails
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to provision user to modules: {e}")
 
     subject = f"{user.id}:{user.tenant_id}"
     access = create_access_token(subject, roles=["super_admin"])

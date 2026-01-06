@@ -18,11 +18,16 @@ def list_entitlements(
 ) -> list[EntitlementRead]:
     statement = select(ModuleEntitlement).where(ModuleEntitlement.tenant_id == current_user.tenant_id)
     entitlements = session.exec(statement).all()
-    return [EntitlementRead.model_validate(e) for e in entitlements]
+    return [EntitlementRead.model_validate({
+        "module_code": e.module_code,
+        "enabled": e.enabled,
+        "seats": e.seats,
+        "ai_access": e.ai_access,
+    }) for e in entitlements]
 
 
 @router.post("/{module_code}", response_model=EntitlementRead)
-def toggle_entitlement(
+async def toggle_entitlement(
     module_code: ModuleCode,
     payload: EntitlementToggleRequest,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_ENTITLEMENTS)),
@@ -45,6 +50,7 @@ def toggle_entitlement(
         )
         session.add(entitlement)
 
+    was_enabled = entitlement.enabled
     entitlement.enabled = payload.enabled
     if payload.seats is not None:
         entitlement.seats = payload.seats
@@ -54,6 +60,24 @@ def toggle_entitlement(
     session.add(entitlement)
     session.commit()
     session.refresh(entitlement)
+    
+    # If module was just enabled, sync all existing users to this module
+    if payload.enabled and not was_enabled:
+        try:
+            from app.services.module_onboarding import sync_all_users_to_module
+            sync_result = await sync_all_users_to_module(
+                session=session,
+                tenant_id=current_user.tenant_id,
+                module_code=module_code,
+            )
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Synced users to {module_code.value}: {sync_result}")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to sync users to {module_code.value}: {e}")
+    
     log_audit(
         session,
         tenant_id=current_user.tenant_id,
