@@ -36,11 +36,14 @@ def build_agent(user: User, session: Session) -> AgentExecutor:
         streaming=False,  # FastAPI streaming can be added later
     )
 
+    # LangChain's create_openai_functions_agent expects an `agent_scratchpad`
+    # placeholder where it can inject intermediate tool call messages.
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", SYSTEM_PROMPT),
             MessagesPlaceholder("chat_history"),
             ("user", "{input}"),
+            MessagesPlaceholder("agent_scratchpad"),
         ]
     )
 

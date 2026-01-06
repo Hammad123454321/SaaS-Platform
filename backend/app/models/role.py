@@ -29,6 +29,7 @@ class PermissionCode(StrEnum):
     VIEW_BILLING = "view_billing"
     ACCESS_MODULES = "access_modules"
     IMPERSONATE_USER = "impersonate_user"
+    VIEW_PLATFORM_STATS = "view_platform_stats"
 
     @property
     def description(self) -> str:
@@ -39,6 +40,7 @@ class PermissionCode(StrEnum):
             self.VIEW_BILLING: "View billing history and subscription",
             self.ACCESS_MODULES: "Access module data and actions",
             self.IMPERSONATE_USER: "Impersonate tenant users (audited)",
+            self.VIEW_PLATFORM_STATS: "View platform-wide statistics (Super Admin only)",
         }
         return descriptions[self]
 
