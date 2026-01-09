@@ -46,7 +46,7 @@ export default function SignupPage() {
         <div className="mb-6 space-y-2 text-center">
           <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">Get started</p>
           <h1 className="text-2xl font-semibold text-white">Create your workspace</h1>
-          <p className="text-sm text-gray-200/80">Tenant, admin email, and password policy enforced.</p>
+          <p className="text-sm text-gray-200/80">Tenant, Business Owner Email, and Password policy enforced.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -61,7 +61,7 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="text-sm text-gray-200/80">Admin email</label>
+            <label className="text-sm text-gray-200/80">Business Owner Email</label>
             <input
               className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-gray-400 outline-none focus:border-cyan-400"
               type="email"

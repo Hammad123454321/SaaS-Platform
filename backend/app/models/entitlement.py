@@ -38,9 +38,15 @@ class Subscription(SQLModel, table=True):
     tenant_id: int = Field(foreign_key="tenants.id", index=True)
     stripe_customer_id: Optional[str] = Field(default=None, index=True)
     stripe_subscription_id: Optional[str] = Field(default=None, index=True)
-    status: str = Field(default="inactive")
+    stripe_price_id: Optional[str] = Field(default=None)  # Stripe price ID
+    status: str = Field(default="inactive")  # active, inactive, canceled, past_due
+    amount: int = Field(default=0)  # Amount in cents (e.g., 2999 = $29.99)
+    currency: str = Field(default="usd")
+    interval: str = Field(default="month")  # month, year
+    current_period_start: Optional[datetime] = Field(default=None)
     current_period_end: Optional[datetime] = Field(default=None)
     plan_name: Optional[str] = Field(default=None)
+    modules: dict = Field(default_factory=dict, sa_column=Column(JSON))  # {"tasks": true, "crm": false}
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

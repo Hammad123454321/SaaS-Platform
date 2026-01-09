@@ -1,4 +1,5 @@
 import asyncio
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
 
@@ -362,6 +363,860 @@ async def draft_email(
             "data": result,
             "meta": {"module": module_code, "to": to},
         }
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== MILESTONES ==========
+@router.get("/{module_code}/milestones")
+async def list_milestones(
+    module_code: ModuleCode,
+    project_id: Optional[int] = None,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """List milestones, optionally filtered by project."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "list_milestones"):
+            if asyncio.iscoroutinefunction(client.list_milestones):
+                milestones = await client.list_milestones(project_id=project_id)
+            else:
+                milestones = client.list_milestones(project_id=project_id)
+        else:
+            milestones = []
+        return {"data": milestones, "meta": {"module": module_code, "project_id": project_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.post("/{module_code}/milestones")
+async def create_milestone(
+    module_code: ModuleCode,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Create a new milestone."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "create_milestone"):
+            if asyncio.iscoroutinefunction(client.create_milestone):
+                result = await client.create_milestone(payload)
+            else:
+                result = client.create_milestone(payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support milestones")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.create_milestone", f"{module_code}", {"milestone": payload.get("title")})
+        return {"data": result, "meta": {"module": module_code}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.patch("/{module_code}/milestones/{milestone_id}")
+async def update_milestone(
+    module_code: ModuleCode,
+    milestone_id: int,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update a milestone."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "update_milestone"):
+            if asyncio.iscoroutinefunction(client.update_milestone):
+                result = await client.update_milestone(milestone_id, payload)
+            else:
+                result = client.update_milestone(milestone_id, payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support milestones")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.update_milestone", f"{module_code}:{milestone_id}")
+        return {"data": result, "meta": {"module": module_code, "milestone_id": milestone_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.delete("/{module_code}/milestones/{milestone_id}")
+async def delete_milestone(
+    module_code: ModuleCode,
+    milestone_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Delete a milestone."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "delete_milestone"):
+            if asyncio.iscoroutinefunction(client.delete_milestone):
+                result = await client.delete_milestone(milestone_id)
+            else:
+                result = client.delete_milestone(milestone_id)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support milestones")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_milestone", f"{module_code}:{milestone_id}")
+        return {"data": result, "meta": {"module": module_code, "milestone_id": milestone_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== TASK LISTS ==========
+@router.get("/{module_code}/task-lists")
+async def list_task_lists(
+    module_code: ModuleCode,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """List all task lists."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "list_task_lists"):
+            if asyncio.iscoroutinefunction(client.list_task_lists):
+                task_lists = await client.list_task_lists()
+            else:
+                task_lists = client.list_task_lists()
+        else:
+            task_lists = []
+        return {"data": task_lists, "meta": {"module": module_code}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.post("/{module_code}/task-lists")
+async def create_task_list(
+    module_code: ModuleCode,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Create a new task list."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "create_task_list"):
+            if asyncio.iscoroutinefunction(client.create_task_list):
+                result = await client.create_task_list(payload)
+            else:
+                result = client.create_task_list(payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task lists")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.create_task_list", f"{module_code}")
+        return {"data": result, "meta": {"module": module_code}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.patch("/{module_code}/task-lists/{task_list_id}")
+async def update_task_list(
+    module_code: ModuleCode,
+    task_list_id: int,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update a task list."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "update_task_list"):
+            if asyncio.iscoroutinefunction(client.update_task_list):
+                result = await client.update_task_list(task_list_id, payload)
+            else:
+                result = client.update_task_list(task_list_id, payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task lists")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.update_task_list", f"{module_code}:{task_list_id}")
+        return {"data": result, "meta": {"module": module_code, "task_list_id": task_list_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.delete("/{module_code}/task-lists/{task_list_id}")
+async def delete_task_list(
+    module_code: ModuleCode,
+    task_list_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Delete a task list."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "delete_task_list"):
+            if asyncio.iscoroutinefunction(client.delete_task_list):
+                result = await client.delete_task_list(task_list_id)
+            else:
+                result = client.delete_task_list(task_list_id)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task lists")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_task_list", f"{module_code}:{task_list_id}")
+        return {"data": result, "meta": {"module": module_code, "task_list_id": task_list_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== TIME TRACKER ==========
+@router.get("/{module_code}/time-tracker")
+async def list_time_trackers(
+    module_code: ModuleCode,
+    task_id: Optional[int] = None,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """List time tracker entries."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "list_time_trackers"):
+            if asyncio.iscoroutinefunction(client.list_time_trackers):
+                entries = await client.list_time_trackers(task_id=task_id)
+            else:
+                entries = client.list_time_trackers(task_id=task_id)
+        else:
+            entries = []
+        return {"data": entries, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.post("/{module_code}/time-tracker")
+async def create_time_tracker(
+    module_code: ModuleCode,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Create a new time tracker entry."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "create_time_tracker"):
+            if asyncio.iscoroutinefunction(client.create_time_tracker):
+                result = await client.create_time_tracker(payload)
+            else:
+                result = client.create_time_tracker(payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support time tracker")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.create_time_tracker", f"{module_code}")
+        return {"data": result, "meta": {"module": module_code}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.patch("/{module_code}/time-tracker/{time_id}")
+async def update_time_tracker(
+    module_code: ModuleCode,
+    time_id: int,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update a time tracker entry."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "update_time_tracker"):
+            if asyncio.iscoroutinefunction(client.update_time_tracker):
+                result = await client.update_time_tracker(time_id, payload)
+            else:
+                result = client.update_time_tracker(time_id, payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support time tracker")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.update_time_tracker", f"{module_code}:{time_id}")
+        return {"data": result, "meta": {"module": module_code, "time_id": time_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.delete("/{module_code}/time-tracker/{time_id}")
+async def delete_time_tracker(
+    module_code: ModuleCode,
+    time_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Delete a time tracker entry."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "delete_time_tracker"):
+            if asyncio.iscoroutinefunction(client.delete_time_tracker):
+                result = await client.delete_time_tracker(time_id)
+            else:
+                result = client.delete_time_tracker(time_id)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support time tracker")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_time_tracker", f"{module_code}:{time_id}")
+        return {"data": result, "meta": {"module": module_code, "time_id": time_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.get("/{module_code}/tasks/{task_id}/time-entries")
+async def list_task_time_entries(
+    module_code: ModuleCode,
+    task_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """List time entries for a specific task."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "list_task_time_entries"):
+            if asyncio.iscoroutinefunction(client.list_task_time_entries):
+                entries = await client.list_task_time_entries(task_id)
+            else:
+                entries = client.list_task_time_entries(task_id)
+        else:
+            entries = []
+        return {"data": entries, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== TAGS ==========
+@router.get("/{module_code}/tags")
+async def list_tags(
+    module_code: ModuleCode,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """List all tags."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "list_tags"):
+            if asyncio.iscoroutinefunction(client.list_tags):
+                tags = await client.list_tags()
+            else:
+                tags = client.list_tags()
+        else:
+            tags = []
+        return {"data": tags, "meta": {"module": module_code}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.post("/{module_code}/tags")
+async def create_tag(
+    module_code: ModuleCode,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Create a new tag."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "create_tag"):
+            if asyncio.iscoroutinefunction(client.create_tag):
+                result = await client.create_tag(payload)
+            else:
+                result = client.create_tag(payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support tags")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.create_tag", f"{module_code}")
+        return {"data": result, "meta": {"module": module_code}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.patch("/{module_code}/tags/{tag_id}")
+async def update_tag(
+    module_code: ModuleCode,
+    tag_id: int,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update a tag."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "update_tag"):
+            if asyncio.iscoroutinefunction(client.update_tag):
+                result = await client.update_tag(tag_id, payload)
+            else:
+                result = client.update_tag(tag_id, payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support tags")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.update_tag", f"{module_code}:{tag_id}")
+        return {"data": result, "meta": {"module": module_code, "tag_id": tag_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.delete("/{module_code}/tags/{tag_id}")
+async def delete_tag(
+    module_code: ModuleCode,
+    tag_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Delete a tag."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "delete_tag"):
+            if asyncio.iscoroutinefunction(client.delete_tag):
+                result = await client.delete_tag(tag_id)
+            else:
+                result = client.delete_tag(tag_id)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support tags")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_tag", f"{module_code}:{tag_id}")
+        return {"data": result, "meta": {"module": module_code, "tag_id": tag_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== TASK-SPECIFIC FEATURES ==========
+@router.get("/{module_code}/tasks/{task_id}/status-timelines")
+async def get_status_timelines(
+    module_code: ModuleCode,
+    task_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Get status change timeline for a task."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "get_status_timelines"):
+            if asyncio.iscoroutinefunction(client.get_status_timelines):
+                timelines = await client.get_status_timelines(task_id)
+            else:
+                timelines = client.get_status_timelines(task_id)
+        else:
+            timelines = []
+        return {"data": timelines, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.patch("/{module_code}/tasks/{task_id}/favorite")
+async def update_task_favorite(
+    module_code: ModuleCode,
+    task_id: int,
+    is_favorite: bool,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update task favorite status."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "update_task_favorite"):
+            if asyncio.iscoroutinefunction(client.update_task_favorite):
+                result = await client.update_task_favorite(task_id, is_favorite)
+            else:
+                result = client.update_task_favorite(task_id, is_favorite)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support favorites")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.update_task_favorite", f"{module_code}:{task_id}")
+        return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.patch("/{module_code}/tasks/{task_id}/pinned")
+async def update_task_pinned(
+    module_code: ModuleCode,
+    task_id: int,
+    is_pinned: bool,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update task pinned status."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "update_task_pinned"):
+            if asyncio.iscoroutinefunction(client.update_task_pinned):
+                result = await client.update_task_pinned(task_id, is_pinned)
+            else:
+                result = client.update_task_pinned(task_id, is_pinned)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support pinned")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.update_task_pinned", f"{module_code}:{task_id}")
+        return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.post("/{module_code}/tasks/{task_id}/media")
+async def upload_task_media(
+    module_code: ModuleCode,
+    task_id: int,
+    request: Request,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Upload media/file to a task."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        form = await request.form()
+        file = form.get("file")
+        if not file:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
+        
+        file_content = await file.read()
+        filename = file.filename or "upload"
+        
+        if hasattr(client, "upload_task_media"):
+            if asyncio.iscoroutinefunction(client.upload_task_media):
+                result = await client.upload_task_media(task_id, "", file_content, filename)
+            else:
+                result = client.upload_task_media(task_id, "", file_content, filename)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support media upload")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.upload_task_media", f"{module_code}:{task_id}")
+        return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.delete("/{module_code}/tasks/media/{media_id}")
+async def delete_task_media(
+    module_code: ModuleCode,
+    media_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Delete media from a task."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "delete_task_media"):
+            if asyncio.iscoroutinefunction(client.delete_task_media):
+                result = await client.delete_task_media(media_id)
+            else:
+                result = client.delete_task_media(media_id)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support media deletion")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_task_media", f"{module_code}:{media_id}")
+        return {"data": result, "meta": {"module": module_code, "media_id": media_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.get("/{module_code}/tasks/{task_id}/subtasks")
+async def get_task_subtasks(
+    module_code: ModuleCode,
+    task_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Get subtasks/dependencies for a task."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "get_task_subtasks"):
+            if asyncio.iscoroutinefunction(client.get_task_subtasks):
+                subtasks = await client.get_task_subtasks(task_id)
+            else:
+                subtasks = client.get_task_subtasks(task_id)
+        else:
+            subtasks = []
+        return {"data": subtasks, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.get("/{module_code}/tasks/{task_id}/recurring")
+async def get_recurring_task(
+    module_code: ModuleCode,
+    task_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Get recurring task configuration for a task."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "get_recurring_task"):
+            if asyncio.iscoroutinefunction(client.get_recurring_task):
+                recurring = await client.get_recurring_task(task_id)
+            else:
+                recurring = client.get_recurring_task(task_id)
+        else:
+            recurring = None
+        return {"data": recurring, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== BULK OPERATIONS ==========
+@router.post("/{module_code}/tasks/bulk-delete")
+async def bulk_delete_tasks(
+    module_code: ModuleCode,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Bulk delete tasks."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        task_ids = payload.get("task_ids", [])
+        if not task_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="task_ids array is required")
+        
+        if hasattr(client, "bulk_delete_tasks"):
+            if asyncio.iscoroutinefunction(client.bulk_delete_tasks):
+                result = await client.bulk_delete_tasks(task_ids)
+            else:
+                result = client.bulk_delete_tasks(task_ids)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support bulk delete")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.bulk_delete_tasks", f"{module_code}", {"count": len(task_ids)})
+        return {"data": result, "meta": {"module": module_code, "deleted_count": len(task_ids)}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.post("/{module_code}/tasks/{task_id}/duplicate")
+async def duplicate_task(
+    module_code: ModuleCode,
+    task_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Duplicate a task."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "duplicate_task"):
+            if asyncio.iscoroutinefunction(client.duplicate_task):
+                result = await client.duplicate_task(task_id)
+            else:
+                result = client.duplicate_task(task_id)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task duplication")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.duplicate_task", f"{module_code}:{task_id}")
+        return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== ACTIVITY LOG ==========
+@router.get("/{module_code}/activity-log")
+async def get_activity_log(
+    module_code: ModuleCode,
+    task_id: Optional[int] = None,
+    limit: Optional[int] = None,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Get activity log."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "get_activity_log"):
+            if asyncio.iscoroutinefunction(client.get_activity_log):
+                log = await client.get_activity_log(task_id=task_id, limit=limit)
+            else:
+                log = client.get_activity_log(task_id=task_id, limit=limit)
+        else:
+            log = []
+        return {"data": log, "meta": {"module": module_code, "task_id": task_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+# ========== CUSTOM FIELDS ==========
+@router.get("/{module_code}/custom-fields")
+async def list_custom_fields(
+    module_code: ModuleCode,
+    module: str = "task",
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """List custom fields for a module."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "list_custom_fields"):
+            if asyncio.iscoroutinefunction(client.list_custom_fields):
+                fields = await client.list_custom_fields(module=module)
+            else:
+                fields = client.list_custom_fields(module=module)
+        else:
+            fields = []
+        return {"data": fields, "meta": {"module": module_code, "module_type": module}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.post("/{module_code}/custom-fields")
+async def create_custom_field(
+    module_code: ModuleCode,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Create a custom field."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "create_custom_field"):
+            if asyncio.iscoroutinefunction(client.create_custom_field):
+                result = await client.create_custom_field(payload)
+            else:
+                result = client.create_custom_field(payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support custom fields")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.create_custom_field", f"{module_code}")
+        return {"data": result, "meta": {"module": module_code}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.patch("/{module_code}/custom-fields/{field_id}")
+async def update_custom_field(
+    module_code: ModuleCode,
+    field_id: int,
+    payload: dict,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Update a custom field."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "update_custom_field"):
+            if asyncio.iscoroutinefunction(client.update_custom_field):
+                result = await client.update_custom_field(field_id, payload)
+            else:
+                result = client.update_custom_field(field_id, payload)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support custom fields")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.update_custom_field", f"{module_code}:{field_id}")
+        return {"data": result, "meta": {"module": module_code, "field_id": field_id}}
+    finally:
+        if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
+            await client.close()
+        elif hasattr(client, "close"):
+            client.close()
+
+
+@router.delete("/{module_code}/custom-fields/{field_id}")
+async def delete_custom_field(
+    module_code: ModuleCode,
+    field_id: int,
+    current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Delete a custom field."""
+    _require_entitlement(session, current_user.tenant_id, module_code)
+    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    try:
+        if hasattr(client, "delete_custom_field"):
+            if asyncio.iscoroutinefunction(client.delete_custom_field):
+                result = await client.delete_custom_field(field_id)
+            else:
+                result = client.delete_custom_field(field_id)
+        else:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support custom fields")
+        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_custom_field", f"{module_code}:{field_id}")
+        return {"data": result, "meta": {"module": module_code, "field_id": field_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
             await client.close()
