@@ -497,6 +497,239 @@ class TaskifyClient(BaseVendorClient):
         data = await self._request("POST", "/api/notes/store", json_data=note_data)
         return data.get("data", data) if isinstance(data, dict) else data
 
+    # Milestones
+    async def list_milestones(self, project_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """List milestones, optionally filtered by project."""
+        params = {}
+        if project_id:
+            params["project_id"] = project_id
+        data = await self._request("GET", "/api/milestones", params=params if params else None)
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    async def create_milestone(self, milestone_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new milestone."""
+        data = await self._request("POST", "/api/milestones/store", json_data=milestone_data)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def update_milestone(self, milestone_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a milestone."""
+        payload = {**updates, "id": milestone_id}
+        data = await self._request("POST", "/api/milestones/update", json_data=payload)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def delete_milestone(self, milestone_id: int) -> Dict[str, Any]:
+        """Delete a milestone."""
+        data = await self._request("DELETE", f"/api/milestones/destroy/{milestone_id}")
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    # Task Lists
+    async def list_task_lists(self) -> List[Dict[str, Any]]:
+        """List all task lists."""
+        data = await self._request("GET", "/api/task-lists/list")
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    async def create_task_list(self, task_list_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new task list."""
+        data = await self._request("POST", "/api/task-lists/store", json_data=task_list_data)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def update_task_list(self, task_list_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a task list."""
+        payload = {**updates, "id": task_list_id}
+        data = await self._request("POST", "/api/task-lists/update", json_data=payload)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def delete_task_list(self, task_list_id: int) -> Dict[str, Any]:
+        """Delete a task list."""
+        data = await self._request("DELETE", f"/api/task-lists/destroy/{task_list_id}")
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    # Time Tracker / Task Time Entries
+    async def list_time_trackers(self, task_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """List time tracker entries, optionally filtered by task."""
+        params = {}
+        if task_id:
+            params["task_id"] = task_id
+        data = await self._request("GET", "/api/time-tracker/list", params=params if params else None)
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    async def create_time_tracker(self, time_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new time tracker entry."""
+        data = await self._request("POST", "/api/time-tracker/store", json_data=time_data)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def update_time_tracker(self, time_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a time tracker entry."""
+        payload = {**updates, "id": time_id}
+        data = await self._request("POST", "/api/time-tracker/update", json_data=payload)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def delete_time_tracker(self, time_id: int) -> Dict[str, Any]:
+        """Delete a time tracker entry."""
+        data = await self._request("DELETE", f"/api/time-tracker/destroy/{time_id}")
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def list_task_time_entries(self, task_id: int) -> List[Dict[str, Any]]:
+        """List time entries for a specific task."""
+        data = await self._request("GET", f"/api/tasks/{task_id}/time-entries", params={"isApi": True})
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    # Tags
+    async def list_tags(self) -> List[Dict[str, Any]]:
+        """List all tags."""
+        data = await self._request("GET", "/api/tags")
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    async def create_tag(self, tag_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new tag."""
+        data = await self._request("POST", "/api/tags/store", json_data=tag_data)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def update_tag(self, tag_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a tag."""
+        payload = {**updates, "id": tag_id}
+        data = await self._request("POST", "/api/tags/update", json_data=payload)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def delete_tag(self, tag_id: int) -> Dict[str, Any]:
+        """Delete a tag."""
+        data = await self._request("DELETE", f"/api/tags/destroy/{tag_id}")
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    # Recurring Tasks
+    async def get_recurring_task(self, task_id: int) -> Optional[Dict[str, Any]]:
+        """Get recurring task configuration for a task."""
+        # Taskify includes recurring task in task details
+        task_data = await self._request("GET", f"/api/tasks/{task_id}")
+        if isinstance(task_data, dict):
+            task = task_data.get("data", task_data)
+            if isinstance(task, dict) and "recurring_task" in task:
+                return task["recurring_task"]
+        return None
+
+    # Status Timelines
+    async def get_status_timelines(self, task_id: int) -> List[Dict[str, Any]]:
+        """Get status change timeline for a task."""
+        data = await self._request("GET", f"/api/tasks/{task_id}/status-timelines")
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    # Favorites/Pinned
+    async def update_task_favorite(self, task_id: int, is_favorite: bool) -> Dict[str, Any]:
+        """Update task favorite status."""
+        data = await self._request("PATCH", f"/api/tasks/{task_id}/favorite", json_data={"favorite": 1 if is_favorite else 0})
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def update_task_pinned(self, task_id: int, is_pinned: bool) -> Dict[str, Any]:
+        """Update task pinned status."""
+        data = await self._request("PATCH", f"/api/tasks/{task_id}/pinned", json_data={"pinned": 1 if is_pinned else 0})
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    # Media/File Attachments
+    async def upload_task_media(self, task_id: int, file_path: str, file_content: bytes, filename: str) -> Dict[str, Any]:
+        """Upload media/file to a task."""
+        # Note: This requires multipart/form-data handling
+        # For now, we'll use a workaround with httpx's files parameter
+        import httpx
+        
+        files = {
+            "file": (filename, file_content, "application/octet-stream")
+        }
+        data = {
+            "task_id": task_id,
+            "isApi": True,
+        }
+        
+        url = urljoin(self.base_url + "/", f"/api/tasks/upload-media".lstrip("/"))
+        headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Accept": "application/json",
+        }
+        if self.workspace_id:
+            headers["workspace_id"] = str(self.workspace_id)
+        
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(url, files=files, data=data, headers=headers)
+            response.raise_for_status()
+            return response.json().get("data", response.json()) if isinstance(response.json(), dict) else response.json()
+
+    async def delete_task_media(self, media_id: int) -> Dict[str, Any]:
+        """Delete media from a task."""
+        data = await self._request("DELETE", f"/api/tasks/delete-media/{media_id}")
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    # Task Dependencies (via subtasks - Taskify uses subtasks for dependencies)
+    async def get_task_subtasks(self, task_id: int) -> List[Dict[str, Any]]:
+        """Get subtasks/dependencies for a task."""
+        task_data = await self._request("GET", f"/api/tasks/{task_id}")
+        if isinstance(task_data, dict):
+            task = task_data.get("data", task_data)
+            if isinstance(task, dict) and "subtasks" in task:
+                return task["subtasks"]
+        return []
+
+    # Bulk Operations
+    async def bulk_delete_tasks(self, task_ids: List[int]) -> Dict[str, Any]:
+        """Bulk delete tasks."""
+        # Taskify uses POST /tasks/destroy_multiple
+        data = await self._request("POST", "/api/tasks/destroy_multiple", json_data={"task_ids": task_ids})
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def duplicate_task(self, task_id: int) -> Dict[str, Any]:
+        """Duplicate a task."""
+        # Taskify uses GET /tasks/duplicate/{id}
+        data = await self._request("GET", f"/api/tasks/duplicate/{task_id}")
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    # Activity Log
+    async def get_activity_log(self, task_id: Optional[int] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get activity log, optionally filtered by task."""
+        params = {}
+        if task_id:
+            params["task_id"] = task_id
+        if limit:
+            params["limit"] = limit
+        data = await self._request("GET", "/api/activity-log", params=params if params else None)
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    # Custom Fields
+    async def list_custom_fields(self, module: str = "task") -> List[Dict[str, Any]]:
+        """List custom fields for a module."""
+        params = {"module": module}
+        data = await self._request("GET", "/api/custom-fields/list", params=params)
+        if isinstance(data, dict) and "data" in data:
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    async def create_custom_field(self, field_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a custom field."""
+        data = await self._request("POST", "/api/custom-fields", json_data=field_data)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def update_custom_field(self, field_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a custom field."""
+        payload = {**updates, "id": field_id}
+        data = await self._request("POST", f"/api/custom-fields/update/{field_id}", json_data=payload)
+        return data.get("data", data) if isinstance(data, dict) else data
+
+    async def delete_custom_field(self, field_id: int) -> Dict[str, Any]:
+        """Delete a custom field."""
+        data = await self._request("DELETE", f"/api/custom-fields/destroy/{field_id}")
+        return data.get("data", data) if isinstance(data, dict) else data
+
     async def close(self):
         """Close the HTTP client."""
         await self.client.aclose()

@@ -104,26 +104,6 @@ async def onboard_taskify(
     health = None
     if payload.verify:
         health = await verify_taskify_connection(session=session, tenant_id=current_user.tenant_id)
-    
-    # Sync existing users to Taskify (optional - users may need to reset passwords)
-    # Note: We can't sync passwords, so users will need to use "Forgot Password" in Taskify
-    # or we could implement SSO later
-    try:
-        from app.services.module_onboarding import sync_all_users_to_module
-        from app.models import ModuleCode
-        sync_result = await sync_all_users_to_module(
-            session=session,
-            tenant_id=current_user.tenant_id,
-            module_code=ModuleCode.TASKS,
-        )
-        # Log sync result but don't fail onboarding
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"User sync result: {sync_result}")
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to sync users to Taskify: {e}")
 
     log_audit(
         session,

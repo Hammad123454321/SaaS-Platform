@@ -10,6 +10,7 @@ from app.models.entitlement import (
 )
 from app.models.vendor_credential import VendorCredential
 from app.models.password_reset import PasswordResetToken, ImpersonationAudit, AuditLog
+from app.models.taskify_config import TenantTaskifyConfig, TaskifyUserMapping
 
 __all__ = [
     "User",
@@ -28,5 +29,7 @@ __all__ = [
     "PasswordResetToken",
     "ImpersonationAudit",
     "AuditLog",
+    "TenantTaskifyConfig",
+    "TaskifyUserMapping",
 ]
 

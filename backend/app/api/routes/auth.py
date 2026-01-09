@@ -23,7 +23,7 @@ from app.models import (
     PasswordResetToken,
     ImpersonationAudit,
 )
-from app.models.role import PermissionCode
+from app.models.role import PermissionCode, Role
 from app.seed import ensure_roles_for_tenant
 from app.schemas import (
     SignupRequest,
@@ -71,7 +71,7 @@ async def signup(payload: SignupRequest, response: Response, session: Session = 
         tenant=tenant,
         email=payload.email.lower(),
         hashed_password=hash_password(payload.password),
-        is_super_admin=True,
+        is_super_admin=False,  # Only platform admins should have this flag
     )
     try:
         session.add(tenant)
@@ -79,9 +79,10 @@ async def signup(payload: SignupRequest, response: Response, session: Session = 
         session.add(user)
 
         roles_by_name = ensure_roles_for_tenant(session, tenant.id)  # type: ignore[arg-type]
-        super_role = roles_by_name.get("super_admin")
-        if super_role:
-            session.add(UserRole(user_id=user.id, role_id=super_role.id))  # type: ignore[arg-type]
+        # Assign company_admin role (not super_admin) for tenant owner
+        company_admin_role = roles_by_name.get("company_admin")
+        if company_admin_role:
+            session.add(UserRole(user_id=user.id, role_id=company_admin_role.id))  # type: ignore[arg-type]
 
         # Initialize entitlements disabled by default
         for module in ModuleCode:
@@ -115,8 +116,16 @@ async def signup(payload: SignupRequest, response: Response, session: Session = 
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to provision user to modules: {e}")
 
+    # Get role names for JWT token
+    user_roles = session.exec(
+        select(Role)
+        .join(UserRole)
+        .where(UserRole.user_id == user.id)
+    ).all()
+    role_names = [r.name for r in user_roles]
+
     subject = f"{user.id}:{user.tenant_id}"
-    access = create_access_token(subject, roles=["super_admin"])
+    access = create_access_token(subject, roles=role_names)
     refresh = create_refresh_token(subject)
     return TokenResponse(access_token=access, refresh_token=refresh)
 

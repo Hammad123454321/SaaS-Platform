@@ -18,6 +18,9 @@ export default function CompanyAdminDashboard() {
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Calculate enabled modules before using in useEffect
+  const enabledModules = entitlements.filter((e) => e.enabled);
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -41,8 +44,6 @@ export default function CompanyAdminDashboard() {
     };
     fetchStats();
   }, [enabledModules.length]);
-
-  const enabledModules = entitlements.filter((e) => e.enabled);
 
   return (
     <div className="space-y-8">
