@@ -1,0 +1,41 @@
+# Laravel
+/vendor/
+node_modules/
+.env
+.env.*
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/.idea
+/.vscode
+/public/storage
+/storage/*.key
+/storage/app/public
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/logs/*
+/bootstrap/cache/*.php
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Ignore uploaded files & demo zips (custom)
+public/assets/demo_data/public.zip
+
+# Laravel Mix & Vite
+/public/hot
+/public/mix-manifest.json
+/public/build/
+/build/
+vite.config.js
+vite.config.ts
+
+/public/assets/demo_data/public.zip
+/.scribe/
+public/docs/
+vendor/

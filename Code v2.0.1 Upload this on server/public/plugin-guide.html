@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taskify Plugin Development Guide</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+   <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #06b6d4;
+            --accent-color: #f59e0b;
+            --dark-bg: #0f172a;
+            --card-bg: #1e293b;
+            --text-light: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+
+        * {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #1e293b 100%);
+            color: var(--text-light) !important; /* Added !important for better override */
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Ensure all text elements have proper contrast */
+        h1, h2, h3, h4, h5, h6, p, span, div, li, td, th {
+            color: var(--text-light) !important;
+        }
+
+        /* Special handling for muted text */
+        .text-muted {
+            color: var(--text-muted) !important;
+        }
+
+        .hero-section {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            padding: 80px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .floating-icon {
+            position: absolute;
+            animation: float 6s ease-in-out infinite;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 2rem;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .floating-icon:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
+        .floating-icon:nth-child(2) { top: 20%; right: 15%; animation-delay: 2s; }
+        .floating-icon:nth-child(3) { bottom: 30%; left: 20%; animation-delay: 4s; }
+
+        .card {
+            background: var(--card-bg) !important;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            color: var(--text-light) !important;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            border-color: var(--primary-color);
+        }
+
+        .section-title {
+            position: relative;
+            margin-bottom: 3rem;
+            color: var(--text-light) !important;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+            border-radius: 2px;
+        }
+
+        .nav-pills .nav-link {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-light) !important; /* Changed from muted to light */
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-pills .nav-link:hover {
+            color: var(--text-light) !important;
+            border-color: var(--primary-color);
+            background: rgba(79, 70, 229, 0.1);
+        }
+
+        .nav-pills .nav-link.active {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+            border-color: var(--primary-color);
+            color: white !important;
+        }
+
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            color: #f8f8f2 !important;
+        }
+
+        .feature-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            color: white !important;
+        }
+
+        .progress-bar {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: white !important;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-outline-primary {
+            border: 2px solid var(--primary-color) !important;
+            color: var(--primary-color) !important;
+            background: transparent !important;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color) !important;
+            color: white !important;
+            transform: translateY(-2px);
+        }
+
+        .table-dark {
+            background: var(--card-bg) !important;
+            border-color: var(--border-color);
+            color: var(--text-light) !important;
+        }
+
+        .table-dark th {
+            border-color: var(--border-color);
+            background: var(--dark-bg) !important;
+            color: var(--text-light) !important;
+        }
+
+        .table-dark td {
+            border-color: var(--border-color);
+            color: var(--text-light) !important;
+        }
+
+        .sidebar {
+            position: sticky;
+            top: 2rem;
+            height: calc(100vh - 4rem);
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: var(--card-bg);
+            border-radius: 2px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 2px;
+        }
+
+        .content-section {
+            padding: 2rem 0;
+        }
+
+        .alert {
+            border: none;
+            border-radius: 12px;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background: rgba(6, 182, 212, 0.1);
+            border-left-color: var(--secondary-color);
+            color: var(--text-light) !important;
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left-color: var(--accent-color);
+            color: var(--text-light) !important;
+        }
+
+        .directory-tree {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            color: var(--text-light) !important;
+        }
+
+        .animated-bg {
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .glass-effect {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-light) !important;
+        }
+
+        /* Bootstrap override for better visibility */
+        .text-dark {
+            color: var(--text-light) !important;
+        }
+
+        .accordion-body{
+                background: linear-gradient(135deg, var(--dark-bg) 0%, #1e293b 100%);
+        }
+
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 60px 0;
+            }
+
+            .floating-icon {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="floating-icon">
+            <i class="fas fa-plug fa-2x text-white opacity-50"></i>
+        </div>
+        <div class="floating-icon">
+            <i class="fas fa-code fa-2x text-white opacity-50"></i>
+        </div>
+        <div class="floating-icon">
+            <i class="fas fa-cogs fa-2x text-white opacity-50"></i>
+        </div>
+
+        <div class="container hero-content">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1 class="display-4 fw-bold mb-4">Taskify Plugin Development Guide</h1>
+                    <p class="lead mb-4">Build powerful extensions for Taskify with our comprehensive plugin architecture. Create seamless integrations that enhance productivity and extend functionality.</p>
+                    <div class="d-flex gap-3 flex-wrap">
+                        <button class="btn btn-primary btn-lg" onclick="scrollToSection('getting-started')">
+                            <i class="fas fa-rocket me-2"></i>Get Started
+                        </button>
+                        <button class="btn btn-outline-light btn-lg" onclick="scrollToSection('example-plugin')">
+                            <i class="fas fa-code me-2"></i>View Examples
+                        </button>
+                    </div>
+                </div>
+                <div class="col-lg-4 text-center">
+                    <div class="hero-illustration">
+                        <i class="fas fa-puzzle-piece fa-10x text-white opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container-fluid py-5">
+        <div class="row">
+            <!-- Sidebar Navigation -->
+            <div class="col-lg-3">
+                <div class="sidebar">
+                    <div class="card glass-effect">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">
+                                <i class="fas fa-list me-2"></i>Table of Contents
+                            </h5>
+                            <nav class="nav nav-pills flex-column">
+                                <a class="nav-link active" href="#introduction">
+                                    <i class="fas fa-info-circle me-2"></i>Introduction
+                                </a>
+                                <a class="nav-link" href="#plugin-structure">
+                                    <i class="fas fa-folder-tree me-2"></i>Plugin Structure
+                                </a>
+                                <a class="nav-link" href="#getting-started">
+                                    <i class="fas fa-play me-2"></i>Getting Started
+                                </a>
+                                <a class="nav-link" href="#core-components">
+                                    <i class="fas fa-puzzle-piece me-2"></i>Core Components
+                                </a>
+                                <a class="nav-link" href="#database-integration">
+                                    <i class="fas fa-database me-2"></i>Database Integration
+                                </a>
+                                <a class="nav-link" href="#views-templates">
+                                    <i class="fas fa-eye me-2"></i>Views & Templates
+                                </a>
+                                <a class="nav-link" href="#resources">
+                                    <i class="fas fa-globe me-2"></i>Resources
+                                </a>
+                                <a class="nav-link" href="#best-practices">
+                                    <i class="fas fa-star me-2"></i>Best Practices
+                                </a>
+                                <a class="nav-link" href="#example-plugin">
+                                    <i class="fas fa-code me-2"></i>Example Plugin
+                                </a>
+                                <a class="nav-link" href="#testing">
+                                    <i class="fas fa-vial me-2"></i>Testing
+                                </a>
+                                <a class="nav-link" href="#deployment">
+                                    <i class="fas fa-rocket me-2"></i>Deployment
+                                </a>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="col-lg-9">
+                <!-- Introduction Section -->
+                <section id="introduction" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-info-circle me-3"></i>Introduction
+                            </h2>
+                            <p class="lead">Taskify supports a robust plugin architecture that allows developers to extend the core functionality of the application. This guide will walk you through creating plugins that seamlessly integrate with Taskify's ecosystem.</p>
+
+                            <div class="row mt-4">
+                                <div class="col-md-4">
+                                    <div class="feature-icon">
+                                        <i class="fas fa-plug text-white"></i>
+                                    </div>
+                                    <h5>Plugin Architecture</h5>
+                                    <p class="text-muted">Modular design for easy integration and management</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="feature-icon">
+                                        <i class="fas fa-code text-white"></i>
+                                    </div>
+                                    <h5>Laravel Integration</h5>
+                                    <p class="text-muted">Built on Laravel framework with full MVC support</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="feature-icon">
+                                        <i class="fas fa-expand-arrows-alt text-white"></i>
+                                    </div>
+                                    <h5>Extensible</h5>
+                                    <p class="text-muted">Add custom features without modifying core code</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Plugin Structure Section -->
+                <section id="plugin-structure" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-folder-tree me-3"></i>Plugin Structure
+                            </h2>
+                            <p>A Taskify plugin follows a specific directory structure. Here's the standard layout:</p>
+
+                            <div class="directory-tree">
+<pre><code>plugins/
+└── YourPluginName/
+    ├── Console/
+    │   └── CleanupCommand.php
+    ├── Controllers/
+    │   └── YourPluginController.php
+    ├── Database/
+    │   └── Migrations/
+    │       ├── 2024_01_01_000000_create_your_plugin_table.php
+    │       └── 2024_01_01_000001_create_related_table.php
+    ├── Models/
+    │   ├── YourModel.php
+    │   └── RelatedModel.php
+    ├── Providers/
+    │   └── YourPluginServiceProvider.php
+    ├── Resources/
+    │   └── lang/
+    │       └── en/
+    │           └── plugin_labels.php
+    │   └── views/
+    │       ├── feature1/
+    │       ├── feature2/
+    │       └── main/
+    ├── routes/
+    │   ├── api.php
+    │   ├── web.php
+    │   └── menus.php
+    ├── plugin.json
+    └── README.md</code></pre>
+                            </div>
+
+                            <div class="alert alert-info mt-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Note:</strong> This structure ensures consistency across all plugins and makes them easy to maintain and debug.
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Getting Started Section -->
+                <section id="getting-started" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-play me-3"></i>Getting Started
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h4>1. Plugin Configuration File</h4>
+                                    <p>Every plugin must have a <code>plugin.json</code> file in its root directory:</p>
+
+                                    <div class="code-block">
+<pre><code class="language-json">{
+    "name": "Your Plugin Name - Feature Description",
+    "slug": "your-plugin-slug",
+    "description": "Brief description of functionality.",
+    "version": "1.0.0",
+    "enabled": true,
+    "provider": "Plugins\\YourPluginName\\Providers\\YourPluginServiceProvider",
+    "publish_tag": "your-plugin-assets"
+}</code></pre>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h4>Configuration Fields</h4>
+                                    <div class="table-responsive">
+                                        <table class="table table-dark table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Field</th>
+                                                    <th>Description</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td><code>name</code></td>
+                                                    <td>Full descriptive name</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><code>slug</code></td>
+                                                    <td>URL-friendly identifier</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><code>description</code></td>
+                                                    <td>Brief functionality explanation</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><code>version</code></td>
+                                                    <td>Semantic version number</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><code>enabled</code></td>
+                                                    <td>Boolean to enable/disable</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><code>provider</code></td>
+                                                    <td>Service provider class name</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><code>publish_tag</code></td>
+                                                    <td>Tag for publishing assets</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Core Components Section -->
+                <section id="core-components" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-puzzle-piece me-3"></i>Core Components
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-lg-4 mb-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <div class="feature-icon mx-auto">
+                                                <i class="fas fa-cogs text-white"></i>
+                                            </div>
+                                            <h5>Controllers</h5>
+                                            <p class="text-muted">Handle HTTP requests and business logic</p>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="showCode('controller')">
+                                                View Example
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-lg-4 mb-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <div class="feature-icon mx-auto">
+                                                <i class="fas fa-cube text-white"></i>
+                                            </div>
+                                            <h5>Models</h5>
+                                            <p class="text-muted">Represent plugin data structures</p>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="showCode('model')">
+                                                View Example
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-lg-4 mb-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <div class="feature-icon mx-auto">
+                                                <i class="fas fa-terminal text-white"></i>
+                                            </div>
+                                            <h5>Console Commands</h5>
+                                            <p class="text-muted">Create maintenance and utility commands</p>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="showCode('command')">
+                                                View Example
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="code-examples" class="mt-4" style="display: none;">
+                                <div class="code-block">
+                                    <pre><code id="example-code" class="language-php"></code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Database Integration Section -->
+                <section id="database-integration" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-database me-3"></i>Database Integration
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h4>Migration Example</h4>
+                                    <p>Create database migrations for your plugin tables:</p>
+                                    <div class="code-block">
+<pre><code class="language-php">&lt;?php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up()
+    {
+        Schema::create('your_plugin_table', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+    }
+
+    public function down()
+    {
+        Schema::dropIfExists('your_plugin_table');
+    }
+};</code></pre>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h4>Migration Best Practices</h4>
+                                    <div class="alert alert-info">
+                                        <h6><i class="fas fa-lightbulb me-2"></i>Naming Convention</h6>
+                                        <p class="mb-2">Follow Laravel's migration naming convention:</p>
+                                        <ul class="mb-0">
+                                            <li><code>YYYY_MM_DD_HHMMSS_create_table_name.php</code></li>
+                                            <li>Use descriptive names</li>
+                                            <li>Include foreign key constraints</li>
+                                            <li>Add proper indexes</li>
+                                        </ul>
+                                    </div>
+                                    <div class="alert alert-warning">
+                                        <h6><i class="fas fa-exclamation-triangle me-2"></i>Important Notes</h6>
+                                        <ul class="mb-0">
+                                            <li>Always include rollback logic in <code>down()</code> method</li>
+                                            <li>Test migrations in development environment</li>
+                                            <li>Use nullable fields when appropriate</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Views & Templates Section -->
+                <section id="views-templates" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-eye me-3"></i>Views & Templates
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h4>View Structure</h4>
+                                    <div class="directory-tree">
+<pre><code>Resources/
+└── views/
+    ├── layouts/
+    │   └── app.blade.php
+    ├── components/
+    │   └── form-input.blade.php
+    ├── index.blade.php
+    ├── create.blade.php
+    ├── edit.blade.php
+    └── show.blade.php</code></pre>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h4>Sample Blade Template</h4>
+                                    <div class="code-block">
+<pre><code class="language-php">@extends('layouts.app')
+
+@section('content')
+&lt;div class="container"&gt;
+    &lt;h1&gt;{{ __('yourplugin::plugin_labels.title') }}&lt;/h1&gt;
+
+    &lt;div class="card"&gt;
+        &lt;div class="card-body"&gt;
+            &lt;table class="table"&gt;
+                &lt;thead&gt;
+                    &lt;tr&gt;
+                        &lt;th&gt;{{ __('yourplugin::plugin_labels.name') }}&lt;/th&gt;
+                        &lt;th&gt;{{ __('yourplugin::plugin_labels.actions') }}&lt;/th&gt;
+                    &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                    {{-- Data will be loaded here --}}
+                &lt;/tbody&gt;
+            &lt;/table&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+&lt;/div&gt;
+@endsection</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Resources Section -->
+                <section id="resources" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-globe me-3"></i>Resources & Localization
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h4>Language Files</h4>
+                                    <p>Create language files for internationalization:</p>
+                                    <div class="code-block">
+<pre><code class="language-php">&lt;?php
+// Resources/lang/en/plugin_labels.php
+
+return [
+    'title' => 'Your Plugin Title',
+    'create_new' => 'Create New',
+    'name' => 'Name',
+    'description' => 'Description',
+    'created_at' => 'Created At',
+    'actions' => 'Actions',
+    'edit' => 'Edit',
+    'delete' => 'Delete',
+    'save' => 'Save',
+    'cancel' => 'Cancel',
+    'success_message' => 'Operation completed successfully',
+    'error_message' => 'An error occurred',
+];</code></pre>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h4>Route Configuration</h4>
+                                    <p>Define your plugin routes:</p>
+                                    <div class="code-block">
+<pre><code class="language-php">&lt;?php
+// routes/web.php
+
+use Illuminate\Support\Facades\Route;
+use Plugins\YourPluginName\Controllers\YourPluginController;
+
+Route::prefix('yourplugin')->group(function () {
+    Route::get('/', [YourPluginController::class, 'index'])
+        ->name('yourplugin.index');
+    Route::post('/', [YourPluginController::class, 'store'])
+        ->name('yourplugin.store');
+    Route::get('/{id}', [YourPluginController::class, 'show'])
+        ->name('yourplugin.show');
+    Route::put('/{id}', [YourPluginController::class, 'update'])
+        ->name('yourplugin.update');
+    Route::delete('/{id}', [YourPluginController::class, 'destroy'])
+        ->name('yourplugin.destroy');
+});</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Best Practices Section -->
+                <section id="best-practices" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-star me-3"></i>Best Practices
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5><i class="fas fa-code me-2"></i>Naming Conventions</h5>
+                                            <ul class="list-unstyled">
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Use PascalCase for class names
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Use snake_case for database table names
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Use kebab-case for route names
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Prefix all plugin resources
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5><i class="fas fa-shield-alt me-2"></i>Security</h5>
+                                            <ul class="list-unstyled">
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Always validate input data
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Use Laravel's built-in security features
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Implement proper authentication
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Sanitize output data
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5><i class="fas fa-exclamation-triangle me-2"></i>Error Handling</h5>
+                                            <div class="code-block">
+<pre><code class="language-php">public function store(Request $request)
+{
+    try {
+        $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $item = YourModel::create($request->all());
+
+        return response()->json([
+            'success' => true,
+            'data' => $item,
+            'message' => __('yourplugin::plugin_labels.success_message')
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => __('yourplugin::plugin_labels.error_message')
+        ], 500);
+    }
+}</code></pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5><i class="fas fa-tachometer-alt me-2"></i>Performance</h5>
+                                            <ul class="list-unstyled">
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Use database indexes appropriately
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Implement caching where beneficial
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Optimize database queries
+                                                </li>
+                                                <li class="mb-2">
+                                                    <i class="fas fa-check text-success me-2"></i>
+                                                    Use Laravel's optimization tools
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Example Plugin Section -->
+                <section id="example-plugin" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-code me-3"></i>Example Plugin Walkthrough
+                            </h2>
+
+                            <p class="lead text-center">Let's walk through creating a "Plugin Example" following the Taskify structure</p>
+
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5><i class="fas fa-folder me-2"></i>Step 1: Structure</h5>
+                                            <p class="text-muted">Create the plugin directory structure</p>
+                                            <div class="directory-tree">
+<pre><code>plugins/ExamplePlugin/
+├── Controllers/
+├── Models/
+├── Database/Migrations/
+├── Resources/views/
+├── Resources/lang/
+├── routes/
+├── Providers/
+└── plugin.json</code></pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5><i class="fas fa-cog me-2"></i>Step 2: Configuration</h5>
+                                            <p class="text-muted">Set up the plugin.json file</p>
+                                            <div class="code-block">
+<pre><code class="language-json">{
+    "name": "Taskify - Example Plugin",
+    "slug": "example-plugin",
+    "description": "Example functionality",
+    "version": "1.0.0",
+    "enabled": true,
+    "provider": "Plugins\\ExamplePlugin\\Providers\\ExamplePluginServiceProvider",
+    "publish_tag": "example-plugin-assets"
+}</code></pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h5><i class="fas fa-database me-2"></i>Step 3: Model</h5>
+                                            <p class="text-muted">Create the plugin model</p>
+                                            <div class="code-block">
+<pre><code class="language-php">class ExampleModel extends Model
+{
+    protected $fillable = [
+        'task_id',
+        'content',
+        'user_id',
+        'is_active'
+    ];
+
+    public function task()
+    {
+        return $this->belongsTo(Task::class);
+    }
+}</code></pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <h4>Complete Controller Example</h4>
+                                <div class="code-block">
+<pre><code class="language-php">&lt;?php
+
+namespace Plugins\ExamplePlugin\Controllers;
+
+use App\Http\Controllers\Controller;
+use Plugins\ExamplePlugin\Models\ExampleModel;
+use Illuminate\Http\Request;
+
+class ExamplePluginController extends Controller
+{
+    public function index($taskId)
+    {
+        $items = ExampleModel::where('task_id', $taskId)
+            ->with('user')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('exampleplugin::feature_one.index', compact('items', 'taskId'));
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'task_id' => 'required|exists:tasks,id',
+            'content' => 'required|string',
+            'is_active' => 'boolean',
+        ]);
+
+        $item = ExampleModel::create([
+            'task_id' => $request->task_id,
+            'content' => $request->content,
+            'user_id' => auth()->id(),
+            'is_active' => $request->is_active ?? true,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'item' => $item->load('user'),
+            'message' => __('exampleplugin::plugin_labels.item_created')
+        ]);
+    }
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Testing Section -->
+                <section id="testing" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-vial me-3"></i>Testing Your Plugin
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h4>Unit Tests</h4>
+                                    <p>Create unit tests for your plugin components:</p>
+                                    <div class="code-block">
+<pre><code class="language-php">&lt;?php
+
+namespace Tests\Plugins\YourPluginName;
+
+use Tests\TestCase;
+use Plugins\YourPluginName\Models\YourModel;
+
+class YourModelTest extends TestCase
+{
+    public function testCanCreateModel()
+    {
+        $model = YourModel::create([
+            'name' => 'Test Name',
+            'description' => 'Test Description',
+        ]);
+
+        $this->assertInstanceOf(YourModel::class, $model);
+        $this->assertEquals('Test Name', $model->name);
+    }
+}</code></pre>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h4>Feature Tests</h4>
+                                    <p>Test your plugin's HTTP endpoints:</p>
+                                    <div class="code-block">
+<pre><code class="language-php">&lt;?php
+
+namespace Tests\Plugins\YourPluginName;
+
+use Tests\TestCase;
+
+class YourPluginControllerTest extends TestCase
+{
+    public function testCanViewIndex()
+    {
+        $response = $this->get('/yourplugin');
+        $response->assertStatus(200);
+    }
+
+    public function testCanCreateItem()
+    {
+        $response = $this->post('/yourplugin', [
+            'name' => 'Test Item',
+            'description' => 'Test Description',
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJson(['success' => true]);
+    }
+}</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info mt-4">
+                                <h5><i class="fas fa-lightbulb me-2"></i>Testing Best Practices</h5>
+                                <ul class="mb-0">
+                                    <li>Write tests for all critical functionality</li>
+                                    <li>Test both success and failure scenarios</li>
+                                    <li>Use database transactions for test isolation</li>
+                                    <li>Mock external dependencies</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Deployment Section -->
+                <section id="deployment" class="content-section">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h2 class="section-title text-center">
+                                <i class="fas fa-rocket me-3"></i>Deployment
+                            </h2>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h4>Installation Steps</h4>
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <ol class="list-unstyled">
+                                                <li class="mb-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge bg-primary rounded-pill me-3">1</span>
+                                                        <div>
+                                                            <strong>Copy Plugin</strong>
+                                                            <p class="text-muted mb-0">Copy your plugin directory to <code>plugins/YourPluginName/</code></p>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                                <li class="mb-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge bg-primary rounded-pill me-3">2</span>
+                                                        <div>
+                                                            <strong>Run Migrations</strong>
+                                                            <p class="text-muted mb-0"><code>php artisan migrate</code></p>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                                <li class="mb-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge bg-primary rounded-pill me-3">3</span>
+                                                        <div>
+                                                            <strong>Publish Assets</strong>
+                                                            <p class="text-muted mb-0"><code>php artisan vendor:publish --tag=your-plugin-assets</code></p>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                                <li class="mb-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge bg-primary rounded-pill me-3">4</span>
+                                                        <div>
+                                                            <strong>Clear Caches</strong>
+                                                            <p class="text-muted mb-0"><code>php artisan cache:clear && php artisan config:clear</code></p>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h4>Troubleshooting</h4>
+                                    <div class="accordion " id="troubleshootingAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header ">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                                                    Plugin not loading
+                                                </button>
+                                            </h2>
+                                            <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                                                <div class="accordion-body ">
+                                                    Check that the <code>provider</code> path in <code>plugin.json</code> matches your actual service provider class
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">
+                                                    Views not found
+                                                </button>
+                                            </h2>
+                                            <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                                                <div class="accordion-body">
+                                                    Ensure the view namespace in your service provider matches the one used in controllers
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree">
+                                                    Migrations not running
+                                                </button>
+                                            </h2>
+                                            <div id="collapseThree" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                                                <div class="accordion-body">
+                                                    Verify the migration files are in the correct <code>Database/Migrations</code> directory
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <div class="alert alert-warning">
+                                    <h5><i class="fas fa-exclamation-triangle me-2"></i>Plugin Updates</h5>
+                                    <p class="mb-2">For plugin updates:</p>
+                                    <ol class="mb-0">
+                                        <li>Replace the plugin files with the new version</li>
+                                        <li>Update the version in <code>plugin.json</code></li>
+                                        <li>Run migrations: <code>php artisan migrate</code></li>
+                                        <li>Republish assets: <code>php artisan vendor:publish --tag=your-plugin-assets --force</code></li>
+                                        <li>Clear caches: <code>php artisan cache:clear</code></li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Conclusion Section -->
+                <section id="conclusion" class="content-section">
+                    <div class="card animated-bg">
+                        <div class="card-body text-center">
+                            <h2 class="text-white mb-4">
+                                <i class="fas fa-trophy me-3"></i>Congratulations!
+                            </h2>
+                            <p class="lead text-white mb-4">
+                                You now have a comprehensive understanding of Taskify plugin development.
+                                The modular architecture allows for powerful extensions while maintaining clean separation of concerns.
+                            </p>
+                            <div class="d-flex justify-content-center gap-3 flex-wrap">
+                                <button class="btn btn-light btn-lg" onclick="window.scrollTo(0, 0)">
+                                    <i class="fas fa-arrow-up me-2"></i>Back to Top
+                                </button>
+                                <button class="btn btn-outline-light btn-lg" onclick="downloadGuide()">
+                                    <i class="fas fa-download me-2"></i>Download Guide
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-code me-2"></i>Taskify Plugin Development</h5>
+                    <p class="text-muted">Build powerful extensions for Taskify with our comprehensive plugin architecture.</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="#introduction" class="text-muted text-decoration-none">Introduction</a></li>
+                        <li><a href="#getting-started" class="text-muted text-decoration-none">Getting Started</a></li>
+                        <li><a href="#example-plugin" class="text-muted text-decoration-none">Example Plugin</a></li>
+                        <li><a href="#deployment" class="text-muted text-decoration-none">Deployment</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="my-4">
+            <div class="text-center">
+                <p class="mb-0">&copy; 2024 Taskify Plugin Development Guide. Built with <i class="fas fa-heart text-danger"></i> and Bootstrap.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+    <script>
+        // Smooth scrolling for navigation
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Update active navigation item on scroll
+        window.addEventListener('scroll', function() {
+            const sections = document.querySelectorAll('section[id]');
+            const navLinks = document.querySelectorAll('.nav-link');
+
+            let currentSection = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - 100;
+                if (scrollY >= sectionTop) {
+                    currentSection = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + currentSection) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        // Code examples
+        const codeExamples = {
+            controller: `<?php
+
+namespace Plugins\\YourPluginName\\Controllers;
+
+use App\\Http\\Controllers\\Controller;
+use Illuminate\\Http\\Request;
+
+class YourPluginController extends Controller
+{
+    public function index()
+    {
+        return view('yourplugin::index');
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'field' => 'required|string|max:255',
+        ]);
+
+        // Process the request
+        return response()->json(['success' => true]);
+    }
+}`,
+            model: `<?php
+
+namespace Plugins\\YourPluginName\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Database\\Eloquent\\Factories\\HasFactory;
+
+class YourModel extends Model
+{
+    use HasFactory;
+
+    protected $table = 'your_plugin_table';
+
+    protected $fillable = [
+        'field1',
+        'field2',
+        'field3',
+    ];
+
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    public function relatedModel()
+    {
+        return $this->hasMany(RelatedModel::class);
+    }
+}`,
+            command: `<?php
+
+namespace Plugins\\YourPluginName\\Console;
+
+use Illuminate\\Console\\Command;
+
+class CleanupCommand extends Command
+{
+    protected $signature = 'yourplugin:cleanup';
+    protected $description = 'Cleanup old plugin data';
+
+    public function handle()
+    {
+        $this->info('Starting cleanup process...');
+
+        // Perform cleanup logic
+
+        $this->info('Cleanup completed successfully!');
+    }
+}`
+        };
+
+        function showCode(type) {
+            const codeBlock = document.getElementById('code-examples');
+            const codeElement = document.getElementById('example-code');
+
+            codeElement.textContent = codeExamples[type];
+            codeBlock.style.display = 'block';
+
+            // Re-run Prism highlighting
+            Prism.highlightElement(codeElement);
+
+            // Scroll to code block
+            codeBlock.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function scrollToSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function downloadGuide() {
+            // Create a simple download functionality
+            const content = document.documentElement.outerHTML;
+            const blob = new Blob([content], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'taskify-plugin-development-guide.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize tooltips and popovers
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add some interactive elements
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-5px)';
+                });
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
