@@ -5,7 +5,7 @@ Flow:
 1. User selects modules during onboarding
 2. Stripe checkout session created
 3. After successful payment (webhook), provision modules
-4. For Tasks module: Create Taskify workspace and admin user
+4. For Tasks module: Initialize default statuses and priorities
 """
 import logging
 from datetime import datetime
@@ -19,11 +19,10 @@ from app.models import (
     ModuleCode,
     ModuleEntitlement,
     Subscription,
-    TenantTaskifyConfig,
-    TaskifyUserMapping,
+    TaskStatus,
+    TaskPriority,
 )
-from app.services.vendor_clients.factory import create_vendor_client
-from app.services.vendor_clients.taskify_client import TaskifyClient
+from app.models.tasks import TaskStatusCategory
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +210,7 @@ async def complete_subscription(
         
         # Provision module-specific resources
         if module_code == ModuleCode.TASKS:
-            await provision_taskify_workspace(session, subscription.tenant_id)
+            await initialize_tasks_module(session, subscription.tenant_id)
         
         provisioned_modules.append(module_code_str)
     
@@ -224,386 +223,54 @@ async def complete_subscription(
     }
 
 
-async def provision_taskify_workspace(session: Session, tenant_id: int) -> TenantTaskifyConfig:
+async def initialize_tasks_module(session: Session, tenant_id: int) -> None:
     """
-    Provision a new Taskify workspace for a tenant.
+    Initialize the Tasks module for a tenant.
     
-    This automatically:
-    1. Creates a user in Taskify using the tenant owner's email
-    2. Authenticates to get a Sanctum token
-    3. Stores the configuration in our database
-    
-    The user is created via Taskify's signup endpoint, then authenticated to get token.
+    Creates default task statuses and priorities.
     """
-    # Check if already provisioned
-    existing = session.exec(
-        select(TenantTaskifyConfig).where(TenantTaskifyConfig.tenant_id == tenant_id)
+    # Check if already initialized
+    existing_status = session.exec(
+        select(TaskStatus).where(TaskStatus.tenant_id == tenant_id)
     ).first()
     
-    if existing and existing.is_active:
-        logger.info(f"Taskify workspace already exists for tenant {tenant_id}")
-        return existing
+    if existing_status:
+        logger.info(f"Tasks module already initialized for tenant {tenant_id}")
+        return
     
-    # Get tenant owner (first user, typically Business Owner)
-    tenant = session.get(Tenant, tenant_id)
-    owner = session.exec(
-        select(User).where(User.tenant_id == tenant_id).order_by(User.id)
-    ).first()
+    # Create default statuses
+    default_statuses = [
+        {"name": "To Do", "color": "#6b7280", "category": TaskStatusCategory.TODO, "is_default": True, "display_order": 1},
+        {"name": "In Progress", "color": "#3b82f6", "category": TaskStatusCategory.IN_PROGRESS, "is_default": False, "display_order": 2},
+        {"name": "Done", "color": "#10b981", "category": TaskStatusCategory.DONE, "is_default": False, "display_order": 3},
+        {"name": "Cancelled", "color": "#ef4444", "category": TaskStatusCategory.CANCELLED, "is_default": False, "display_order": 4},
+    ]
     
-    if not owner:
-        raise ValueError(f"No owner found for tenant {tenant_id}")
+    for status_data in default_statuses:
+        status = TaskStatus(
+            tenant_id=tenant_id,
+            **status_data
+        )
+        session.add(status)
     
-    from app.config import settings
+    # Create default priorities
+    default_priorities = [
+        {"name": "Low", "color": "#6b7280", "level": 0, "is_default": True, "display_order": 1},
+        {"name": "Medium", "color": "#f59e0b", "level": 1, "is_default": False, "display_order": 2},
+        {"name": "High", "color": "#ef4444", "level": 2, "is_default": False, "display_order": 3},
+        {"name": "Urgent", "color": "#dc2626", "level": 3, "is_default": False, "display_order": 4},
+    ]
     
-    taskify_base_url = getattr(settings, "taskify_base_url", "http://taskify:8001")
-    taskify_master_token = getattr(settings, "taskify_master_token", None)
+    for priority_data in default_priorities:
+        priority = TaskPriority(
+            tenant_id=tenant_id,
+            **priority_data
+        )
+        session.add(priority)
     
-    # Generate workspace details
-    workspace_id = tenant_id  # Use tenant_id as workspace_id for simplicity
-    workspace_name = f"{tenant.name} Workspace"
-    
-    # Generate a secure password for the Taskify user
-    import secrets
-    import string
-    password_chars = string.ascii_letters + string.digits + "!@#$%^&*"
-    taskify_password = ''.join(secrets.choice(password_chars) for _ in range(16))
-    
-    # Extract name from email (User model doesn't have first_name/last_name)
-    email_local = owner.email.split("@")[0]
-    name_parts = email_local.split(".", 1)
-    first_name = name_parts[0].capitalize() if name_parts else "Admin"
-    last_name = name_parts[1].capitalize() if len(name_parts) > 1 else "User"
-    
-    api_token = None
-    taskify_user_id = None
-    
-    try:
-        # Step 1: Create user in Taskify using signup endpoint
-        import httpx
-        async with httpx.AsyncClient(
-            base_url=taskify_base_url,
-            timeout=30.0,
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-        ) as client:
-            # Create user via signup endpoint
-            signup_payload = {
-                "type": "member",  # Create as team member
-                "first_name": first_name,
-                "last_name": last_name,
-                "email": owner.email,
-                "password": taskify_password,
-                "password_confirmation": taskify_password,
-                "isApi": True,  # Skip email verification
-            }
-            
-            try:
-                signup_response = await client.post("/api/users/signup", json=signup_payload)
-                
-                # Log the full response for debugging
-                logger.debug(f"Taskify signup response status: {signup_response.status_code}")
-                logger.debug(f"Taskify signup response body: {signup_response.text}")
-                
-                signup_response.raise_for_status()
-                signup_data = signup_response.json()
-                
-                if signup_data.get("error"):
-                    error_msg = signup_data.get("message", "Unknown error")
-                    error_details = signup_data.get("errors", {})
-                    full_error = f"{error_msg}"
-                    if error_details:
-                        full_error += f" | Errors: {error_details}"
-                    raise ValueError(f"Taskify signup failed: {full_error}")
-                
-                # Extract user ID from response
-                user_data = signup_data.get("data", {})
-                taskify_user_id = user_data.get("id")
-                
-                logger.info(f"Created Taskify user {taskify_user_id} for tenant {tenant_id}")
-                
-            except httpx.HTTPStatusError as e:
-                # Get detailed error information
-                error_text = e.response.text
-                error_data = {}
-                try:
-                    error_data = e.response.json()
-                except:
-                    pass
-                
-                # Log full error details
-                logger.error(f"Taskify signup HTTP error {e.response.status_code}: {error_text}")
-                logger.error(f"Error data: {error_data}")
-                
-                # Check if user already exists
-                error_str = str(error_data)
-                if "already been taken" in error_str or "already exists" in error_str.lower():
-                    logger.info(f"User {owner.email} already exists in Taskify, will authenticate instead")
-                    # User exists, we'll authenticate to get token
-                elif e.response.status_code == 500:
-                    # Server error - might be due to missing primary workspace
-                    error_msg = error_data.get("message", "Server Error")
-                    
-                    # Try using authenticated endpoint if master token is available
-                    if taskify_master_token:
-                        logger.info("Signup failed, trying authenticated user creation endpoint instead...")
-                        try:
-                            # Use authenticated endpoint to create user
-                            create_payload = {
-                                "first_name": first_name,
-                                "last_name": last_name,
-                                "email": owner.email,
-                                "password": taskify_password,
-                                "password_confirmation": taskify_password,
-                                "role": 1,  # Default role ID (adjust if needed)
-                                "status": 1,  # Active
-                                "require_ev": 0,  # Skip email verification
-                                "isApi": True,
-                            }
-                            
-                            async with httpx.AsyncClient(
-                                base_url=taskify_base_url,
-                                timeout=30.0,
-                                headers={
-                                    "Authorization": f"Bearer {taskify_master_token}",
-                                    "Accept": "application/json",
-                                    "Content-Type": "application/json",
-                                    "workspace_id": str(workspace_id),
-                                },
-                            ) as auth_client:
-                                create_response = await auth_client.post("/api/users/store", json=create_payload)
-                                
-                                logger.debug(f"Authenticated create response: {create_response.status_code} - {create_response.text}")
-                                create_response.raise_for_status()
-                                create_data = create_response.json()
-                                
-                                if create_data.get("error"):
-                                    raise ValueError(f"Taskify user creation failed: {create_data.get('message', 'Unknown error')}")
-                                
-                                user_data = create_data.get("data", {})
-                                taskify_user_id = create_data.get("id") or user_data.get("id")
-                                logger.info(f"Created Taskify user {taskify_user_id} via authenticated endpoint")
-                            
-                        except Exception as create_err:
-                            logger.error(f"Authenticated user creation also failed: {create_err}")
-                            import traceback
-                            logger.error(traceback.format_exc())
-                            raise ValueError(
-                                f"Taskify server error: {error_msg}. "
-                                f"Both signup and authenticated user creation failed. "
-                                f"Please ensure Taskify has a primary workspace configured and the master token is valid. "
-                                f"Error: {str(create_err)}"
-                            )
-                    else:
-                        raise ValueError(
-                            f"Taskify server error: {error_msg}. "
-                            f"This might be because no primary workspace is set up in Taskify. "
-                            f"Please ensure Taskify has a primary workspace configured, or provide a master token in settings."
-                        )
-                else:
-                    # Other errors
-                    error_msg = error_data.get("message", error_text)
-                    error_details = error_data.get("errors", {})
-                    full_error = f"HTTP {e.response.status_code}: {error_msg}"
-                    if error_details:
-                        full_error += f" | Validation errors: {error_details}"
-                    raise ValueError(f"Failed to create user in Taskify: {full_error}")
-            
-            # Step 2: Authenticate to get Sanctum token
-            auth_payload = {
-                "email": owner.email,
-                "password": taskify_password,
-                "isApi": True,
-            }
-            
-            auth_response = await client.post("/api/users/login", json=auth_payload)
-            auth_response.raise_for_status()
-            auth_data = auth_response.json()
-            
-            if auth_data.get("error"):
-                raise ValueError(f"Taskify authentication failed: {auth_data.get('message', 'Unknown error')}")
-            
-            # Extract Sanctum token
-            token_data = auth_data.get("data", {})
-            api_token = auth_data.get("token") or token_data.get("token")
-            
-            if not api_token:
-                raise ValueError("No token received from Taskify authentication")
-            
-            logger.info(f"Successfully authenticated and obtained Sanctum token for tenant {tenant_id}")
-            
-            # If we didn't get user_id from signup, try to get it from auth response
-            if not taskify_user_id:
-                taskify_user_id = token_data.get("user_id")
-    
-    except Exception as e:
-        logger.error(f"Failed to provision Taskify workspace for tenant {tenant_id}: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise ValueError(f"Taskify provisioning failed: {str(e)}")
-    
-    # Step 3: Store configuration
-    config = TenantTaskifyConfig(
-        tenant_id=tenant_id,
-        workspace_id=workspace_id,
-        workspace_name=workspace_name,
-        api_token=api_token,
-        base_url=taskify_base_url,
-        taskify_admin_email=owner.email,
-        taskify_admin_user_id=taskify_user_id,
-        is_active=True,
-        provisioned_at=datetime.utcnow(),
-    )
-    
-    session.add(config)
     session.commit()
-    session.refresh(config)
-    
-    # Step 4: Create user mapping for tenant owner
-    if taskify_user_id:
-        await create_taskify_user_mapping(
-            session=session,
-            user=owner,
-            taskify_config=config,
-            role="admin",
-            taskify_user_id=taskify_user_id,
-        )
-    
-    logger.info(f"Successfully provisioned Taskify workspace {workspace_id} for tenant {tenant_id}")
-    
-    return config
+    logger.info(f"Initialized Tasks module for tenant {tenant_id}")
 
 
-async def create_taskify_user_mapping(
-    session: Session,
-    user: User,
-    taskify_config: TenantTaskifyConfig,
-    role: str = "member",
-    taskify_user_id: Optional[int] = None,
-) -> TaskifyUserMapping:
-    """
-    Create a Taskify user mapping for a SaaS platform user.
-    
-    Called when:
-    1. Business Owner subscribes to Tasks (admin role)
-    2. Staff is created by Business Owner (member role)
-    
-    Args:
-        session: Database session
-        user: SaaS platform user
-        taskify_config: Tenant Taskify configuration
-        role: Role in Taskify (admin, member, etc.)
-        taskify_user_id: Taskify user ID (if already created)
-    """
-    # Check if mapping already exists
-    existing = session.exec(
-        select(TaskifyUserMapping).where(
-            TaskifyUserMapping.user_id == user.id,
-            TaskifyUserMapping.tenant_id == user.tenant_id,
-        )
-    ).first()
-    
-    if existing:
-        return existing
-    
-    # Use provided taskify_user_id or get from config
-    if not taskify_user_id:
-        taskify_user_id = taskify_config.taskify_admin_user_id
-    
-    mapping = TaskifyUserMapping(
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        taskify_user_id=taskify_user_id or user.id,  # Fallback to user.id if not provided
-        taskify_email=user.email,
-        taskify_workspace_id=taskify_config.workspace_id,
-        taskify_role=role,
-        is_active=True,
-    )
-    
-    session.add(mapping)
-    session.commit()
-    session.refresh(mapping)
-    
-    logger.info(f"Created Taskify user mapping for user {user.id} in workspace {taskify_config.workspace_id}")
-    
-    return mapping
-
-
-async def provision_staff_to_taskify(session: Session, user: User, password: str) -> Optional[TaskifyUserMapping]:
-    """
-    Provision a newly created staff member to Taskify.
-    
-    Called automatically when Business Owner creates staff.
-    """
-    # Check if tenant has Tasks module enabled
-    entitlement = session.exec(
-        select(ModuleEntitlement).where(
-            ModuleEntitlement.tenant_id == user.tenant_id,
-            ModuleEntitlement.module_code == ModuleCode.TASKS,
-            ModuleEntitlement.enabled == True,  # noqa: E712
-        )
-    ).first()
-    
-    if not entitlement:
-        logger.debug(f"Tasks module not enabled for tenant {user.tenant_id}, skipping Taskify provisioning")
-        return None
-    
-    # Get Taskify config for tenant
-    taskify_config = session.exec(
-        select(TenantTaskifyConfig).where(
-            TenantTaskifyConfig.tenant_id == user.tenant_id,
-            TenantTaskifyConfig.is_active == True,  # noqa: E712
-        )
-    ).first()
-    
-    if not taskify_config:
-        logger.warning(f"No Taskify config found for tenant {user.tenant_id}")
-        return None
-    
-    # Create user in Taskify
-    try:
-        client = TaskifyClient(
-            base_url=taskify_config.base_url,
-            api_token=taskify_config.api_token,
-            workspace_id=taskify_config.workspace_id,
-        )
-        
-        # Extract name from email or use defaults
-        email_parts = user.email.split("@")[0].split(".", 1)
-        first_name = email_parts[0].capitalize() if email_parts else "User"
-        last_name = email_parts[1].capitalize() if len(email_parts) > 1 else "Staff"
-        
-        # Create user in Taskify
-        taskify_user = await client.create_user(
-            first_name=first_name,
-            last_name=last_name,
-            email=user.email,
-            password=password,
-            is_team_member=True,
-        )
-        
-        await client.close()
-        
-        # Create mapping
-        mapping = TaskifyUserMapping(
-            user_id=user.id,
-            tenant_id=user.tenant_id,
-            taskify_user_id=taskify_user.get("id", user.id),
-            taskify_email=user.email,
-            taskify_workspace_id=taskify_config.workspace_id,
-            taskify_role="member",
-            is_active=True,
-        )
-        
-        session.add(mapping)
-        session.commit()
-        session.refresh(mapping)
-        
-        logger.info(f"Staff user {user.id} provisioned to Taskify workspace {taskify_config.workspace_id}")
-        return mapping
-        
-    except Exception as e:
-        logger.error(f"Failed to provision staff to Taskify: {e}")
-        return None
+# Legacy function - removed, no longer needed
 

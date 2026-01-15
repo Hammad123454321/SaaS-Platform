@@ -1,0 +1,2191 @@
+# **Task Management UI Modernization - Implementation Plan**
+
+## **Phase 1: Foundation Setup (Days 1-2)**
+
+### **Step 1.1: Install Required Dependencies**
+
+```bash
+cd frontend
+
+# Core libraries
+npm install @tanstack/react-query @tanstack/react-query-devtools
+npm install react-hook-form zod @hookform/resolvers
+npm install framer-motion
+npm install sonner  # For toast notifications
+npm install date-fns  # For date utilities
+npm install @radix-ui/react-slot  # Required by shadcn/ui
+npm install class-variance-authority clsx tailwind-merge  # Utility libraries
+
+# Install shadcn/ui
+npx shadcn-ui@latest init
+# When prompted:
+# - Would you like to use TypeScript? Yes
+# - Which style would you like to use? Default
+# - Which color would you like to use as base color? Slate
+# - Where is your global CSS file? app/globals.css
+# - Would you like to use CSS variables for colors? Yes
+# - Where is your tailwind.config.js located? ./
+# - Configure the import alias for components? @/components
+# - Configure the import alias for utils? @/lib/utils
+
+# Install shadcn/ui components
+npx shadcn-ui@latest add button
+npx shadcn-ui@latest add dialog
+npx shadcn-ui@latest add form
+npx shadcn-ui@latest add input
+npx shadcn-ui@latest add textarea
+npx shadcn-ui@latest add select
+npx shadcn-ui@latest add tabs
+npx shadcn-ui@latest add card
+npx shadcn-ui@latest add badge
+npx shadcn-ui@latest add dropdown-menu
+npx shadcn-ui@latest add popover
+npx shadcn-ui@latest add calendar
+npx shadcn-ui@latest add toast
+npx shadcn-ui@latest add skeleton
+npx shadcn-ui@latest add separator
+npx shadcn-ui@latest add avatar
+npx shadcn-ui@latest add checkbox
+npx shadcn-ui@latest add label
+npx shadcn-ui@latest add scroll-area
+```
+
+### **Step 1.2: Update Tailwind Configuration**
+
+**File: `frontend/tailwind.config.ts`**
+
+```typescript
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+  darkMode: ["class"],
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
+    },
+  },
+  plugins: [require("tailwindcss-animate")],
+};
+
+export default config;
+```
+
+**Install tailwindcss-animate:**
+```bash
+npm install tailwindcss-animate
+```
+
+### **Step 1.3: Update Global CSS**
+
+**File: `frontend/app/globals.css`**
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 198 93% 60%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 198 93% 60%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+}
+
+/* Keep your existing glass morphism styles */
+.bg-radial {
+  background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.15), transparent 25%),
+    radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.15), transparent 25%),
+    radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.12), transparent 30%),
+    #0b1220;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.parallax {
+  background-attachment: fixed;
+}
+
+:root {
+  --brand-color: #0ea5e9;
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, var(--brand-color), #0ea5e9, #2563eb);
+}
+```
+
+### **Step 1.4: Create Utility Functions**
+
+**File: `frontend/lib/utils.ts`**
+
+```typescript
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+**File: `frontend/lib/date.ts`**
+
+```typescript
+import { format, formatDistance, isPast, isToday, isTomorrow, isThisWeek, parseISO } from "date-fns";
+
+export function formatDate(date: string | Date): string {
+  return format(typeof date === "string" ? parseISO(date) : date, "MMM dd, yyyy");
+}
+
+export function formatDateTime(date: string | Date): string {
+  return format(typeof date === "string" ? parseISO(date) : date, "MMM dd, yyyy HH:mm");
+}
+
+export function formatRelativeDate(date: string | Date): string {
+  return formatDistance(typeof date === "string" ? parseISO(date) : date, new Date(), {
+    addSuffix: true,
+  });
+}
+
+export function isOverdue(date: string | Date): boolean {
+  const dateObj = typeof date === "string" ? parseISO(date) : date;
+  return isPast(dateObj) && !isToday(dateObj);
+}
+
+export function getDateGroup(date: string | Date | null | undefined): string {
+  if (!date) return "no-date";
+  const dateObj = typeof date === "string" ? parseISO(date) : date;
+  
+  if (isToday(dateObj)) return "today";
+  if (isTomorrow(dateObj)) return "tomorrow";
+  if (isThisWeek(dateObj)) return "this-week";
+  if (isOverdue(dateObj)) return "overdue";
+  return "upcoming";
+}
+```
+
+### **Step 1.5: Set Up React Query Provider**
+
+**File: `frontend/lib/providers/query-provider.tsx`**
+
+```typescript
+"use client";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { useState } from "react";
+
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 30 * 1000, // 30 seconds
+            refetchOnWindowFocus: false,
+            retry: 1,
+          },
+        },
+      })
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+```
+
+**File: `frontend/lib/providers/toast-provider.tsx`**
+
+```typescript
+"use client";
+
+import { Toaster } from "sonner";
+
+export function ToastProvider() {
+  return (
+    <Toaster
+      position="top-right"
+      richColors
+      closeButton
+      toastOptions={{
+        style: {
+          background: "rgba(255, 255, 255, 0.06)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          backdropFilter: "blur(12px)",
+          color: "#fff",
+        },
+      }}
+    />
+  );
+}
+```
+
+**Update: `frontend/app/layout.tsx`**
+
+```typescript
+import "./globals.css";
+import { ReactNode } from "react";
+import { QueryProvider } from "@/lib/providers/query-provider";
+import { ToastProvider } from "@/lib/providers/toast-provider";
+
+export const metadata = {
+  title: process.env.NEXT_PUBLIC_APP_NAME || "SaaS Frontend",
+  description: "Multi-tenant business management SaaS",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body className="bg-radial text-gray-50 antialiased">
+        <QueryProvider>
+          <main className="min-h-screen px-4 py-6 sm:px-8">{children}</main>
+          <ToastProvider />
+        </QueryProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+---
+
+## **Phase 2: Directory Structure Setup (Day 2)**
+
+### **Complete Directory Structure**
+
+```
+frontend/
+├── app/
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── modules/
+│       └── tasks/
+│           ├── page.tsx                    # Main page (refactored, <200 lines)
+│           ├── components/                  # Page-specific components
+│           │   ├── TasksHeader.tsx
+│           │   ├── TasksTabs.tsx
+│           │   ├── TasksToolbar.tsx
+│           │   ├── TasksContent.tsx
+│           │   ├── CreateTaskButton.tsx
+│           │   └── WorkflowGuide.tsx
+│           └── hooks/                       # Page-specific hooks
+│               └── useTasksPage.ts
+│
+├── components/
+│   ├── ui/                                  # shadcn/ui components (auto-generated)
+│   │   ├── button.tsx
+│   │   ├── dialog.tsx
+│   │   ├── form.tsx
+│   │   ├── input.tsx
+│   │   ├── textarea.tsx
+│   │   ├── select.tsx
+│   │   ├── tabs.tsx
+│   │   ├── card.tsx
+│   │   ├── badge.tsx
+│   │   ├── dropdown-menu.tsx
+│   │   ├── popover.tsx
+│   │   ├── calendar.tsx
+│   │   ├── toast.tsx
+│   │   ├── skeleton.tsx
+│   │   ├── separator.tsx
+│   │   ├── avatar.tsx
+│   │   ├── checkbox.tsx
+│   │   ├── label.tsx
+│   │   └── scroll-area.tsx
+│   │
+│   ├── tasks/                               # Task-specific components
+│   │   ├── TaskCard.tsx                     # Individual task card
+│   │   ├── TaskCardSkeleton.tsx             # Loading skeleton
+│   │   ├── TaskForm.tsx                     # Create/Edit form
+│   │   ├── TaskDetailModal.tsx              # Refactored detail modal
+│   │   ├── TaskFilters.tsx                  # Filter component
+│   │   ├── TaskActions.tsx                  # Action buttons (favorite, pin, etc.)
+│   │   ├── TaskAssignees.tsx                # Assignee display/selection
+│   │   ├── TaskStatusBadge.tsx              # Status badge component
+│   │   ├── TaskPriorityBadge.tsx            # Priority badge component
+│   │   ├── TaskProgressBar.tsx              # Progress bar component
+│   │   ├── TaskDueDate.tsx                  # Due date display
+│   │   ├── KanbanView/
+│   │   │   ├── index.tsx
+│   │   │   ├── KanbanColumn.tsx
+│   │   │   ├── KanbanTaskCard.tsx
+│   │   │   └── KanbanEmptyState.tsx
+│   │   └── ListView/
+│   │       ├── index.tsx
+│   │       ├── TaskGroup.tsx
+│   │       ├── TaskRow.tsx
+│   │       └── ListViewEmptyState.tsx
+│   │
+│   ├── projects/                            # Project components
+│   │   ├── ProjectCard.tsx
+│   │   ├── ProjectForm.tsx
+│   │   └── ProjectSelect.tsx
+│   │
+│   ├── clients/                             # Client components
+│   │   ├── ClientCard.tsx
+│   │   ├── ClientForm.tsx
+│   │   └── ClientSelect.tsx
+│   │
+│   └── shared/                              # Reusable components
+│       ├── LoadingSkeleton.tsx
+│       ├── ErrorBoundary.tsx
+│       ├── ErrorMessage.tsx
+│       ├── EmptyState.tsx
+│       ├── ConfirmDialog.tsx
+│       ├── DataTable/
+│       │   ├── index.tsx
+│       │   ├── DataTableHeader.tsx
+│       │   └── DataTableRow.tsx
+│       └── StatusBadge.tsx
+│
+├── hooks/                                   # Custom hooks
+│   ├── tasks/
+│   │   ├── useTasks.ts                      # Main tasks hook
+│   │   ├── useTask.ts                       # Single task hook
+│   │   ├── useCreateTask.ts                 # Create task hook
+│   │   ├── useUpdateTask.ts                 # Update task hook
+│   │   ├── useDeleteTask.ts                 # Delete task hook
+│   │   ├── useTaskFilters.ts                # Filter logic
+│   │   ├── useTaskForm.ts                   # Form handling
+│   │   └── useTaskActions.ts                # Actions (favorite, pin, etc.)
+│   │
+│   ├── projects/
+│   │   ├── useProjects.ts
+│   │   ├── useProject.ts
+│   │   └── useProjectForm.ts
+│   │
+│   ├── clients/
+│   │   ├── useClients.ts
+│   │   ├── useClient.ts
+│   │   └── useClientForm.ts
+│   │
+│   └── shared/
+│       ├── useDebounce.ts
+│       ├── useLocalStorage.ts
+│       └── useMediaQuery.ts
+│
+├── lib/
+│   ├── api/
+│   │   ├── client.ts                        # Axios instance
+│   │   ├── tasks.ts                         # Task API endpoints
+│   │   ├── projects.ts                      # Project API endpoints
+│   │   ├── clients.ts                       # Client API endpoints
+│   │   ├── statuses.ts                      # Status API endpoints
+│   │   ├── priorities.ts                   # Priority API endpoints
+│   │   └── users.ts                         # User API endpoints
+│   │
+│   ├── schemas/                             # Zod schemas
+│   │   ├── task.ts
+│   │   ├── project.ts
+│   │   ├── client.ts
+│   │   └── common.ts
+│   │
+│   ├── providers/
+│   │   ├── query-provider.tsx
+│   │   └── toast-provider.tsx
+│   │
+│   └── utils/
+│       ├── cn.ts                            # Already created
+│       └── date.ts                          # Already created
+│
+└── types/                                   # TypeScript types
+    ├── task.ts
+    ├── project.ts
+    ├── client.ts
+    ├── status.ts
+    ├── priority.ts
+    └── api.ts
+```
+
+---
+
+## **Phase 3: Core Infrastructure (Days 3-4)**
+
+### **Step 3.1: Create TypeScript Types**
+
+**File: `frontend/types/task.ts`**
+
+```typescript
+export interface Task {
+  id: number;
+  title: string;
+  description?: string;
+  status_id: number;
+  status_name?: string;
+  status_color?: string;
+  priority_id?: number;
+  priority_name?: string;
+  priority_color?: string;
+  project_id: number;
+  project?: {
+    id: number;
+    title: string;
+  };
+  due_date?: string;
+  start_date?: string;
+  completion_percentage: number;
+  assignees?: TaskAssignee[];
+  user_id?: number[];
+  created_at?: string;
+  updated_at?: string;
+  is_favorite?: boolean;
+  is_pinned?: boolean;
+  subtasks?: Task[];
+  subtasks_count?: number;
+}
+
+export interface TaskAssignee {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
+export interface TaskFormData {
+  title: string;
+  description?: string;
+  project_id: number;
+  status_id: number;
+  priority_id?: number;
+  due_date?: string;
+  start_date?: string;
+  user_id?: number[];
+  completion_percentage?: number;
+}
+
+export interface TaskFilters {
+  project_id?: number;
+  status_id?: number;
+  priority_id?: number;
+  assignee_id?: number;
+  search?: string;
+  due_date_from?: string;
+  due_date_to?: string;
+}
+
+export interface KanbanColumn {
+  status_id: number;
+  status_name: string;
+  status_color: string;
+  tasks: Task[];
+  count: number;
+}
+```
+
+**File: `frontend/types/project.ts`**
+
+```typescript
+export interface Project {
+  id: number;
+  title: string;
+  description?: string;
+  client_id: number;
+  client?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+  budget?: number;
+  start_date?: string;
+  end_date?: string;
+  deadline?: string;
+  status: "active" | "completed" | "on-hold" | "cancelled";
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProjectFormData {
+  title: string;
+  description?: string;
+  client_id: number;
+  budget?: number;
+  start_date?: string;
+  end_date?: string;
+  deadline?: string;
+  status?: "active" | "completed" | "on-hold" | "cancelled";
+}
+```
+
+**File: `frontend/types/client.ts`**
+
+```typescript
+export interface Client {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  address?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ClientFormData {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  address?: string;
+  notes?: string;
+}
+```
+
+**File: `frontend/types/status.ts`**
+
+```typescript
+export interface Status {
+  id: number;
+  title: string;
+  color: string;
+  order?: number;
+  category?: "todo" | "in-progress" | "done" | "cancelled";
+}
+
+export interface StatusFormData {
+  title: string;
+  color: string;
+  order?: number;
+  category?: "todo" | "in-progress" | "done" | "cancelled";
+}
+```
+
+**File: `frontend/types/priority.ts`**
+
+```typescript
+export interface Priority {
+  id: number;
+  title: string;
+  color: string;
+  level?: number;
+}
+
+export interface PriorityFormData {
+  title: string;
+  color: string;
+  level?: number;
+}
+```
+
+**File: `frontend/types/api.ts`**
+
+```typescript
+export interface ApiResponse<T> {
+  data: T;
+  message?: string;
+  success?: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+export interface DropdownItem {
+  id: number;
+  name: string;
+  title?: string;
+  color?: string;
+  email?: string;
+  status?: number;
+  client_id?: number;
+}
+```
+
+### **Step 3.2: Create Zod Schemas**
+
+**File: `frontend/lib/schemas/task.ts`**
+
+```typescript
+import { z } from "zod";
+
+export const taskFormSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200, "Title is too long"),
+  description: z.string().max(5000, "Description is too long").optional(),
+  project_id: z.number().min(1, "Project is required"),
+  status_id: z.number().min(1, "Status is required"),
+  priority_id: z.number().optional(),
+  due_date: z.string().optional(),
+  start_date: z.string().optional(),
+  user_id: z.array(z.number()).optional(),
+  completion_percentage: z.number().min(0).max(100).optional(),
+});
+
+export type TaskFormData = z.infer<typeof taskFormSchema>;
+```
+
+**File: `frontend/lib/schemas/project.ts`**
+
+```typescript
+import { z } from "zod";
+
+export const projectFormSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200, "Title is too long"),
+  description: z.string().max(5000, "Description is too long").optional(),
+  client_id: z.number().min(1, "Client is required"),
+  budget: z.number().positive().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  deadline: z.string().optional(),
+  status: z.enum(["active", "completed", "on-hold", "cancelled"]).optional(),
+});
+
+export type ProjectFormData = z.infer<typeof projectFormSchema>;
+```
+
+**File: `frontend/lib/schemas/client.ts`**
+
+```typescript
+import { z } from "zod";
+
+export const clientFormSchema = z.object({
+  first_name: z.string().min(1, "First name is required").max(100),
+  last_name: z.string().min(1, "Last name is required").max(100),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().max(20).optional(),
+  company: z.string().max(200).optional(),
+  address: z.string().max(500).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+export type ClientFormData = z.infer<typeof clientFormSchema>;
+```
+
+### **Step 3.3: Create API Client**
+
+**File: `frontend/lib/api/client.ts`**
+
+```typescript
+import axios, { AxiosInstance, AxiosError } from "axios";
+import { useSessionStore } from "@/lib/store";
+
+// Create axios instance
+const apiClient: AxiosInstance = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Request interceptor to add auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = useSessionStore.getState().token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      // Handle unauthorized - redirect to login
+      useSessionStore.getState().logout();
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;
+```
+
+**File: `frontend/lib/api/tasks.ts`**
+
+```typescript
+import apiClient from "./client";
+import { Task, TaskFormData, TaskFilters, KanbanColumn } from "@/types/task";
+import { ApiResponse } from "@/types/api";
+
+export const tasksApi = {
+  // List tasks with filters
+  list: async (filters?: TaskFilters): Promise<Task[]> => {
+    const response = await apiClient.get<ApiResponse<Task[]>>(
+      "/modules/tasks/records",
+      {
+        params: { resource: "tasks", ...filters },
+      }
+    );
+    return response.data.data;
+  },
+
+  // Get single task
+  get: async (id: number): Promise<Task> => {
+    const response = await apiClient.get<ApiResponse<Task>>(
+      `/modules/tasks/records/${id}`,
+      {
+        params: { resource: "tasks" },
+      }
+    );
+    return response.data.data;
+  },
+
+  // Create task
+  create: async (data: TaskFormData): Promise<Task> => {
+    const response = await apiClient.post<ApiResponse<Task>>(
+      "/modules/tasks/records",
+      data,
+      {
+        params: { resource: "tasks" },
+      }
+    );
+    return response.data.data;
+  },
+
+  // Update task
+  update: async (id: number, data: Partial<TaskFormData>): Promise<Task> => {
+    const response = await apiClient.patch<ApiResponse<Task>>(
+      `/modules/tasks/records/${id}`,
+      data,
+      {
+        params: { resource: "tasks" },
+      }
+    );
+    return response.data.data;
+  },
+
+  // Delete task
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/modules/tasks/records/${id}`, {
+      params: { resource: "tasks" },
+    });
+  },
+
+  // Get my tasks (for staff)
+  getMyTasks: async (): Promise<Task[]> => {
+    const response = await apiClient.get<ApiResponse<Task[]>>(
+      "/modules/tasks/my-tasks"
+    );
+    return response.data.data;
+  },
+
+  // Kanban view
+  getKanban: async (projectId?: number): Promise<Record<string, KanbanColumn>> => {
+    const response = await apiClient.get<ApiResponse<Record<string, KanbanColumn>>>(
+      "/modules/tasks/kanban",
+      {
+        params: projectId ? { project_id: projectId } : {},
+      }
+    );
+    return response.data.data;
+  },
+
+  // Move task in kanban
+  moveTask: async (taskId: number, statusId: number): Promise<void> => {
+    await apiClient.patch(
+      `/modules/tasks/kanban/${taskId}/move`,
+      null,
+      {
+        params: { status_id: statusId },
+      }
+    );
+  },
+
+  // Task actions
+  toggleFavorite: async (taskId: number, isFavorite: boolean): Promise<void> => {
+    await apiClient.patch(
+      `/modules/tasks/tasks/${taskId}/favorite`,
+      null,
+      {
+        params: { is_favorite: !isFavorite },
+      }
+    );
+  },
+
+  togglePinned: async (taskId: number, isPinned: boolean): Promise<void> => {
+    await apiClient.patch(
+      `/modules/tasks/tasks/${taskId}/pinned`,
+      null,
+      {
+        params: { is_pinned: !isPinned },
+      }
+    );
+  },
+
+  duplicate: async (taskId: number): Promise<Task> => {
+    const response = await apiClient.post<ApiResponse<Task>>(
+      `/modules/tasks/tasks/${taskId}/duplicate`
+    );
+    return response.data.data;
+  },
+
+  bulkDelete: async (taskIds: number[]): Promise<void> => {
+    await apiClient.post("/modules/tasks/tasks/bulk-delete", {
+      task_ids: taskIds,
+    });
+  },
+
+  // Upload media
+  uploadMedia: async (taskId: number, file: File): Promise<void> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    await apiClient.post(
+      `/modules/tasks/tasks/${taskId}/media`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+  },
+};
+```
+
+**File: `frontend/lib/api/projects.ts`**
+
+```typescript
+import apiClient from "./client";
+import { Project, ProjectFormData } from "@/types/project";
+import { ApiResponse, DropdownItem } from "@/types/api";
+
+export const projectsApi = {
+  list: async (): Promise<Project[]> => {
+    const response = await apiClient.get<ApiResponse<Project[]>>(
+      "/modules/tasks/records",
+      { params: { resource: "projects" } }
+    );
+    return response.data.data;
+  },
+
+  get: async (id: number): Promise<Project> => {
+    const response = await apiClient.get<ApiResponse<Project>>(
+      `/modules/tasks/records/${id}`,
+      { params: { resource: "projects" } }
+    );
+    return response.data.data;
+  },
+
+  create: async (data: ProjectFormData): Promise<Project> => {
+    const response = await apiClient.post<ApiResponse<Project>>(
+      "/modules/tasks/records",
+      { ...data, title: data.title },
+      { params: { resource: "projects" } }
+    );
+    return response.data.data;
+  },
+
+  update: async (id: number, data: Partial<ProjectFormData>): Promise<Project> => {
+    const response = await apiClient.patch<ApiResponse<Project>>(
+      `/modules/tasks/records/${id}`,
+      data,
+      { params: { resource: "projects" } }
+    );
+    return response.data.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/modules/tasks/records/${id}`, {
+      params: { resource: "projects" },
+    });
+  },
+
+  getDropdown: async (): Promise<DropdownItem[]> => {
+    const response = await apiClient.get<ApiResponse<DropdownItem[]>>(
+      "/modules/tasks/dropdown/projects"
+    );
+    return response.data.data || [];
+  },
+};
+```
+
+**File: `frontend/lib/api/clients.ts`**
+
+```typescript
+import apiClient from "./client";
+import { Client, ClientFormData } from "@/types/client";
+import { ApiResponse, DropdownItem } from "@/types/api";
+
+export const clientsApi = {
+  list: async (): Promise<Client[]> => {
+    const response = await apiClient.get<ApiResponse<Client[]>>(
+      "/modules/tasks/records",
+      { params: { resource: "clients" } }
+    );
+    return response.data.data;
+  },
+
+  get: async (id: number): Promise<Client> => {
+    const response = await apiClient.get<ApiResponse<Client>>(
+      `/modules/tasks/records/${id}`,
+      { params: { resource: "clients" } }
+    );
+    return response.data.data;
+  },
+
+  create: async (data: ClientFormData): Promise<Client> => {
+    const response = await apiClient.post<ApiResponse<Client>>(
+      "/modules/tasks/records",
+      data,
+      { params: { resource: "clients" } }
+    );
+    return response.data.data;
+  },
+
+  update: async (id: number, data: Partial<ClientFormData>): Promise<Client> => {
+    const response = await apiClient.patch<ApiResponse<Client>>(
+      `/modules/tasks/records/${id}`,
+      data,
+      { params: { resource: "clients" } }
+    );
+    return response.data.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/modules/tasks/records/${id}`, {
+      params: { resource: "clients" },
+    });
+  },
+
+  getDropdown: async (): Promise<DropdownItem[]> => {
+    const response = await apiClient.get<ApiResponse<DropdownItem[]>>(
+      "/modules/tasks/dropdown/clients"
+    );
+    return response.data.data || [];
+  },
+};
+```
+
+**File: `frontend/lib/api/statuses.ts`**
+
+```typescript
+import apiClient from "./client";
+import { Status, StatusFormData } from "@/types/status";
+import { ApiResponse, DropdownItem } from "@/types/api";
+
+export const statusesApi = {
+  list: async (): Promise<Status[]> => {
+    const response = await apiClient.get<ApiResponse<Status[]>>(
+      "/modules/tasks/records",
+      { params: { resource: "statuses" } }
+    );
+    return response.data.data;
+  },
+
+  create: async (data: StatusFormData): Promise<Status> => {
+    const response = await apiClient.post<ApiResponse<Status>>(
+      "/modules/tasks/records",
+      { ...data, title: data.title },
+      { params: { resource: "statuses" } }
+    );
+    return response.data.data;
+  },
+
+  update: async (id: number, data: Partial<StatusFormData>): Promise<Status> => {
+    const response = await apiClient.patch<ApiResponse<Status>>(
+      `/modules/tasks/records/${id}`,
+      data,
+      { params: { resource: "statuses" } }
+    );
+    return response.data.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/modules/tasks/records/${id}`, {
+      params: { resource: "statuses" },
+    });
+  },
+
+  getDropdown: async (): Promise<DropdownItem[]> => {
+    const response = await apiClient.get<ApiResponse<DropdownItem[]>>(
+      "/modules/tasks/dropdown/statuses"
+    );
+    return response.data.data || [];
+  },
+};
+```
+
+**File: `frontend/lib/api/priorities.ts`**
+
+```typescript
+import apiClient from "./client";
+import { Priority, PriorityFormData } from "@/types/priority";
+import { ApiResponse, DropdownItem } from "@/types/api";
+
+export const prioritiesApi = {
+  list: async (): Promise<Priority[]> => {
+    const response = await apiClient.get<ApiResponse<Priority[]>>(
+      "/modules/tasks/records",
+      { params: { resource: "priorities" } }
+    );
+    return response.data.data;
+  },
+
+  create: async (data: PriorityFormData): Promise<Priority> => {
+    const response = await apiClient.post<ApiResponse<Priority>>(
+      "/modules/tasks/records",
+      { ...data, title: data.title },
+      { params: { resource: "priorities" } }
+    );
+    return response.data.data;
+  },
+
+  update: async (id: number, data: Partial<PriorityFormData>): Promise<Priority> => {
+    const response = await apiClient.patch<ApiResponse<Priority>>(
+      `/modules/tasks/records/${id}`,
+      data,
+      { params: { resource: "priorities" } }
+    );
+    return response.data.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/modules/tasks/records/${id}`, {
+      params: { resource: "priorities" },
+    });
+  },
+
+  getDropdown: async (): Promise<DropdownItem[]> => {
+    const response = await apiClient.get<ApiResponse<DropdownItem[]>>(
+      "/modules/tasks/dropdown/priorities"
+    );
+    return response.data.data || [];
+  },
+};
+```
+
+**File: `frontend/lib/api/users.ts`**
+
+```typescript
+import apiClient from "./client";
+import { ApiResponse, DropdownItem } from "@/types/api";
+
+export const usersApi = {
+  getDropdown: async (): Promise<DropdownItem[]> => {
+    const response = await apiClient.get<ApiResponse<DropdownItem[]>>(
+      "/modules/tasks/dropdown/users"
+    );
+    return response.data.data || [];
+  },
+};
+```
+
+---
+
+## **Phase 4: Custom Hooks Implementation (Days 5-6)**
+
+### **Step 4.1: Create Task Hooks**
+
+**File: `frontend/hooks/tasks/useTasks.ts`**
+
+```typescript
+import { useQuery } from "@tanstack/react-query";
+import { tasksApi } from "@/lib/api/tasks";
+import { TaskFilters } from "@/types/task";
+
+export function useTasks(filters?: TaskFilters) {
+  return useQuery({
+    queryKey: ["tasks", filters],
+    queryFn: () => tasksApi.list(filters),
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+```
+
+**File: `frontend/hooks/tasks/useTask.ts`**
+
+```typescript
+import { useQuery } from "@tanstack/react-query";
+import { tasksApi } from "@/lib/api/tasks";
+
+export function useTask(id: number | null) {
+  return useQuery({
+    queryKey: ["task", id],
+    queryFn: () => (id ? tasksApi.get(id) : null),
+    enabled: !!id,
+  });
+}
+```
+
+**File: `frontend/hooks/tasks/useCreateTask.ts`**
+
+```typescript
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { tasksApi } from "@/lib/api/tasks";
+import { TaskFormData } from "@/types/task";
+import { toast } from "sonner";
+
+export function useCreateTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: TaskFormData) => tasksApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      toast.success("Task created successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Failed to create task");
+    },
+  });
+}
+```
+
+**File: `frontend/hooks/tasks/useUpdateTask.ts`**
+
+```typescript
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { tasksApi } from "@/lib/api/tasks";
+import { TaskFormData } from "@/types/task";
+import { toast } from "sonner";
+
+export function useUpdateTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<TaskFormData> }) =>
+      tasksApi.update(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      toast.success("Task updated successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Failed to update task");
+    },
+  });
+}
+```
+
+**File: `frontend/hooks/tasks/useDeleteTask.ts`**
+
+```typescript
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { tasksApi } from "@/lib/api/tasks";
+import { toast } from "sonner";
+
+export function useDeleteTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => tasksApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      toast.success("Task deleted successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Failed to delete task");
+    },
+  });
+}
+```
+
+**File: `frontend/hooks/tasks/useTaskActions.ts`**
+
+```typescript
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { tasksApi } from "@/lib/api/tasks";
+import { toast } from "sonner";
+
+export function useTaskActions() {
+  const queryClient = useQueryClient();
+
+  const toggleFavorite = useMutation({
+    mutationFn: ({ taskId, isFavorite }: { taskId: number; isFavorite: boolean }) =>
+      tasksApi.toggleFavorite(taskId, isFavorite),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task", variables.taskId] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      toast.success(
+        variables.isFavorite ? "Removed from favorites" : "Added to favorites"
+      );
+    },
+  });
+
+  const togglePinned = useMutation({
+    mutationFn: ({ taskId, isPinned }: { taskId: number; isPinned: boolean }) =>
+      tasksApi.togglePinned(taskId, isPinned),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task", variables.taskId] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      toast.success(variables.isPinned ? "Unpinned" : "Pinned");
+    },
+  });
+
+  const duplicate = useMutation({
+    mutationFn: (taskId: number) => tasksApi.duplicate(taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+      toast.success("Task duplicated successfully!");
+    },
+  });
+
+  return {
+    toggleFavorite,
+    togglePinned,
+    duplicate,
+  };
+}
+```
+
+**File: `frontend/hooks/tasks/useTaskFilters.ts`**
+
+```typescript
+import { useState, useMemo } from "react";
+import { TaskFilters } from "@/types/task";
+
+export function useTaskFilters() {
+  const [filters, setFilters] = useState<TaskFilters>({});
+
+  const updateFilter = <K extends keyof TaskFilters>(
+    key: K,
+    value: TaskFilters[K] | undefined
+  ) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value === undefined || value === null ? undefined : value,
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({});
+  };
+
+  const hasActiveFilters = useMemo(() => {
+    return Object.values(filters).some((value) => value !== undefined);
+  }, [filters]);
+
+  return {
+    filters,
+    updateFilter,
+    clearFilters,
+    hasActiveFilters,
+  };
+}
+```
+
+**File: `frontend/hooks/tasks/useKanban.ts`**
+
+```typescript
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { tasksApi } from "@/lib/api/tasks";
+import { toast } from "sonner";
+
+export function useKanban(projectId?: number) {
+  return useQuery({
+    queryKey: ["kanban", projectId],
+    queryFn: () => tasksApi.getKanban(projectId),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useMoveTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, statusId }: { taskId: number; statusId: number }) =>
+      tasksApi.moveTask(taskId, statusId),
+    onMutate: async ({ taskId, statusId }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["kanban"] });
+
+      // Snapshot previous value
+      const previousKanban = queryClient.getQueryData(["kanban"]);
+
+      // Optimistically update
+      queryClient.setQueryData(["kanban"], (old: any) => {
+        if (!old) return old;
+        // Move task logic here
+        return old;
+      });
+
+      return { previousKanban };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousKanban) {
+        queryClient.setQueryData(["kanban"], context.previousKanban);
+      }
+      toast.error("Failed to move task");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["kanban"] });
+    },
+  });
+}
+```
+
+**File: `frontend/hooks/tasks/useTaskForm.ts`**
+
+```typescript
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { taskFormSchema, TaskFormData } from "@/lib/schemas/task";
+import { useCreateTask, useUpdateTask } from "./useCreateTask";
+import { useUpdateTask as useUpdateTaskHook } from "./useUpdateTask";
+
+export function useTaskForm(taskId?: number) {
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTaskHook();
+
+  const form = useForm<TaskFormData>({
+    resolver: zodResolver(taskFormSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      project_id: 0,
+      status_id: 0,
+      priority_id: undefined,
+      due_date: undefined,
+      start_date: undefined,
+      user_id: [],
+      completion_percentage: 0,
+    },
+  });
+
+  const onSubmit = async (data: TaskFormData) => {
+    if (taskId) {
+      await updateTask.mutateAsync({ id: taskId, data });
+    } else {
+      await createTask.mutateAsync(data);
+    }
+  };
+
+  return {
+    form,
+    onSubmit: form.handleSubmit(onSubmit),
+    isLoading: createTask.isPending || updateTask.isPending,
+  };
+}
+```
+
+### **Step 4.2: Create Shared Hooks**
+
+**File: `frontend/hooks/shared/useDebounce.ts`**
+
+```typescript
+import { useState, useEffect } from "react";
+
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+```
+
+**File: `frontend/hooks/shared/useLocalStorage.ts`**
+
+```typescript
+import { useState, useEffect } from "react";
+
+export function useLocalStorage<T>(key: string, initialValue: T) {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === "undefined") {
+      return initialValue;
+    }
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      return initialValue;
+    }
+  });
+
+  const setValue = (value: T | ((val: T) => T)) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return [storedValue, setValue] as const;
+}
+```
+
+---
+
+## **Phase 5: Component Implementation (Days 7-10)**
+
+### **Step 5.1: Shared Components**
+
+**File: `frontend/components/shared/LoadingSkeleton.tsx`**
+
+```typescript
+import { Skeleton } from "@/components/ui/skeleton";
+
+export function LoadingSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[...Array(5)].map((_, i) => (
+        <div key={i} className="glass rounded-lg p-4 space-y-2">
+          <Skeleton className="h-4 w-3/4 bg-white/10" />
+          <Skeleton className="h-4 w-1/2 bg-white/10" />
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**File: `frontend/components/shared/EmptyState.tsx`**
+
+```typescript
+import { LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface EmptyStateProps {
+  icon: LucideIcon;
+  title: string;
+  description?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: EmptyStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <Icon className="h-12 w-12 text-gray-400 mb-4" />
+      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
+      {description && (
+        <p className="text-sm text-gray-400 mb-4 max-w-md">{description}</p>
+      )}
+      {actionLabel && onAction && (
+        <Button onClick={onAction} variant="default">
+          {actionLabel}
+        </Button>
+      )}
+    </div>
+  );
+}
+```
+
+**File: `frontend/components/shared/ErrorMessage.tsx`**
+
+```typescript
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface ErrorMessageProps {
+  message: string;
+  onDismiss?: () => void;
+}
+
+export function ErrorMessage({ message, onDismiss }: ErrorMessageProps) {
+  return (
+    <Alert variant="destructive" className="glass border-red-500/50">
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription className="text-red-200">{message}</AlertDescription>
+    </Alert>
+  );
+}
+```
+
+**File: `frontend/components/shared/ConfirmDialog.tsx`**
+
+```typescript
+"use client";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+interface ConfirmDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  variant?: "default" | "destructive";
+}
+
+export function ConfirmDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  onConfirm,
+  variant = "default",
+}: ConfirmDialogProps) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="glass">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className={variant === "destructive" ? "bg-red-500 hover:bg-red-600" : ""}
+          >
+            {confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+```
+
+**Note:** Install alert-dialog component:
+```bash
+npx shadcn-ui@latest add alert-dialog
+```
+
+### **Step 5.2: Task Components**
+
+**File: `frontend/components/tasks/TaskStatusBadge.tsx`**
+
+```typescript
+import { Badge } from "@/components/ui/badge";
+
+interface TaskStatusBadgeProps {
+  name: string;
+  color?: string;
+}
+
+export function TaskStatusBadge({ name, color }: TaskStatusBadgeProps) {
+  const bgColor = color ? `${color}20` : "rgba(107, 114, 128, 0.2)";
+  const textColor = color || "#6b7280";
+
+  return (
+    <Badge
+      className="text-xs font-medium"
+      style={{
+        backgroundColor: bgColor,
+        color: textColor,
+        border: `1px solid ${textColor}40`,
+      }}
+    >
+      {name}
+    </Badge>
+  );
+}
+```
+
+**File: `frontend/components/tasks/TaskPriorityBadge.tsx`**
+
+```typescript
+import { Badge } from "@/components/ui/badge";
+
+interface TaskPriorityBadgeProps {
+  name: string;
+  color?: string;
+}
+
+export function TaskPriorityBadge({ name, color }: TaskPriorityBadgeProps) {
+  const bgColor = color ? `${color}20` : "rgba(107, 114, 128, 0.2)";
+  const textColor = color || "#6b7280";
+
+  return (
+    <Badge
+      className="text-xs font-medium"
+      style={{
+        backgroundColor: bgColor,
+        color: textColor,
+        border: `1px solid ${textColor}40`,
+      }}
+    >
+      {name}
+    </Badge>
+  );
+}
+```
+
+**File: `frontend/components/tasks/TaskCard.tsx`**
+
+```typescript
+"use client";
+
+import { Task } from "@/types/task";
+import { Card } from "@/components/ui/card";
+import { TaskStatusBadge } from "./TaskStatusBadge";
+import { TaskPriorityBadge } from "./TaskPriorityBadge";
+import { TaskActions } from "./TaskActions";
+import { TaskAssignees } from "./TaskAssignees";
+import { TaskDueDate } from "./TaskDueDate";
+import { TaskProgressBar } from "./TaskProgressBar";
+import { formatRelativeDate, isOverdue } from "@/lib/date";
+import { motion } from "framer-motion";
+
+interface TaskCardProps {
+  task: Task;
+  onClick?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}
+
+export function TaskCard({ task, onClick, onEdit, onDelete }: TaskCardProps) {
+  const overdue = task.due_date ? isOverdue(task.due_date) : false;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <Card
+        className="glass cursor-pointer hover:bg-white/10 transition p-4 space-y-3"
+        onClick={onClick}
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-2">
+            <h4 className="font-semibold text-white line-clamp-2">{task.title}</h4>
+            {task.description && (
+              <p className="text-sm text-gray-300 line-clamp-2">{task.description}</p>
+            )}
+          </div>
+          <TaskActions
+            task={task}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            className="ml-2"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {task.status_name && (
+            <TaskStatusBadge name={task.status_name} color={task.status_color} />
+          )}
+          {task.priority_name && (
+            <TaskPriorityBadge name={task.priority_name} color={task.priority_color} />
+          )}
+        </div>
+
+        {task.completion_percentage > 0 && (
+          <TaskProgressBar percentage={task.completion_percentage} />
+        )}
+
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <div className="flex items-center gap-3">
+            {task.assignees && task.assignees.length > 0 && (
+              <TaskAssignees assignees={task.assignees} />
+            )}
+            {task.due_date && (
+              <TaskDueDate date={task.due_date} overdue={overdue} />
+            )}
+          </div>
+          {task.project && (
+            <span className="text-gray-500">{task.project.title}</span>
+          )}
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+```
+
+**File: `frontend/components/tasks/TaskForm.tsx`**
+
+```typescript
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { taskFormSchema, TaskFormData } from "@/lib/schemas/task";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { DropdownItem } from "@/types/api";
+import { Task } from "@/types/task";
+
+interface TaskFormProps {
+  task?: Task;
+  projects: DropdownItem[];
+  statuses: DropdownItem[];
+  priorities: DropdownItem[];
+  users: DropdownItem[];
+  onSubmit: (data: TaskFormData) => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+}
+
+export function TaskForm({
+  task,
+  projects,
+  statuses,
+  priorities,
+  users,
+  onSubmit,
+  onCancel,
+  isLoading,
+}: TaskFormProps) {
+  const form = useForm<TaskFormData>({
+    resolver: zodResolver(taskFormSchema),
+    defaultValues: {
+      title: task?.title || "",
+      description: task?.description || "",
+      project_id: task?.project_id || 0,
+      status_id: task?.status_id || 0,
+      priority_id: task?.priority_id,
+      due_date: task?.due_date ? task.due_date.split("T")[0] : undefined,
+      start_date: task?.start_date ? task.start_date.split("T")[0] : undefined,
+      user_id: task?.user_id || [],
+      completion_percentage: task?.completion_percentage || 0,
+    },
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Title</FormLabel>
+              <FormControl>
+                <Input placeholder="Task title" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Task description"
+                  rows={4}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="project_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Project *</FormLabel>
+                <Select
+                  onValueChange={(value) => field.onChange(Number(value))}
+                  defaultValue={field.value?.toString()}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id.toString()}>
+                        {project.name || project.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="status_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Status *</FormLabel>
+                <Select
+                  onValueChange={(value) => field.onChange(Number(value))}
+                  defaultValue={field.value?.toString()}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {statuses.map((status) => (
+                      <SelectItem key={status.id} value={status.id.toString()}>
+                        {status.name || status.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="priority_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Priority</FormLabel>
+                <Select
+                  onValueChange={(value) =>
+                    field.onChange(value ? Number(value) : undefined)
+                  }
+                  defaultValue={field.value?.toString()}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {priorities.map((priority) => (
+                      <SelectItem key={priority.id} value={priority.id.toString()}>
+                        {priority.name || priority.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="completion_percentage"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Completion %</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    {...field}
+                    onChange={(e) => field.onChange(Number(e.target.value))}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="start_date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Start Date</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="due_date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Due Date</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? "Saving..." : task ? "Update" : "Create"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+```
+
+**Continue with remaining components...** (Due to length, I'll provide the key structure. Your developer should follow the same patterns for remaining components.)
+
+---
+
+## **Phase 6: Main Page Refactoring (Days 11-12)**
+
+### **Step 6.1: Refactored Main Page**
+
+**File: `frontend/app/modules/tasks/page.tsx`**
+
+```typescript
+"use client";
+
+import { useState } from "react";
+import { useSessionStore } from "@/lib/store";
+import { TasksHeader } from "./components/TasksHeader";
+import { TasksTabs } from "./components/TasksTabs";
+import { TasksContent } from "./components/TasksContent";
+import { useTasksPage } from "./hooks/useTasksPage";
+
+export default function TasksModulePage() {
+  const { user } = useSessionStore();
+  const [activeTab, setActiveTab] = useState<string>("tasks");
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("list");
+
+  const {
+    tasks,
+    projects,
+    clients,
+    statuses,
+    priorities,
+    users,
+    isLoading,
+    error,
+  } = useTasksPage(activeTab);
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-4">
+      <TasksHeader user={user} />
+      <TasksTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        user={user}
+      />
+      <TasksContent
+        activeTab={activeTab}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        tasks={tasks}
+        projects={projects}
+        clients={clients}
+        statuses={statuses}
+        priorities={priorities}
+        users={users}
+        isLoading={isLoading}
+        error={error}
+        user={user}
+      />
+    </div>
+  );
+}
+```
+
+---
+
+## **Phase 7: Testing & Polish (Days 13-14)**
+
+### **Step 7.1: Testing Checklist**
+
+1. ✅ All forms validate correctly
+2. ✅ CRUD operations work
+3. ✅ Filters work properly
+4. ✅ Kanban drag & drop works
+5. ✅ Loading states display
+6. ✅ Error handling works
+7. ✅ Toast notifications appear
+8. ✅ Responsive design works
+9. ✅ Accessibility (keyboard navigation)
+10. ✅ Performance (no unnecessary re-renders)
+
+### **Step 7.2: Performance Optimizations**
+
+- Use React.memo for expensive components
+- Implement virtual scrolling for large lists
+- Add debouncing to search inputs
+- Optimize images with next/image
+- Code splitting for routes
+
+---
+
+## **Implementation Timeline Summary**
+
+- **Days 1-2:** Foundation Setup
+- **Days 3-4:** Core Infrastructure
+- **Days 5-6:** Custom Hooks
+- **Days 7-10:** Component Implementation
+- **Days 11-12:** Main Page Refactoring
+- **Days 13-14:** Testing & Polish
+
+**Total: 14 days (2 weeks)**
+
+---
+
+## **Important Notes for Developer**
+
+1. Follow the directory structure exactly
+2. Use TypeScript strictly (no `any` types)
+3. All API calls go through the API client
+4. Use React Query for all server state
+5. Use React Hook Form + Zod for all forms
+6. Use shadcn/ui components consistently
+7. Add loading skeletons for all async operations
+8. Add error boundaries
+9. Use Framer Motion for animations
+10. Test on mobile devices
+
+---
+
+## **Migration Strategy**
+
+1. Keep old code working during migration
+2. Migrate one feature at a time
+3. Test thoroughly after each migration
+4. Remove old code only after new code is verified
+5. Update documentation as you go
+
+This plan provides the structure and patterns needed for implementation. Your developer should follow these patterns for consistency.

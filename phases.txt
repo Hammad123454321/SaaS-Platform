@@ -1,73 +1,165 @@
-PHASE 1 — PLATFORM CORE + MODULE INTEGRATION + BASIC AI AGENT
+PHASES — CUSTOMER ONBOARDING & COMPLIANCE FLOW
+
+This document is aligned strictly with `requirement_project.txt` and its staged onboarding model.
+Each phase below corresponds directly to a STAGE in the requirements (0–8) and preserves all
+hard gates and compliance constraints.
+
+________________________________________
+PHASE 0 — ACCOUNT CREATION (ACCESS GATE)
 Objective:
-Set up the SaaS foundation, integrate all paid module APIs, create multi-tenant structure, and launch a basic functional AI agent.
-________________________________________
-1. Multi-Tenant SaaS Core (FastAPI + Next.js)
-•	Authentication system (JWT)
-•	Company creation + onboarding
-•	Stripe billing
-•	Super Admin panel
-•	Company Admin panel
-•	Staff roles & permissions
-•	Tenant isolation across modules
-•	Unified session & routing in Next.js
-•	User management UI
+Enable a new user to register, accept policies, and pass email verification before they can
+access the product.
+
+User does:
+• Enter email + password.
+• Accept Privacy Policy and Terms of Service.
+• Select communication preferences (email / SMS – optional).
+
+System does:
+• Enforce password policy and store policy version + timestamp.
+• Create a draft Tenant.
+• Send email verification (e.g. via SendGrid SMTP).
+• Log registration event.
+
+Hard gate:
+• Email verification must be completed before login and further onboarding steps.
 ________________________________________
 
+PHASE 1 — BUSINESS SETUP (IDENTITY & JURISDICTION)
+Objective:
+Collect and persist core business identity and jurisdiction so applicable laws and rules can
+be determined and activated.
+
+User does:
+• Provide legal business name and operating name (if different).
+• Provide province/country, time zone, and primary location.
+
+System does:
+• Determine applicable laws based on jurisdiction (e.g., Ontario → PAWS, WSIB).
+• Activate relevant compliance rules tied to that jurisdiction.
+• Save the profile as “unconfirmed” until later confirmations.
+
+Compliance:
+• Jurisdiction mapping must be correct and traceable.
+________________________________________
+
+PHASE 2 — ROLES & ACCESS (LIABILITY CONTROL)
+Objective:
+Define the account Owner and role structure so responsibilities and access are controlled.
+
+Step 2.1 – Owner Confirmation:
+• User confirms the Owner role and acknowledges responsibility disclaimer.
+• System locks Owner role (cannot be deleted) and requires Owner for future confirmations.
+
+Step 2.2 – Create Roles:
+• User creates roles (e.g., Manager, Staff, Accountant) using templates or custom roles.
+• System applies RBAC, prevents over-permissioning, and logs role creation.
+
+Step 2.3 – Invite Team (Optional):
+• User invites employees / accountant.
+• System sends invite emails, requires policy acceptance per user, and creates onboarding
+  tasks for staff.
+
+Hard gate:
+• Owner confirmation is required before go‑live and high‑impact confirmations.
+________________________________________
+
+PHASE 3 — MODULE SELECTION (SCOPE CONTROL)
+Objective:
+Limit scope and liability by explicitly selecting which operational modules are in use and
+what industry rules apply.
+
+Step 3.1 – Select Modules:
+• User chooses modules: Website, Bookings, POS, HR, Finance, Marketing.
+• System:
+  • Activates only required compliance rules based on selected modules.
+  • Creates module‑specific onboarding tasks.
+  • Prevents access to inactive modules.
+
+Step 3.2 – Industry Declaration:
+• User selects industry (e.g., Grooming, Daycare, Retail, Food, Other).
+• System enables industry‑specific rules (e.g., PAWS, CFIA) and adds required compliance
+  tasks automatically.
+________________________________________
+
+PHASE 4 — COMPLIANCE CONFIRMATIONS (LEGAL SAFEGUARDS)
+Objective:
+Capture explicit user confirmations for privacy, marketing, financial, and HR/safety areas.
+
+Step 4.1 – Privacy & Marketing:
+• User reviews default privacy wording and confirms CASL language (or edits).
+• System stores confirmed wording and locks it for use in forms/emails.
+
+Step 4.2 – Financial Setup (If Finance module enabled):
+• User enters payroll type, pay schedule, and WSIB class (if applicable).
+• System calculates suggested values, shows a disclaimer, blocks auto‑submission,
+  and requires explicit confirmation: “I confirm these values are correct.”
+
+Step 4.3 – HR & Safety (If HR module enabled):
+• User reviews default policies (Health & safety, Harassment, Training requirements).
+• System assigns training tasks and requires employee acknowledgements.
+
+Hard gates:
+• Policy acceptance (privacy/marketing wording and required HR policies).
+• Financial confirmations if the Finance module is enabled.
+________________________________________
+
+PHASE 5 — TASKS & WORKFLOWS (OPERATIONAL READINESS)
+Objective:
+Operationalize all required and recommended tasks that derive from earlier choices.
+
+Step 5.1 – Review Auto‑Generated Tasks:
+• User reviews onboarding checklist, assigns owners, and adjusts due dates.
+• System marks required tasks as non‑deletable and enables escalation rules.
+
+Step 5.2 – Incident & Safety Rules:
+• User confirms incident handling rules.
+• System locks incident tasks and enables export & audit tracking.
+________________________________________
+
+PHASE 6 — WEBSITE & CUSTOMER TOUCHPOINTS (IF ENABLED)
+Objective:
+Provision and configure customer‑facing properties when the Website module is selected.
+
+Step 6.1 – Website Setup:
+• User confirms site name, selects template, and chooses domain (or placeholder).
+• System provisions a WordPress Multisite site, enables cookie banner, and enables
+  accessibility helpers.
+
+Step 6.2 – AI Writer Orientation:
+• User reviews AI usage rules and confirms publishing approval requirement.
+• System pins AI disclaimers and enables the AI Writer (e.g., “Writer NC5”) accordingly.
+________________________________________
+
+PHASE 7 — FINAL REVIEW & GO‑LIVE
+Objective:
+Provide a final compliance and readiness checkpoint before unlocking production features.
+
+Step 7.1 – Compliance Checklist Review:
+• System shows required items, pending confirmations, and warnings (non‑blocking).
+
+Step 7.2 – Owner Go‑Live Confirmation:
+• User (Owner) confirms:
+  • “I confirm my setup is accurate.”
+  • “I understand Axiom9 does not file on my behalf.”
+• System unlocks production features, logs the Go‑Live event, and starts regular monitoring.
+
+Hard gates:
+• Compliance checklist required items must be completed.
+• Owner go‑live confirmation must be captured before unlocking production.
+________________________________________
+
+PHASE 8 — POST‑ONBOARDING (FIRST 30 DAYS)
+Objective:
+Support the tenant in the first 30 days with reminders, summaries, and alerts.
+
+Automated System Actions:
+• Weekly compliance reminders.
+• AI “What needs attention” summary.
+• Expiring confirmation alerts.
+• Suggested optimizations.
+
+One‑line summary flow:
+Register → Verify → Business Info → Roles → Modules → Compliance Confirmations → Tasks → Website (if any) → Go Live → 30‑day follow‑up
 
 
-2. Module Integrations (Using Paid Scripts)
-Each script is integrated via API wrapper microservices in FastAPI:
-•	CRM API wrapper
-•	HRM API wrapper
-•	POS API wrapper
-•	Task Management wrapper
-•	Booking System wrapper
-•	Landing Page Builder wrapper
-This means:
-•	No database building for modules
-•	No frontend UI for modules
-•	You use their UI or embed their UI if available
-•	Or build your own UI by consuming their API
-At this stage:
-The goal is only integration — NOT building features.
-________________________________________
-3. Next.js Shell + Company Dashboards
-•	Super Admin dashboard
-•	Company Admin dashboard
-•	Staff dashboard
-•	Module navigation & routing
-•	Branding (logo, colors)
-•	"Chat with AI Agent" interface
-________________________________________
-4. AI Business Agent (Phase 1 – LangChain Agent with GPT API)
-Implementation:
-•	LangChain agent using OpenAI GPT API (GPT-4 or GPT-3.5-turbo)
-•	Function calling tools for module interactions:
-o	CRM: get_leads, get_clients, create_deal, add_note, draft_email
-o	HRM: get_employees, get_attendance, get_leave_requests
-o	POS: get_sales, get_inventory, get_products
-o	Tasks: create_task, list_tasks, update_task
-o	Booking: get_appointments, create_booking, check_availability
-o	Landing Page: create_page, update_page_content
-•	RAG indexing per tenant (optional, for business data context)
-•	Tenant isolation enforced in all tool calls
-•	Streaming responses for chat interface
-Capabilities:
-•	Answers questions like:
-"Show me top customers"
-"What were last week's sales?"
-"How many staff were absent yesterday?"
-•	Performs actions:
-o	Create task
-o	Create CRM note
-o	Draft email
-o	Create booking
-o	Generate landing page content
-Security Layer:
-•	Tenant isolation in all tool calls
-•	Permission checks before executing actions
-•	Audit logging for all AI actions
-________________________________________
-Phase 1 Outcome:
-A functioning SaaS wrapper with all modules integrated via API + a working LangChain-powered AI assistant that can read and act on module data using GPT API.

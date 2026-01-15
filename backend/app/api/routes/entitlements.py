@@ -86,5 +86,10 @@ async def toggle_entitlement(
         target=str(module_code),
         details={"enabled": payload.enabled, "seats": payload.seats, "ai_access": payload.ai_access},
     )
-    return EntitlementRead.model_validate(entitlement)
+    return EntitlementRead.model_validate({
+        "module_code": entitlement.module_code,
+        "enabled": entitlement.enabled,
+        "seats": entitlement.seats,
+        "ai_access": entitlement.ai_access,
+    })
 

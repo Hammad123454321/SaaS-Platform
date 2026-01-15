@@ -5,6 +5,7 @@ from app.db import get_session
 from app.models import User, Tenant, UserRole, Role
 from app.api.authz import require_permission
 from app.models.role import PermissionCode
+from app.services.owner_service import is_user_owner
 from app.core.security import hash_password
 from app.api.routes.auth import _validate_password_strength
 from app.schemas.user import UserRead, UserCreate, UserUpdate
@@ -186,6 +187,13 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete your own account.",
+        )
+    
+    # Stage 2: Owner cannot be deleted
+    if is_user_owner(session, user.id, user.tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete the owner account. The owner role is locked.",
         )
     
     user.is_active = False

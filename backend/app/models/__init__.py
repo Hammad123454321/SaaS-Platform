@@ -11,25 +11,160 @@ from app.models.entitlement import (
 from app.models.vendor_credential import VendorCredential
 from app.models.password_reset import PasswordResetToken, ImpersonationAudit, AuditLog
 from app.models.taskify_config import TenantTaskifyConfig, TaskifyUserMapping
+from app.models.onboarding import (
+    EmailVerificationToken,
+    PolicyAcceptance,
+    PolicyType,
+    CommunicationPreferences,
+    RegistrationEvent,
+    BusinessProfile,
+    ProvinceCode,
+    ComplianceRuleCode,
+    TenantComplianceRule,
+    OwnerConfirmation,
+    RoleTemplateCode,
+    TeamInvitation,
+    StaffOnboardingTask,
+)
+from app.models.compliance import (
+    FinancialSetup,
+    PayrollType,
+    PaySchedule,
+    WSIBClass,
+    HRPolicy,
+    HRPolicyType,
+    PolicyAcknowledgement,
+    PrivacyWording,
+)
+from app.models.workflows import (
+    TaskTemplate,
+    OnboardingTask,
+    OnboardingTaskSource,
+    EscalationRule,
+    EscalationEvent,
+)
+from app.models.permissions import UserPermission
+from app.models.tasks import (
+    # Enums
+    TaskStatusCategory,
+    ProjectStatus,
+    BillingType,
+    # Link models for many-to-many
+    TaskAssignment,
+    TaskTagLink,
+    # Association tables (legacy references)
+    task_assignments_table,
+    task_tags_table,
+    # Core models
+    Client,
+    Project,
+    Task,
+    TaskStatus,
+    TaskPriority,
+    TaskList,
+    TaskComment,
+    TaskAttachment,
+    TaskFavorite,
+    TaskPin,
+    Tag,
+    Milestone,
+    TimeEntry,
+    TimeTracker,
+    CommentAttachment,
+    DocumentFolder,
+    DocumentCategory,
+    ResourceAllocation,
+    ActivityLog,
+    TaskDependency,
+    RecurringTask,
+)
 
 __all__ = [
+    # User and Tenant
     "User",
     "Tenant",
+    # Roles and Permissions
     "Role",
     "Permission",
     "RolePermission",
     "UserRole",
     "PermissionCode",
+    # Entitlements
     "ModuleEntitlement",
     "ModuleCode",
     "Subscription",
     "BillingHistory",
     "WebhookEvent",
+    # Vendor
     "VendorCredential",
+    # Auth and Audit
     "PasswordResetToken",
     "ImpersonationAudit",
     "AuditLog",
+    # Taskify Config
     "TenantTaskifyConfig",
     "TaskifyUserMapping",
+    # Onboarding (Stages 0-2)
+    "EmailVerificationToken",
+    "PolicyAcceptance",
+    "PolicyType",
+    "CommunicationPreferences",
+    "RegistrationEvent",
+    "BusinessProfile",
+    "ProvinceCode",
+    "ComplianceRuleCode",
+    "TenantComplianceRule",
+    "OwnerConfirmation",
+    "RoleTemplateCode",
+    "TeamInvitation",
+    "StaffOnboardingTask",
+    # Task Management Enums
+    "TaskStatusCategory",
+    "ProjectStatus",
+    "BillingType",
+    # Link Models
+    "TaskAssignment",
+    "TaskTagLink",
+    # Association Tables (legacy references)
+    "task_assignments_table",
+    "task_tags_table",
+    # Task Management Models
+    "Client",
+    "Project",
+    "Task",
+    "TaskStatus",
+    "TaskPriority",
+    "TaskList",
+    "TaskComment",
+    "TaskAttachment",
+    "TaskFavorite",
+    "TaskPin",
+    "Tag",
+    "Milestone",
+    "TimeEntry",
+    "TimeTracker",
+    "CommentAttachment",
+    "DocumentFolder",
+    "DocumentCategory",
+    "ResourceAllocation",
+    "ActivityLog",
+    "TaskDependency",
+    "RecurringTask",
+    # Compliance (Stage 4)
+    "FinancialSetup",
+    "PayrollType",
+    "PaySchedule",
+    "WSIBClass",
+    "HRPolicy",
+    "HRPolicyType",
+    "PolicyAcknowledgement",
+    "PrivacyWording",
+    # Workflows (Stage 5)
+    "TaskTemplate",
+    "OnboardingTask",
+    "OnboardingTaskSource",
+    "EscalationRule",
+    "EscalationEvent",
+    # Permissions (Stage 3)
+    "UserPermission",
 ]
-

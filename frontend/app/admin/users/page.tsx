@@ -137,7 +137,7 @@ export default function UsersPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-white">{u.email}</span>
                       {u.is_super_admin && (
-                        <Shield className="h-4 w-4 text-yellow-300" title="Super Admin" />
+                        <Shield className="h-4 w-4 text-yellow-300" />
                       )}
                       {!u.is_active && (
                         <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-300">

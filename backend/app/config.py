@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-me", description="HS256 secret for access tokens")
     jwt_refresh_secret_key: str = Field(default="change-me-refresh", description="HS256 secret for refresh tokens")
     jwt_algorithm: str = "HS256"
-    access_token_exp_minutes: int = 30
+    access_token_exp_minutes: int = 1440  # 24 hours for debugging - change back to 30 later
     refresh_token_exp_minutes: int = 60 * 24 * 7
 
     # Security
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = "STRIPE_WEBHOOK_SECRET_PLACEHOLDER"
 
     # Observability
-    log_level: str = "INFO"
+    log_level: str = "DEBUG"  # Set to DEBUG temporarily to debug token expiration
 
     # Frontend / CORS
     cors_origins: List[str] = Field(
@@ -47,17 +47,13 @@ class Settings(BaseSettings):
 
     # OpenAI / LangChain
     openai_api_key: str = Field(default="", description="OpenAI API key for GPT models")
-    openai_model: str = Field(
-        default="gpt-3.5-turbo", description="OpenAI model to use (e.g. gpt-3.5-turbo)"
-    )
-    openai_temperature: float = Field(
-        default=0.7, description="Temperature for AI responses"
-    )
-
-    # OpenAI / LangChain
-    openai_api_key: str = Field(default="", description="OpenAI API key for GPT models")
     openai_model: str = Field(default="gpt-4-turbo-preview", description="OpenAI model to use (gpt-4, gpt-4-turbo-preview, gpt-3.5-turbo)")
     openai_temperature: float = Field(default=0.7, description="Temperature for AI responses")
 
 
 settings = Settings()  # Singleton-style settings instance
+
+
+def is_development() -> bool:
+    """Check if the application is running in development mode."""
+    return settings.environment.lower() == "development"

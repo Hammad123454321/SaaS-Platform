@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/lib/store";
+import { api } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import SuperAdminDashboard from "./super-admin/page";
 import CompanyAdminDashboard from "./company-admin/page";
@@ -11,15 +12,35 @@ import StaffDashboard from "./staff/page";
 export default function DashboardPage() {
   const router = useRouter();
   const { user, accessToken } = useSessionStore();
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   useEffect(() => {
     if (!user || !accessToken) {
       router.push("/login");
       return;
     }
+    
+    // Check onboarding completion
+    const checkOnboarding = async () => {
+      try {
+        const res = await api.get("/auth/onboarding-status");
+        if (!res.data.onboarding_complete) {
+          // Redirect to onboarding if not complete
+          router.push("/onboarding");
+          return;
+        }
+        setCheckingOnboarding(false);
+      } catch (err) {
+        console.error("Failed to check onboarding status:", err);
+        // On error, allow access (fail open)
+        setCheckingOnboarding(false);
+      }
+    };
+    
+    checkOnboarding();
   }, [user, accessToken, router]);
 
-  if (!user || !accessToken) {
+  if (!user || !accessToken || checkingOnboarding) {
     return null;
   }
 

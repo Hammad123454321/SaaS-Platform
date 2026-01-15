@@ -252,19 +252,41 @@ async def create_task(tenant_id: int, task_data: Dict[str, Any], session: Any) -
     
     Args:
         tenant_id: The tenant ID
-        task_data: Task information (title, description, assignee_id, due_date, etc.)
+        task_data: Task information (title, description, project_id, status_id, assignee_ids, due_date, etc.)
         session: Database session
         
     Returns:
         Created task information
     """
     _require_entitlement(session, tenant_id, ModuleCode.TASKS)
-    client = await _get_module_client(ModuleCode.TASKS, tenant_id, session)
-    if hasattr(client, "create_task"):
-        result = await client.create_task(task_data) if asyncio.iscoroutinefunction(client.create_task) else client.create_task(task_data)
-    else:
-        result = await client.create_record("tasks", task_data) if asyncio.iscoroutinefunction(client.create_record) else client.create_record("tasks", task_data)
-    return result
+    from app.services.tasks import create_task as create_task_service
+    from app.models import User
+    
+    # Get a user for the tenant (use first user as creator)
+    from sqlmodel import select
+    user = session.exec(select(User).where(User.tenant_id == tenant_id).limit(1)).first()
+    if not user:
+        raise ValueError("No user found for tenant")
+    
+    # Normalize task data
+    normalized_data = {
+        "title": task_data.get("title", ""),
+        "description": task_data.get("description"),
+        "project_id": task_data.get("project_id"),
+        "status_id": task_data.get("status_id"),
+        "priority_id": task_data.get("priority_id"),
+        "due_date": task_data.get("due_date"),
+        "assignee_ids": task_data.get("assignee_ids", []) or task_data.get("assignee_id", []),
+    }
+    
+    task = create_task_service(session, tenant_id, user.id, normalized_data)
+    return {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "project_id": task.project_id,
+        "status_id": task.status_id,
+    }
 
 
 @tool
@@ -273,19 +295,45 @@ async def list_tasks(tenant_id: int, status: Optional[str] = None, session: Any 
     
     Args:
         tenant_id: The tenant ID
-        status: Optional status filter (pending, in_progress, completed)
+        status: Optional status filter (status name or status_id)
         session: Database session
         
     Returns:
         List of tasks
     """
     _require_entitlement(session, tenant_id, ModuleCode.TASKS)
-    client = await _get_module_client(ModuleCode.TASKS, tenant_id, session)
-    if hasattr(client, "list_tasks"):
-        result = await client.list_tasks(status=status) if asyncio.iscoroutinefunction(client.list_tasks) else client.list_tasks(status=status)
-    else:
-        result = await client.list_records("tasks", status=status) if asyncio.iscoroutinefunction(client.list_records) else client.list_records("tasks")
-    return result
+    from app.services.tasks import list_tasks as list_tasks_service
+    from sqlmodel import select
+    from app.models import TaskStatus
+    
+    # Convert status name to status_id if needed
+    status_id = None
+    if status:
+        if status.isdigit():
+            status_id = int(status)
+        else:
+            # Try to find status by name
+            status_obj = session.exec(
+                select(TaskStatus).where(
+                    TaskStatus.tenant_id == tenant_id,
+                    TaskStatus.name.ilike(f"%{status}%")
+                ).limit(1)
+            ).first()
+            if status_obj:
+                status_id = status_obj.id
+    
+    tasks = list_tasks_service(session, tenant_id, status_id=status_id)
+    return [
+        {
+            "id": t.id,
+            "title": t.title,
+            "description": t.description,
+            "status": t.status.name if t.status else None,
+            "project": t.project.name if t.project else None,
+            "due_date": str(t.due_date) if t.due_date else None,
+        }
+        for t in tasks
+    ]
 
 
 @tool
@@ -302,12 +350,30 @@ async def update_task(tenant_id: int, task_id: str, updates: Dict[str, Any], ses
         Updated task information
     """
     _require_entitlement(session, tenant_id, ModuleCode.TASKS)
-    client = await _get_module_client(ModuleCode.TASKS, tenant_id, session)
-    if hasattr(client, "update_task"):
-        result = await client.update_task(int(task_id), updates) if asyncio.iscoroutinefunction(client.update_task) else client.update_task(int(task_id), updates)
-    else:
-        result = {"id": task_id, "updated": updates, "status": "success"}
-    return result
+    from app.services.tasks import update_task as update_task_service
+    
+    try:
+        task_id_int = int(task_id)
+    except ValueError:
+        raise ValueError(f"Invalid task ID: {task_id}")
+    
+    # Normalize updates
+    normalized_updates = {
+        "title": updates.get("title"),
+        "description": updates.get("description"),
+        "status_id": updates.get("status_id"),
+        "priority_id": updates.get("priority_id"),
+        "due_date": updates.get("due_date"),
+        "assignee_ids": updates.get("assignee_ids", []) or updates.get("assignee_id", []),
+    }
+    normalized_updates = {k: v for k, v in normalized_updates.items() if v is not None}
+    
+    task = update_task_service(session, tenant_id, task_id_int, normalized_updates)
+    return {
+        "id": task.id,
+        "title": task.title,
+        "status_id": task.status_id,
+    }
 
 
 # Booking Tools

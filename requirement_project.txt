@@ -1,323 +1,533 @@
-📘 PRD v1.0 – 6-in-1 Business Management SaaS Platform
-Version: 1.0
-________________________________________
-1. Product Overview
-A multi-tenant SaaS platform providing small & medium businesses with an integrated suite of tools:
-1.	CRM
-2.	HRM
-3.	POS
-4.	Task Management
-5.	Booking System
-6.	Website Landing Page Builder
-7.	(NEW) AI Business Agent – personalized AI assistant per business
-Each module is backed by a paid script with API integration into a single unified platform.
-________________________________________
-2. Target Customers
-Primary ICP:
-Small to medium businesses needing multi-functional tools under one unified system.
-Examples:
-•	Retail stores
-•	Spas & salons
-•	Service providers
-•	Clinics
-•	Agencies
-•	Training institutes
-Pain Points Solved:
-•	Fragmented tools across different platforms
-•	High software costs
-•	No automation
-•	No AI support
-•	Poor analytics & limited scalability
-________________________________________
-3. Goals & Non-Goals
-3.1 Goals
-•	Provide fully integrated modules under a single SaaS platform.
-•	Centralized authentication & role-based access.
-•	Tenant-specific AI agent to automate business actions.
-•	Custom brandable workspace per company.
-•	Scalable billing system based on modules.
-•	Super Admin oversight with platform analytics.
-3.2 Non-Goals
-•	No cross-module analytics in v1 (module-specific only).
-•	No HIPAA/SOC2 compliance in v1.
-•	No advanced workflow automations beyond basic AI agent tasks.
-________________________________________
-4. System Architecture (High Level)
-4.1 Architecture Model
-•	Multi-tenant Application
-•	Single codebase
-•	Module integrations via API
-•	Global RBAC
-•	Dynamic dashboards
+STAGE 0 — ACCOUNT CREATION (Access Gate) 
 
+Step 0.1 — Register Account 
 
+User does 
 
+Enters email + password 
+ 
 
-4.2 Core Layers
-Frontend UI Shell
-      ↓
-API Gateway / BFF
-      ↓
-Core Microservices
-      ↓
-Module Integration Layer (CRM, HRM, POS, etc.)
-      ↓
-AI Business Agent Service (per tenant)
-      ↓
-Database (multi-tenant)
-________________________________________
-5. User Roles & Access Model
-5.1 Global System Roles
-Role	Description
-Super Admin	Platform owner; manages all companies, billing, modules
-Company Admin (Owner)	Administrator of a tenant/company
-Staff	Employee under a company with restricted access
-________________________________________
-5.2 Role-Based Access Control (RBAC)
-Role Levels:
-•	Role Groups:
-o	Sales
-o	HR
-o	POS Staff
-o	Manager
-o	Marketing
-o	Finance
-o	Custom roles (Admin can create)
-Permission Types:
-•	Module access permissions:
-o	CRM: read/write/delete
-o	HRM: read/write/delete
-o	POS: cashier mode / manager mode
-o	Landing Builder: create/edit/publish
-o	Tasks: assign/manage
-o	Booking: view/manage
-Company Admin defines custom roles with granular permissions.
-________________________________________
-6. Dashboards (3-panel system)
-6.1 Super Admin Dashboard
-(SaaS Owner)
-Features:
-•	Total companies (active/inactive)
-•	Monthly Recurring Revenue (MRR)
-•	Module usage statistics
-•	Activity logs (super audit)
-•	Manage all companies
-•	Enable/disable modules per company
-•	Approve downgrade requests
-•	Manage global pricing
-•	Manage global settings (logo, theme, email templates)
-•	View & resolve support tickets
-•	AI agent configuration defaults
-•	System health & module API status
-________________________________________
-6.2 Company Admin Dashboard
-(Business Owner)
-Features:
-•	Company overview metrics
-•	Module-specific dashboards
-•	Staff management
-•	Custom roles & permissions
-•	Subscription management
-•	Billing history
-•	Branding setup
-•	Custom domain configuration
-•	AI Business Agent panel
-o	Chat with agent
-o	Request actions (send email, generate offers, run campaigns)
-o	Business insights
-o	Automated suggestions
-________________________________________
-6.3 Staff Dashboard
-(Based on role)
-Features shown depend on permissions:
-•	CRM
-•	HRM
-•	POS
-•	Tasks
-•	Booking
-•	Landing Builder
-Staff never see:
-•	Company settings
-•	Billing
-•	Branding
-•	Subscription
-•	Admin-only modules
-________________________________________
+Accepts: 
+ 
 
+Privacy Policy 
+ 
 
+Terms of Service 
+ 
 
+Selects communication preferences (email / SMS – optional)(EMAIL we have to add SENDGRID SMTP) Fiberbase  
+ 
 
+System does 
 
-7. Modules
-Each module is a separate paid script wrapped via internal APIs.
-7.1 CRM Module
-•	Leads
-•	Clients
-•	Deals
-•	Pipelines
-•	Follow-up activities
-•	Email campaigns (if supported by the script)
-•	AI agent can:
-o	Suggest follow-ups
-o	Analyze conversion patterns
-o	Draft emails
-________________________________________
-7.2 HRM Module
-•	Employees
-•	Attendance
-•	Payroll (if included)
-•	Leave management
-•	AI agent can:
-o	Analyze workforce performance
-o	Suggest staffing changes
-________________________________________
-7.3 POS Module
-•	Sales
-•	Inventory
-•	Cashier interface
-•	Barcode support
-•	AI agent can:
-o	Predict stock shortages
-o	Recommend best-selling products to push
-________________________________________
-7.4 Task Management Module
-•	Managing projects
-•	Tasks
-•	Deadlines
-•	Assignments
-•	AI agent can:
-o	Auto-create tasks based on business goals
-o	Remind staff
-o	Suggest efficiencies
-________________________________________
+Enforces password policy 
+ 
 
-7.5 Booking System Module
-•	Appointments
-•	Calendar
-•	Agent availability
-•	AI agent can:
-o	Analyse booking trends
-o	Suggest offers to boost slow days
-________________________________________
-7.6 Landing Page Builder
-•	Build websites
-•	SEO tools
-•	Publish to custom domain
-•	AI agent can:
-o	Generate page content
-o	Optimize headlines
-o	Suggest layouts
-________________________________________
-8. AI Business Agent (Key Feature)
-8.1 Summary
-Each business gets its own dedicated AI agent, which:
-•	Knows all business data (CRM, POS, HRM, etc.)
-•	Interacts with the business owner via chat interface
-•	Can trigger actions in the system
-•	Provides insights and suggestions
-________________________________________
-8.2 AI Agent Capabilities (v1)
-1. Business Insights
-•	Sales trends
-•	Customer segments
-•	Product performance
-•	Booking utilization
-•	HR performance
-2. Suggestions
-•	“Increase follow-ups for high-value leads”
-•	“Offer discount on slow-moving inventory”
-•	“Book staff training on X”
-•	“Expand POS categories”
-3. Action Automation
-The owner can say:
-•	“Send email campaign to high-value customers”
-•	“Create a 10% off coupon”
-•	“Draft a job posting”
-•	“Add a follow-up task for John”
-•	“Build a landing page for the new offer”
-The AI agent triggers the appropriate module APIs.
-We will try to automate every above action written above. 
-________________________________________
-8.3 AI Agent Data Model
-Each agent has:
-•	company_id
-•	business_profile
-•	module_entitlements
-•	company_data_index (vector embeddings)
-•	conversation_history
-•	automation_rules (future)
-________________________________________
-8.4 AI Agent Technical Requirements
-•	Vector database for storing business knowledge
-•	LLM for chat & reasoning
-•	Function calling / actions for module integrations
-•	Rate limits enabled per company
-•	Secure data isolation per tenant
-________________________________________
-9. Subscription & Billing
-9.1 Pricing Model
-•	Per company subscription
-•	Pay per module
-•	Base platform fee (optional)
-•	Stripe as the payment gateway
-9.2 Entitlement Logic
-•	Each Stripe plan maps to:
-o	Enabled modules
-o	User seat limits
-o	AI agent access
-9.3 Upgrades
-•	Automatic and immediate
-9.4 Downgrades
-•	If data deletion is required → admin approval
-•	Else scheduled
-________________________________________
+Stores policy version + timestamp 
+ 
 
-10. Branding & White-Labeling
-Company-level branding:
-•	Logo
-•	Primary theme color
-•	Company profile
-Custom domain (v1):
-•	Domain verification instructions
-•	Auto SSL
-•	Custom domain mapping
-________________________________________
-11. Onboarding Flow
-After signup:
-•	User sees pricing page → must select a plan
-•	After payment → onboarding wizard:
-1.	Company info
-2.	Industry
-3.	Choose default modules
-4.	Initial staff roles
-5.	Branding setup
-6.	Welcome screen with business AI agent
-________________________________________
-12. Reporting
-v1:
-•	Module-specific reports only
-•	Reporting provided by individual paid scripts (via API)
-________________________________________
+Creates Tenant (draft) 
+ 
 
-13. Notifications & Emails
-•	Email notifications for actions
-•	AI can generate email drafts
-•	Admin can send bulk emails (if CRM supports)
-________________________________________
-14. Security Requirements
-•	Multi-tenant data isolation
-•	Encrypted data in transit (SSL)
-•	Strong password enforcement
-•	Audit logs for:
-o	Admin changes
-o	Billing changes
-o	AI actions
-________________________________________
-15. Super Admin Tools
-•	Impersonate company admin for support
-•	Global activity logs
-•	View AI agent logs
-•	Issue refunds (if Stripe allows)
-•	Suspend tenant
-•	Module enable/disable
-•	Platform theme settings
+Sends email verification 
+ 
+
+Logs registration event 
+ 
+
+Compliance 
+
+PIPEDA ✔ 
+ 
+
+CASL (consent captured or declined) ✔ 
+ 
+
+Shape 
+
+Step 0.2 — Verify Email 
+
+User 
+
+Clicks verification link 
+ 
+
+System 
+
+Activates account 
+ 
+
+Enables login 
+ 
+
+Logs verification 
+ 
+
+Gate 
+🚫 Cannot continue without verification 
+
+Shape 
+
+STAGE 1 — BUSINESS SETUP (Identity & Jurisdiction) 
+
+Step 1.1 — Business Profile 
+
+User 
+
+Legal business name 
+ 
+
+Operating name (if different) 
+ 
+
+Province / Country 
+ 
+
+Time zone 
+ 
+
+Primary location 
+ 
+
+System 
+
+Determines applicable laws (Ontario → PAWS, WSIB, etc.) 
+ 
+
+Activates relevant compliance rules 
+ 
+
+Saves as “unconfirmed” 
+ 
+
+Compliance 
+
+Jurisdiction mapping ✔ 
+ 
+
+ 
+
+Step 1.2 — Contact & Communication Info 
+
+User 
+
+Business email 
+ 
+
+Business phone 
+ 
+
+Preferred notification channels 
+ 
+
+System 
+
+Applies CASL logic 
+ 
+
+Sets default notification routes 
+ 
+
+Creates communication tasks (recommended) 
+ 
+
+ 
+
+STAGE 2 — ROLES & ACCESS (Liability Control) 
+
+Step 2.1 — Owner Confirmation 
+
+User 
+
+Confirms Owner role 
+ 
+
+Acknowledges responsibility disclaimer 
+ 
+
+System 
+
+Locks Owner role (cannot be deleted) 
+ 
+
+Requires Owner for future confirmations 
+ 
+
+ 
+
+Step 2.2 — Create Roles 
+
+User 
+
+Uses templates or custom roles: 
+ 
+
+Manager 
+ 
+
+Staff 
+ 
+
+Accountant 
+ 
+
+System 
+
+Applies RBAC 
+ 
+
+Prevents over-permissioning 
+ 
+
+Logs role creation 
+ 
+
+ 
+
+Step 2.3 — Invite Team (Optional) 
+
+User 
+
+Invites employees / accountant 
+ 
+
+System 
+
+Sends invite emails 
+ 
+
+Requires policy acceptance per user 
+ 
+
+Creates onboarding tasks for staff 
+ 
+
+ 
+
+STAGE 3 — MODULE SELECTION (Scope Control) 
+
+Step 3.1 — Select Modules 
+
+User 
+
+Chooses modules: 
+ 
+
+Website 
+ 
+
+Bookings 
+ 
+
+POS 
+ 
+
+HR 
+ 
+
+Finance 
+ 
+
+Marketing 
+ 
+
+System 
+
+Activates only required compliance rules 
+ 
+
+Creates module-specific onboarding tasks 
+ 
+
+Prevents access to inactive modules 
+ 
+
+ 
+
+Step 3.2 — Industry Declaration 
+
+User 
+
+Selects industry: 
+ 
+
+Grooming 
+ 
+
+Daycare 
+ 
+
+Retail 
+ 
+
+Food 
+ 
+
+Other 
+ 
+
+System 
+
+Enables industry-specific rules (PAWS, CFIA, etc.) 
+ 
+
+Adds required compliance tasks automatically 
+ 
+
+ 
+
+STAGE 4 — COMPLIANCE CONFIRMATIONS (Legal Safeguards) 
+
+Step 4.1 — Privacy & Marketing 
+
+User 
+
+Reviews default privacy wording 
+ 
+
+Confirms CASL language (or edits) 
+ 
+
+System 
+
+Stores confirmed wording 
+ 
+
+Locks it for use in forms/emails 
+ 
+
+ 
+
+Step 4.2 — Financial Setup (If Enabled) 
+
+User 
+
+Enters: 
+ 
+
+Payroll type 
+ 
+
+Pay schedule 
+ 
+
+WSIB class (if applicable) 
+ 
+
+System 
+
+Calculates suggested values 
+ 
+
+Shows disclaimer 
+ 
+
+Blocks auto-submission 
+ 
+
+User must confirm 
+✔ “I confirm these values are correct.” 
+
+ 
+
+Step 4.3 — HR & Safety (If Enabled) 
+
+User 
+
+Reviews default policies: 
+ 
+
+Health & safety 
+ 
+
+Harassment 
+ 
+
+Training requirements 
+ 
+
+System 
+
+Assigns training tasks 
+ 
+
+Requires employee acknowledgements 
+ 
+
+ 
+
+STAGE 5 — TASKS & WORKFLOWS (Operational Readiness) 
+
+Step 5.1 — Review Auto-Generated Tasks 
+
+User 
+
+Reviews onboarding checklist 
+ 
+
+Assigns owners 
+ 
+
+Adjusts due dates 
+ 
+
+System 
+
+Marks required tasks as non-deletable 
+ 
+
+Enables escalation rules 
+ 
+
+ 
+
+Step 5.2 — Incident & Safety Rules 
+
+User 
+
+Confirms incident handling rules 
+ 
+
+System 
+
+Locks incident tasks 
+ 
+
+Enables export & audit tracking 
+ 
+
+ 
+
+STAGE 6 — WEBSITE & CUSTOMER TOUCHPOINTS (If Enabled) 
+
+Step 6.1 — Website Setup 
+
+User 
+
+Confirms site name 
+ 
+
+Selects template 
+ 
+
+Chooses domain (or placeholder) 
+ 
+
+System 
+
+Provisions WP Multisite site 
+ 
+
+Enables cookie banner 
+ 
+
+Enables accessibility helpers 
+ 
+
+ 
+
+Step 6.2 — AI Writer Orientation 
+
+User 
+
+Reviews AI usage rules 
+ 
+
+Confirms publishing approval requirement 
+ 
+
+System 
+
+Pins AI disclaimers 
+ 
+
+Enables Writer NC5 
+ 
+
+ 
+
+STAGE 7 — FINAL REVIEW & GO-LIVE 
+
+Step 7.1 — Compliance Checklist Review 
+
+System shows 
+
+Required items 
+ 
+
+Pending confirmations 
+ 
+
+Warnings (non-blocking) 
+ 
+
+ 
+
+Step 7.2 — Owner Go-Live Confirmation 
+
+User 
+
+Checks: 
+ 
+
+“I confirm my setup is accurate” 
+ 
+
+“I understand Axiom9 does not file on my behalf” 
+ 
+
+System 
+
+Unlocks production features 
+ 
+
+Logs Go-Live event 
+ 
+
+Starts regular monitoring 
+ 
+
+ 
+
+STAGE 8 — POST-ONBOARDING (First 30 Days) 
+
+Automated System Actions 
+
+Weekly compliance reminders 
+ 
+
+AI “What needs attention” summary 
+ 
+
+Expiring confirmation alerts 
+ 
+
+Suggested optimizations 
+ 
+
+ 
+
+🧩 SUMMARY FLOW (One Line) 
+
+Register → Verify → Business Info → Roles → Modules → Compliance Confirmations → Tasks → Go Live 
+
+Shape 
+
+🔐 Hard Gates (Cannot Skip) 
+
+Email verification 
+ 
+
+Policy acceptance 
+ 
+
+Owner confirmation 
+ 
+
+Financial confirmations (if enabled) 
+ 
+
+Compliance checklist required items 
+
+ 

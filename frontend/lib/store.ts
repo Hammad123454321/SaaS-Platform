@@ -36,14 +36,20 @@ export const useSessionStore = create<SessionState>()(
       branding: { color: "#0ea5e9", logoUrl: "" },
       setSession: ({ accessToken, refreshToken, user }) =>
         set({ accessToken, refreshToken, user }),
-      clearSession: () =>
+      clearSession: () => {
+        // Clear cookies
+        if (typeof document !== "undefined") {
+          document.cookie = "access_token=; path=/; max-age=0";
+          document.cookie = "refresh_token=; path=/; max-age=0";
+        }
         set({
           accessToken: null,
           refreshToken: null,
           user: null,
           entitlements: [],
           branding: { color: "#0ea5e9", logoUrl: "" },
-        }),
+        });
+      },
       setEntitlements: (entitlements) => set({ entitlements }),
       setBranding: (branding) => set({ branding }),
     }),

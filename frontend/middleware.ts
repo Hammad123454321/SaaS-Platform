@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const publicRoutes = ["/", "/login", "/signup", "/reset-password", "/reset"];
+const publicRoutes = ["/", "/login", "/signup", "/reset-password", "/reset", "/auth/verify-email", "/verify-email", "/accept-invite"];
 const authRoutes = ["/login", "/signup"];
+const onboardingRoutes = ["/onboarding"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -14,9 +15,20 @@ export function middleware(request: NextRequest) {
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
     // Redirect authenticated users away from auth pages
+    // But respect redirect/verified query params for proper flow
     if (authRoutes.some(route => pathname.startsWith(route)) && token) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      const redirectParam = request.nextUrl.searchParams.get("redirect");
+      const verifiedParam = request.nextUrl.searchParams.get("verified");
+      
+      // If coming from dev mode signup, redirect to onboarding
+      const destination = verifiedParam === "true" ? "/onboarding" : (redirectParam || "/dashboard");
+      return NextResponse.redirect(new URL(destination, request.url));
     }
+    return NextResponse.next();
+  }
+
+  // Allow onboarding route - it handles its own auth check
+  if (onboardingRoutes.some(route => pathname.startsWith(route))) {
     return NextResponse.next();
   }
 

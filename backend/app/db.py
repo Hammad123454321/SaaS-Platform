@@ -1,9 +1,10 @@
-from sqlmodel import SQLModel, create_engine, Session
+from sqlmodel import SQLModel, create_engine, Session, select
 from sqlalchemy import text, inspect
 import logging
 
 from app.config import settings
-from app.seed import seed_permissions
+from app.seed import seed_permissions, ensure_roles_for_tenant
+from app.models import Tenant
 
 engine = create_engine(str(settings.database_url), echo=settings.debug)
 logger = logging.getLogger(__name__)
@@ -62,7 +63,17 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     
     with Session(engine) as session:
+        # Seed permissions catalog
         seed_permissions(session)
+        
+        # Update roles for all existing tenants (ensures new permissions are added)
+        tenants = session.exec(select(Tenant)).all()
+        for tenant in tenants:
+            try:
+                ensure_roles_for_tenant(session, tenant.id)
+                logger.info(f"Updated roles for tenant {tenant.id} ({tenant.name})")
+            except Exception as e:
+                logger.warning(f"Failed to update roles for tenant {tenant.id}: {e}")
 
 
 def get_session() -> Session:

@@ -21,6 +21,7 @@ DEFAULT_ROLES: list[RoleDef] = [
             PermissionCode.MANAGE_USERS,
             PermissionCode.MANAGE_VENDOR_CREDENTIALS,
             PermissionCode.VIEW_BILLING,
+            PermissionCode.ACCESS_MODULES,  # Required to access module features like Tasks
         ],
     ),
     RoleDef(

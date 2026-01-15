@@ -18,9 +18,18 @@ async def _get_client_for(module: ModuleCode, tenant_id: int, session: Session):
     """
     Get vendor client for module. Falls back to stub if no real client available.
     
+    Note: TASKS module has its own dedicated routes and doesn't use this.
+    
     Returns:
-        Real vendor client (TaskifyClient, etc.) or VendorStubClient as fallback
+        Real vendor client or VendorStubClient as fallback
     """
+    # Tasks module has dedicated routes, skip it here
+    if module == ModuleCode.TASKS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tasks module uses dedicated routes at /modules/tasks"
+        )
+    
     real_client = await create_vendor_client(module, tenant_id, session)
     if real_client:
         return real_client

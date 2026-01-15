@@ -1,0 +1,65 @@
+import apiClient from "./client";
+import { ApiResponse } from "@/types/api";
+
+export interface Milestone {
+  id: number;
+  name: string;
+  description?: string;
+  project_id: number;
+  due_date?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MilestoneFormData {
+  name: string;
+  description?: string;
+  project_id: number;
+  due_date?: string;
+}
+
+export const milestonesApi = {
+  list: async (project_id?: number): Promise<Milestone[]> => {
+    const params: any = {};
+    if (project_id) params.project_id = project_id;
+    const response = await apiClient.get<ApiResponse<Milestone[]>>(
+      "/modules/tasks/milestones",
+      { params }
+    );
+    return response.data.data;
+  },
+
+  get: async (id: number): Promise<Milestone> => {
+    const response = await apiClient.get<ApiResponse<Milestone>>(
+      `/modules/tasks/milestones/${id}`
+    );
+    return response.data.data;
+  },
+
+  create: async (data: MilestoneFormData): Promise<Milestone> => {
+    const response = await apiClient.post<ApiResponse<Milestone>>(
+      "/modules/tasks/milestones",
+      data
+    );
+    return response.data.data;
+  },
+
+  update: async (id: number, data: Partial<MilestoneFormData>): Promise<Milestone> => {
+    const response = await apiClient.patch<ApiResponse<Milestone>>(
+      `/modules/tasks/milestones/${id}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/modules/tasks/milestones/${id}`);
+  },
+
+  getStats: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/modules/tasks/milestones/${id}/stats`);
+    return response.data.data;
+  },
+};
+
