@@ -95,19 +95,19 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <header className="glass rounded-2xl px-6 py-5 shadow-xl">
+      <header className="bg-white rounded-2xl px-6 py-5 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">User Management</p>
-            <h1 className="text-3xl font-semibold text-white">Team Members</h1>
-            <p className="text-sm text-gray-200/80">Manage users and their roles in your organization.</p>
+            <p className="text-sm uppercase tracking-[0.2em] text-purple-600 font-medium">User Management</p>
+            <h1 className="text-3xl font-semibold text-gray-900">Team Members</h1>
+            <p className="text-sm text-gray-500">Manage users and their roles in your organization.</p>
           </div>
           <button
-                  onClick={() => {
-                    setShowCreateModal(true);
-                    setFormData({ email: "", password: "", role_names: [], is_active: true });
-                  }}
-            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 text-sm font-semibold text-gray-900 shadow transition hover:-translate-y-0.5"
+            onClick={() => {
+              setShowCreateModal(true);
+              setFormData({ email: "", password: "", role_names: [], is_active: true });
+            }}
+            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:-translate-y-0.5 hover:shadow-lg"
           >
             <Plus className="h-4 w-4" />
             Add User
@@ -116,36 +116,38 @@ export default function UsersPage() {
       </header>
 
       {error && (
-        <div className="glass rounded-xl border border-red-400/50 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="glass rounded-2xl p-5 shadow-xl">
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         {loading ? (
-          <div className="text-center py-8 text-gray-200">Loading users...</div>
+          <div className="text-center py-8 text-gray-500">Loading users...</div>
         ) : (
           <div className="space-y-3">
             {users.map((u) => (
               <div
                 key={u.id}
-                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3"
+                className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <Users className="h-5 w-5 text-cyan-300" />
+                  <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                    <Users className="h-5 w-5 text-purple-600" />
+                  </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white">{u.email}</span>
+                      <span className="font-semibold text-gray-900">{u.email}</span>
                       {u.is_super_admin && (
-                        <Shield className="h-4 w-4 text-yellow-300" />
+                        <Shield className="h-4 w-4 text-yellow-500" />
                       )}
                       {!u.is_active && (
-                        <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-300">
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 font-medium">
                           Inactive
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-200/80">
+                    <div className="text-xs text-gray-500">
                       Roles: {u.roles.length > 0 ? u.roles.join(", ") : "None"}
                     </div>
                   </div>
@@ -153,7 +155,7 @@ export default function UsersPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => openEditModal(u)}
-                    className="rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-cyan-400 hover:bg-white/10"
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-purple-400 hover:bg-purple-50"
                   >
                     <Edit className="h-3 w-3 inline mr-1" />
                     Edit
@@ -161,7 +163,7 @@ export default function UsersPage() {
                   {u.id !== user?.id && (
                     <button
                       onClick={() => handleDelete(u.id)}
-                      className="rounded-lg border border-red-400/50 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:border-red-400 hover:bg-red-500/10"
+                      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-400 hover:bg-red-50"
                     >
                       <Trash2 className="h-3 w-3 inline mr-1" />
                       Deactivate
@@ -171,7 +173,7 @@ export default function UsersPage() {
               </div>
             ))}
             {users.length === 0 && (
-              <div className="text-center py-8 text-gray-200/80">No users found.</div>
+              <div className="text-center py-8 text-gray-500">No users found.</div>
             )}
           </div>
         )}
@@ -180,42 +182,42 @@ export default function UsersPage() {
       {/* Create/Edit Modal */}
       {(showCreateModal || editingUser) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="glass w-full max-w-md rounded-2xl p-6 shadow-2xl">
-            <h2 className="text-xl font-semibold text-white mb-4">
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
               {editingUser ? "Edit User" : "Create User"}
             </h2>
             <form onSubmit={editingUser ? handleUpdate : handleCreate} className="space-y-4">
               <div>
-                <label className="text-sm text-gray-200/80">Email</label>
+                <label className="text-sm text-gray-600 font-medium">Email</label>
                 <input
                   type="email"
                   required
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
               </div>
               {!editingUser && (
                 <div>
-                  <label className="text-sm text-gray-200/80">Password</label>
+                  <label className="text-sm text-gray-600 font-medium">Password</label>
                   <input
                     type="password"
                     required
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   />
-                  <p className="mt-1 text-xs text-gray-300/80">
+                  <p className="mt-1 text-xs text-gray-500">
                     Min 12 characters, must include special character.
                   </p>
                 </div>
               )}
               {editingUser && (
                 <div>
-                  <label className="text-sm text-gray-200/80">New Password (leave blank to keep current)</label>
+                  <label className="text-sm text-gray-600 font-medium">New Password (leave blank to keep current)</label>
                   <input
                     type="password"
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   />
@@ -223,9 +225,9 @@ export default function UsersPage() {
               )}
               {editingUser && (
                 <div>
-                  <label className="text-sm text-gray-200/80">Status</label>
+                  <label className="text-sm text-gray-600 font-medium">Status</label>
                   <select
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                     value={editingUser.is_active ? "active" : "inactive"}
                     onChange={(e) => {
                       setFormData({ ...formData, is_active: e.target.value === "active" });
@@ -239,7 +241,7 @@ export default function UsersPage() {
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  className="flex-1 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 font-semibold text-gray-900 shadow transition hover:-translate-y-0.5"
+                  className="flex-1 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 font-semibold text-white shadow transition hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   {editingUser ? "Update" : "Create"}
                 </button>
@@ -251,7 +253,7 @@ export default function UsersPage() {
                     setFormData({ email: "", password: "", role_names: [], is_active: true });
                     setError("");
                   }}
-                  className="rounded-lg border border-white/20 px-4 py-2 font-semibold text-white transition hover:border-cyan-400"
+                  className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-purple-400 hover:bg-gray-50"
                 >
                   Cancel
                 </button>

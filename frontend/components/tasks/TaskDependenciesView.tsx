@@ -58,9 +58,9 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Dependencies</h3>
+        <h3 className="text-lg font-semibold text-gray-900">Dependencies</h3>
         {canUpdateTask && (
-          <Button onClick={() => setShowForm(true)} size="sm" className="glass">
+          <Button onClick={() => setShowForm(true)} size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Add Dependency
           </Button>
@@ -72,18 +72,18 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
           {dependencies.map((dep) => {
             const depTask = allTasks?.find(t => t.id === dep.depends_on_task_id);
             return (
-              <div key={dep.id} className="glass rounded-lg p-3 flex items-center justify-between">
+              <div key={dep.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Link2 className="h-4 w-4 text-gray-400" />
-                  <span className="text-white">{depTask?.title || `Task #${dep.depends_on_task_id}`}</span>
-                  <span className="text-xs text-gray-400 capitalize">({dep.dependency_type})</span>
+                  <Link2 className="h-4 w-4 text-purple-600" />
+                  <span className="text-gray-900">{depTask?.title || `Task #${dep.depends_on_task_id}`}</span>
+                  <span className="text-xs text-gray-500 capitalize">({dep.dependency_type})</span>
                 </div>
                 {canUpdateTask && (
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDelete(dep.id)}
-                    className="h-6 w-6 text-red-400"
+                    className="h-6 w-6 text-gray-600 hover:text-red-600 hover:bg-red-50"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -93,26 +93,26 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
           })}
         </div>
       ) : (
-        <div className="glass rounded-lg p-6 text-center">
-          <p className="text-gray-400">No dependencies yet.</p>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+          <p className="text-gray-500">No dependencies yet.</p>
         </div>
       )}
 
       {/* Create Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="glass max-w-md">
+        <DialogContent className="bg-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">Add Dependency</DialogTitle>
+            <DialogTitle className="text-gray-900">Add Dependency</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm text-gray-200/80">Depends On *</label>
+              <label className="text-sm text-gray-600 font-medium">Depends On *</label>
               <Select
                 value={formData.depends_on_task_id?.toString() || ""}
                 onValueChange={(value) => setFormData({ ...formData, depends_on_task_id: parseInt(value) })}
                 required
               >
-                <SelectTrigger className="mt-1 bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="mt-1 bg-white border-gray-300 text-gray-900">
                   <SelectValue placeholder="Select task" />
                 </SelectTrigger>
                 <SelectContent>
@@ -125,13 +125,13 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Dependency Type *</label>
+              <label className="text-sm text-gray-600 font-medium">Dependency Type *</label>
               <Select
                 value={formData.dependency_type || "blocks"}
                 onValueChange={(value) => setFormData({ ...formData, dependency_type: value as any })}
                 required
               >
-                <SelectTrigger className="mt-1 bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="mt-1 bg-white border-gray-300 text-gray-900">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -145,7 +145,7 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
               <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" className="glass" disabled={createDependency.isPending}>
+              <Button type="submit" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700" disabled={createDependency.isPending}>
                 Add
               </Button>
             </div>

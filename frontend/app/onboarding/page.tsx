@@ -416,38 +416,38 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <header className="glass rounded-2xl px-6 py-5 shadow-xl">
-        <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">Onboarding</p>
-        <h1 className="text-3xl font-semibold text-white">Set up your workspace</h1>
-        <p className="text-sm text-gray-200/80">Complete your business profile and configure access.</p>
+      <header className="bg-white rounded-2xl px-6 py-5 shadow-sm border border-gray-200">
+        <p className="text-sm uppercase tracking-[0.2em] text-gray-500">Onboarding</p>
+        <h1 className="text-3xl font-semibold text-gray-900">Set up your workspace</h1>
+        <p className="text-sm text-gray-600">Complete your business profile and configure access.</p>
       </header>
 
-      <div className="glass rounded-2xl p-6 shadow-xl">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
         {/* Step Indicators */}
-        <div className="mb-6 flex items-center gap-3 text-sm font-semibold text-white">
-          <span className={`rounded-full px-3 py-1 ${step === "business-profile" ? "bg-cyan-400/20 text-cyan-400" : "bg-white/5"}`}>
+        <div className="mb-6 flex items-center gap-3 text-sm font-semibold text-gray-700">
+          <span className={`rounded-full px-3 py-1 ${step === "business-profile" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
             1. Business Profile
           </span>
-          <span className={`rounded-full px-3 py-1 ${step === "owner-confirmation" ? "bg-cyan-400/20 text-cyan-400" : "bg-white/5"}`}>
+          <span className={`rounded-full px-3 py-1 ${step === "owner-confirmation" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
             2. Owner Confirmation
           </span>
-          <span className={`rounded-full px-3 py-1 ${step === "roles" ? "bg-cyan-400/20 text-cyan-400" : "bg-white/5"}`}>
+          <span className={`rounded-full px-3 py-1 ${step === "roles" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
             3. Roles
           </span>
-          <span className={`rounded-full px-3 py-1 ${step === "invitations" ? "bg-cyan-400/20 text-cyan-400" : "bg-white/5"}`}>
+          <span className={`rounded-full px-3 py-1 ${step === "invitations" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
             4. Team Invitations
           </span>
-          <span className={`rounded-full px-3 py-1 ${step === "module-selection" ? "bg-cyan-400/20 text-cyan-400" : "bg-white/5"}`}>
+          <span className={`rounded-full px-3 py-1 ${step === "module-selection" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
             5. Module Selection
           </span>
-          <span className={`rounded-full px-3 py-1 ${step === "compliance" ? "bg-cyan-400/20 text-cyan-400" : "bg-white/5"}`}>
+          <span className={`rounded-full px-3 py-1 ${step === "compliance" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
             6. Compliance
           </span>
         </div>
 
         {message && (
           <div className={`mb-4 rounded-lg p-3 text-sm ${
-            message.includes("success") ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+            message.includes("success") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
           }`}>
             {message}
           </div>
@@ -456,12 +456,12 @@ export default function OnboardingPage() {
         {/* Step 1: Business Profile */}
         {step === "business-profile" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Business Profile</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Business Profile</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-sm text-gray-200/80">Legal Business Name *</label>
+                <label className="text-sm text-gray-600">Legal Business Name *</label>
                 <input
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.legal_business_name}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, legal_business_name: e.target.value })}
                   placeholder="Acme Corp Inc."
@@ -469,70 +469,70 @@ export default function OnboardingPage() {
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Operating Name (if different)</label>
+                <label className="text-sm text-gray-600">Operating Name (if different)</label>
                 <input
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.operating_name}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, operating_name: e.target.value })}
                   placeholder="Acme"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Province *</label>
+                <label className="text-sm text-gray-600">Province *</label>
                 <select
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.province}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, province: e.target.value })}
                   required
                 >
                   {provinces.map((p) => (
-                    <option key={p.code} value={p.code} className="bg-gray-800">
+                    <option key={p.code} value={p.code} className="bg-white text-gray-900">
                       {p.label}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Country</label>
+                <label className="text-sm text-gray-600">Country</label>
                 <input
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.country}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, country: e.target.value })}
                   placeholder="Canada"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Timezone</label>
+                <label className="text-sm text-gray-600">Timezone</label>
                 <input
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.timezone}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, timezone: e.target.value })}
                   placeholder="America/Toronto"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Primary Location</label>
+                <label className="text-sm text-gray-600">Primary Location</label>
                 <input
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.primary_location}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, primary_location: e.target.value })}
                   placeholder="123 Main St, Toronto, ON"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Business Email</label>
+                <label className="text-sm text-gray-600">Business Email</label>
                 <input
                   type="email"
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.business_email}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, business_email: e.target.value })}
                   placeholder="info@acme.com"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Business Phone</label>
+                <label className="text-sm text-gray-600">Business Phone</label>
                 <input
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={businessProfile.business_phone}
                   onChange={(e) => setBusinessProfile({ ...businessProfile, business_phone: e.target.value })}
                   placeholder="+1 (555) 123-4567"
@@ -541,11 +541,11 @@ export default function OnboardingPage() {
             </div>
             
             {complianceRules.length > 0 && (
-              <div className="mt-4 rounded-lg border border-cyan-400/20 bg-cyan-400/10 p-4">
-                <p className="text-sm font-medium text-cyan-400">Activated Compliance Rules:</p>
+              <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-4">
+                <p className="text-sm font-medium text-purple-700">Activated Compliance Rules:</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {complianceRules.map((rule) => (
-                    <span key={rule} className="rounded-full bg-cyan-400/20 px-3 py-1 text-xs text-cyan-300">
+                    <span key={rule} className="rounded-full bg-purple-100 px-3 py-1 text-xs text-purple-700">
                       {rule}
                     </span>
                   ))}
@@ -558,18 +558,18 @@ export default function OnboardingPage() {
         {/* Step 2: Owner Confirmation */}
         {step === "owner-confirmation" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Owner Confirmation</h2>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-              <p className="mb-4 text-sm text-gray-200/80">
+            <h2 className="text-xl font-semibold text-gray-900">Owner Confirmation</h2>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="mb-4 text-sm text-gray-600">
                 As the owner of this workspace, you acknowledge that you are responsible for:
               </p>
-              <ul className="mb-4 list-disc space-y-2 pl-5 text-sm text-gray-200/80">
+              <ul className="mb-4 list-disc space-y-2 pl-5 text-sm text-gray-600">
                 <li>All compliance and legal obligations</li>
                 <li>Data accuracy and completeness</li>
                 <li>User access and permissions management</li>
                 <li>Financial and billing decisions</li>
               </ul>
-              <label className="flex items-start gap-2 text-sm text-white">
+              <label className="flex items-start gap-2 text-sm text-gray-700">
                 <input
                   type="checkbox"
                   checked={ownerConfirmed}
@@ -580,7 +580,7 @@ export default function OnboardingPage() {
               </label>
             </div>
             {ownerStatus?.is_owner && (
-              <div className="rounded-lg border border-green-400/20 bg-green-400/10 p-3 text-sm text-green-400">
+              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
                 ✓ Owner role confirmed
               </div>
             )}
@@ -591,25 +591,25 @@ export default function OnboardingPage() {
         {step === "roles" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">Role Templates</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Role Templates</h2>
               {!roleTemplatesSeeded && (
                 <button
                   onClick={handleSeedRoleTemplates}
                   disabled={loading}
-                  className="rounded-lg border border-cyan-400/50 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-400/20 disabled:opacity-60"
+                  className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100 disabled:opacity-60"
                 >
                   Seed Templates
                 </button>
               )}
             </div>
-            <p className="text-sm text-gray-200/80">
+            <p className="text-sm text-gray-600">
               Default role templates (Manager, Staff, Accountant) will be created for your tenant.
             </p>
             <div className="space-y-2">
               {roles.map((role) => (
-                <div key={role.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
-                  <p className="font-medium text-white">{role.name}</p>
-                  <p className="text-xs text-gray-300/80">Created: {new Date(role.created_at).toLocaleDateString()}</p>
+                <div key={role.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="font-medium text-gray-900">{role.name}</p>
+                  <p className="text-xs text-gray-500">Created: {new Date(role.created_at).toLocaleDateString()}</p>
                 </div>
               ))}
             </div>
@@ -619,29 +619,29 @@ export default function OnboardingPage() {
         {/* Step 4: Team Invitations */}
         {step === "invitations" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Team Invitations</h2>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <h2 className="text-xl font-semibold text-gray-900">Team Invitations</h2>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm text-gray-200/80">Email Address</label>
+                  <label className="text-sm text-gray-600">Email Address</label>
                   <input
                     type="email"
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                     value={newInvitation.email}
                     onChange={(e) => setNewInvitation({ ...newInvitation, email: e.target.value })}
                     placeholder="colleague@example.com"
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-200/80">Role (Optional)</label>
+                  <label className="text-sm text-gray-600">Role (Optional)</label>
                   <select
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                     value={newInvitation.role_id || ""}
                     onChange={(e) => setNewInvitation({ ...newInvitation, role_id: e.target.value ? parseInt(e.target.value) : null })}
                   >
-                    <option value="" className="bg-gray-800">No specific role</option>
+                    <option value="" className="bg-white text-gray-900">No specific role</option>
                     {roles.map((role) => (
-                      <option key={role.id} value={role.id} className="bg-gray-800">
+                      <option key={role.id} value={role.id} className="bg-white text-gray-900">
                         {role.name}
                       </option>
                     ))}
@@ -650,7 +650,7 @@ export default function OnboardingPage() {
                 <button
                   onClick={handleCreateInvitation}
                   disabled={loading || !newInvitation.email}
-                  className="w-full rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 font-semibold text-gray-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+                  className="w-full rounded-lg bg-gradient-purple-blue px-4 py-2 font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
                 >
                   {loading ? "Sending..." : "Send Invitation"}
                 </button>
@@ -659,13 +659,13 @@ export default function OnboardingPage() {
             
             {invitations.length > 0 && (
               <div className="mt-4 space-y-2">
-                <p className="text-sm font-medium text-white">Pending Invitations</p>
+                <p className="text-sm font-medium text-gray-900">Pending Invitations</p>
                 {invitations.map((inv) => (
-                  <div key={inv.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div key={inv.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-white">{inv.email}</p>
-                        <p className="text-xs text-gray-300/80">
+                        <p className="font-medium text-gray-900">{inv.email}</p>
+                        <p className="text-xs text-gray-500">
                           {inv.accepted_at ? "Accepted" : "Pending"} • Expires: {new Date(inv.expires_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -689,77 +689,77 @@ export default function OnboardingPage() {
         {/* Step 6: Compliance */}
         {step === "compliance" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Financial Setup & Compliance</h2>
-            <p className="text-sm text-gray-200/80">
+            <h2 className="text-xl font-semibold text-gray-900">Financial Setup & Compliance</h2>
+            <p className="text-sm text-gray-600">
               Configure your financial setup and confirm compliance requirements.
             </p>
             
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-gray-200/80">Payroll Type</label>
+                <label className="text-sm text-gray-600">Payroll Type</label>
                 <select
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={financialSetup.payroll_type || ""}
                   onChange={(e) => setFinancialSetup({ ...financialSetup, payroll_type: e.target.value as any || null })}
                 >
-                  <option value="" className="bg-gray-800">Select payroll type</option>
-                  <option value="weekly" className="bg-gray-800">Weekly</option>
-                  <option value="bi_weekly" className="bg-gray-800">Bi-weekly</option>
-                  <option value="monthly" className="bg-gray-800">Monthly</option>
-                  <option value="semi_monthly" className="bg-gray-800">Semi-monthly</option>
+                  <option value="" className="bg-white text-gray-900">Select payroll type</option>
+                  <option value="weekly" className="bg-white text-gray-900">Weekly</option>
+                  <option value="bi_weekly" className="bg-white text-gray-900">Bi-weekly</option>
+                  <option value="monthly" className="bg-white text-gray-900">Monthly</option>
+                  <option value="semi_monthly" className="bg-white text-gray-900">Semi-monthly</option>
                 </select>
               </div>
               
               <div>
-                <label className="text-sm text-gray-200/80">Pay Schedule (Payday)</label>
+                <label className="text-sm text-gray-600">Pay Schedule (Payday)</label>
                 <select
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={financialSetup.pay_schedule || ""}
                   onChange={(e) => setFinancialSetup({ ...financialSetup, pay_schedule: e.target.value as any || null })}
                 >
-                  <option value="" className="bg-gray-800">Select payday</option>
-                  <option value="monday" className="bg-gray-800">Monday</option>
-                  <option value="tuesday" className="bg-gray-800">Tuesday</option>
-                  <option value="wednesday" className="bg-gray-800">Wednesday</option>
-                  <option value="thursday" className="bg-gray-800">Thursday</option>
-                  <option value="friday" className="bg-gray-800">Friday</option>
-                  <option value="last_day_of_month" className="bg-gray-800">Last Day of Month</option>
-                  <option value="first_day_of_month" className="bg-gray-800">First Day of Month</option>
-                  <option value="fifteenth" className="bg-gray-800">15th</option>
-                  <option value="last_friday" className="bg-gray-800">Last Friday</option>
+                  <option value="" className="bg-white text-gray-900">Select payday</option>
+                  <option value="monday" className="bg-white text-gray-900">Monday</option>
+                  <option value="tuesday" className="bg-white text-gray-900">Tuesday</option>
+                  <option value="wednesday" className="bg-white text-gray-900">Wednesday</option>
+                  <option value="thursday" className="bg-white text-gray-900">Thursday</option>
+                  <option value="friday" className="bg-white text-gray-900">Friday</option>
+                  <option value="last_day_of_month" className="bg-white text-gray-900">Last Day of Month</option>
+                  <option value="first_day_of_month" className="bg-white text-gray-900">First Day of Month</option>
+                  <option value="fifteenth" className="bg-white text-gray-900">15th</option>
+                  <option value="last_friday" className="bg-white text-gray-900">Last Friday</option>
                 </select>
               </div>
               
               <div>
-                <label className="text-sm text-gray-200/80">WSIB Class</label>
+                <label className="text-sm text-gray-600">WSIB Class</label>
                 <select
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
                   value={financialSetup.wsib_class || ""}
                   onChange={(e) => setFinancialSetup({ ...financialSetup, wsib_class: e.target.value as any || null })}
                 >
-                  <option value="" className="bg-gray-800">Select WSIB class</option>
-                  <option value="retail" className="bg-gray-800">Retail</option>
-                  <option value="office" className="bg-gray-800">Office</option>
-                  <option value="construction" className="bg-gray-800">Construction</option>
-                  <option value="manufacturing" className="bg-gray-800">Manufacturing</option>
-                  <option value="healthcare" className="bg-gray-800">Healthcare</option>
-                  <option value="food_service" className="bg-gray-800">Food Service</option>
-                  <option value="grooming" className="bg-gray-800">Grooming</option>
-                  <option value="daycare" className="bg-gray-800">Daycare</option>
-                  <option value="other" className="bg-gray-800">Other</option>
+                  <option value="" className="bg-white text-gray-900">Select WSIB class</option>
+                  <option value="retail" className="bg-white text-gray-900">Retail</option>
+                  <option value="office" className="bg-white text-gray-900">Office</option>
+                  <option value="construction" className="bg-white text-gray-900">Construction</option>
+                  <option value="manufacturing" className="bg-white text-gray-900">Manufacturing</option>
+                  <option value="healthcare" className="bg-white text-gray-900">Healthcare</option>
+                  <option value="food_service" className="bg-white text-gray-900">Food Service</option>
+                  <option value="grooming" className="bg-white text-gray-900">Grooming</option>
+                  <option value="daycare" className="bg-white text-gray-900">Daycare</option>
+                  <option value="other" className="bg-white text-gray-900">Other</option>
                 </select>
               </div>
               
               <button
                 onClick={handleFinancialSetupSubmit}
                 disabled={loading}
-                className="w-full rounded-lg border border-cyan-400/50 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-400/20 disabled:opacity-60"
+                className="w-full rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100 disabled:opacity-60"
               >
                 {loading ? "Saving..." : "Save Financial Setup"}
               </button>
               
               {financialSetupConfirmed && (
-                <div className="rounded-lg border border-green-400/20 bg-green-400/10 p-3 text-sm text-green-400">
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
                   ✓ Financial setup confirmed
                 </div>
               )}
@@ -773,7 +773,7 @@ export default function OnboardingPage() {
             type="button"
             onClick={prev}
             disabled={step === "business-profile"}
-            className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400 disabled:opacity-40"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-purple-400 disabled:opacity-40"
           >
             Back
           </button>
@@ -784,7 +784,7 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleBusinessProfileContinue}
                   disabled={loading}
-                  className="rounded-lg border border-cyan-400/50 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-400 transition hover:bg-cyan-400/20 disabled:opacity-60"
+                  className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-semibold text-purple-700 transition hover:bg-purple-100 disabled:opacity-60"
                 >
                   Continue
                 </button>
@@ -793,7 +793,7 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={handleBusinessProfileSubmit}
                 disabled={loading || !canProceed()}
-                className="rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 text-sm font-semibold text-gray-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+                className="rounded-lg bg-gradient-purple-blue px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
               >
                 {loading ? "Saving..." : businessProfileExists ? "Update & Continue" : "Save & Continue"}
               </button>
@@ -803,7 +803,7 @@ export default function OnboardingPage() {
               type="button"
               onClick={handleOwnerConfirmation}
               disabled={loading || !canProceed()}
-              className="rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 text-sm font-semibold text-gray-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+              className="rounded-lg bg-gradient-purple-blue px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
             >
               {loading ? "Confirming..." : ownerConfirmed ? "Continue" : "Confirm Owner Role"}
             </button>
@@ -812,7 +812,7 @@ export default function OnboardingPage() {
               type="button"
               onClick={handleEnableModules}
               disabled={loading || selectedModules.length === 0}
-              className="rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 text-sm font-semibold text-gray-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+              className="rounded-lg bg-gradient-purple-blue px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
             >
               {loading ? "Enabling..." : isDevelopmentMode ? "Enable Modules (Free)" : "Continue to Payment"}
             </button>
@@ -821,7 +821,7 @@ export default function OnboardingPage() {
               type="button"
               onClick={handleFinancialSetupConfirm}
               disabled={loading || (!financialSetup.payroll_type && !financialSetup.pay_schedule && !financialSetup.wsib_class)}
-              className="rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 text-sm font-semibold text-gray-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+              className="rounded-lg bg-gradient-purple-blue px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
             >
               {loading ? "Confirming..." : financialSetupConfirmed ? "Complete Onboarding" : "Confirm & Complete"}
             </button>
@@ -830,7 +830,7 @@ export default function OnboardingPage() {
               type="button"
               onClick={next}
               disabled={!canProceed()}
-              className="rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 text-sm font-semibold text-gray-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+              className="rounded-lg bg-gradient-purple-blue px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
             >
               Next
             </button>

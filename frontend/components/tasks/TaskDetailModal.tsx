@@ -19,6 +19,7 @@ import {
   Square,
   Link2,
   Repeat,
+  Download,
 } from "lucide-react";
 import { TaskDependenciesView } from "./TaskDependenciesView";
 import { RecurringTaskView } from "./RecurringTaskView";
@@ -111,22 +112,22 @@ export function TaskDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="glass rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-purple-600 to-blue-600">
           <h2 className="text-2xl font-semibold text-white">
             {loading ? "Loading..." : task?.title || "Task Details"}
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white"
+            className="p-2 hover:bg-white/20 rounded-lg text-white/80 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-white/10 px-6 overflow-x-auto">
+        <div className="flex border-b border-gray-200 px-6 overflow-x-auto bg-gray-50">
           {[
             { id: "details", label: "Details", icon: FileText },
             { id: "subtasks", label: "Subtasks", icon: CheckSquare },
@@ -141,8 +142,8 @@ export function TaskDetailModal({
               onClick={() => setActiveTab(tab.id as any)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
                 activeTab === tab.id
-                  ? "border-cyan-400 text-cyan-400"
-                  : "border-transparent text-gray-400 hover:text-white"
+                  ? "border-purple-600 text-purple-600"
+                  : "border-transparent text-gray-500 hover:text-gray-900"
               }`}
             >
               <tab.icon className="h-4 w-4 inline mr-2" />
@@ -152,9 +153,9 @@ export function TaskDetailModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-white">
           {loading ? (
-            <div className="text-center py-12 text-gray-300">Loading...</div>
+            <div className="text-center py-12 text-gray-500">Loading...</div>
           ) : activeTab === "details" ? (
             <TaskDetailsView task={task} />
           ) : activeTab === "subtasks" ? (
@@ -201,27 +202,27 @@ function TaskDetailsView({ task }: { task: any }) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-sm text-gray-400">Description</label>
-        <p className="text-white mt-1">{task.description || "No description"}</p>
+        <label className="text-sm text-gray-500 font-medium">Description</label>
+        <p className="text-gray-900 mt-1">{task.description || "No description"}</p>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-sm text-gray-400">Status</label>
-          <p className="text-white mt-1">{task.status_name}</p>
+          <label className="text-sm text-gray-500 font-medium">Status</label>
+          <p className="text-gray-900 mt-1">{task.status_name}</p>
         </div>
         <div>
-          <label className="text-sm text-gray-400">Priority</label>
-          <p className="text-white mt-1">{task.priority_name || "None"}</p>
+          <label className="text-sm text-gray-500 font-medium">Priority</label>
+          <p className="text-gray-900 mt-1">{task.priority_name || "None"}</p>
         </div>
         <div>
-          <label className="text-sm text-gray-400">Due Date</label>
-          <p className="text-white mt-1">
+          <label className="text-sm text-gray-500 font-medium">Due Date</label>
+          <p className="text-gray-900 mt-1">
             {task.due_date ? new Date(task.due_date).toLocaleDateString() : "No due date"}
           </p>
         </div>
         <div>
-          <label className="text-sm text-gray-400">Completion</label>
-          <p className="text-white mt-1">{task.completion_percentage || 0}%</p>
+          <label className="text-sm text-gray-500 font-medium">Completion</label>
+          <p className="text-gray-900 mt-1">{task.completion_percentage || 0}%</p>
         </div>
       </div>
     </div>
@@ -254,10 +255,10 @@ function SubtasksView({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Subtasks</h3>
+        <h3 className="text-lg font-semibold text-gray-900">Subtasks</h3>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white text-sm"
+          className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-white text-sm"
         >
           <Plus className="h-4 w-4" />
           Add Subtask
@@ -265,25 +266,25 @@ function SubtasksView({
       </div>
 
       {showCreate && (
-        <div className="bg-white/5 rounded-lg p-4 space-y-3">
+        <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-200">
           <input
             type="text"
             placeholder="Subtask title"
             value={newSubtask.title}
             onChange={(e) => setNewSubtask({ ...newSubtask, title: e.target.value })}
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
+            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
           />
           <textarea
             placeholder="Description (optional)"
             value={newSubtask.description}
             onChange={(e) => setNewSubtask({ ...newSubtask, description: e.target.value })}
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
+            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
             rows={3}
           />
           <div className="flex gap-2">
             <button
               onClick={handleCreate}
-              className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white text-sm"
+              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-white text-sm"
             >
               Create
             </button>
@@ -292,7 +293,7 @@ function SubtasksView({
                 setShowCreate(false);
                 setNewSubtask({ title: "", description: "" });
               }}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 text-sm"
             >
               Cancel
             </button>
@@ -304,29 +305,29 @@ function SubtasksView({
         {subtasks.map((subtask) => (
           <div
             key={subtask.id}
-            className="bg-white/5 rounded-lg p-3 flex items-center justify-between"
+            className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
-              <CheckSquare className="h-4 w-4 text-gray-400" />
+              <CheckSquare className="h-4 w-4 text-purple-600" />
               <div>
-                <p className="text-white">{subtask.title}</p>
+                <p className="text-gray-900">{subtask.title}</p>
                 {subtask.description && (
-                  <p className="text-sm text-gray-400">{subtask.description}</p>
+                  <p className="text-sm text-gray-500">{subtask.description}</p>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-500">
                 {subtask.completion_percentage || 0}%
               </span>
-              <button className="p-1 hover:bg-white/10 rounded text-gray-400">
+              <button className="p-1 hover:bg-gray-100 rounded text-gray-500">
                 <Edit className="h-4 w-4" />
               </button>
             </div>
           </div>
         ))}
         {subtasks.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm">
+          <div className="text-center py-8 text-gray-500 text-sm">
             No subtasks yet
           </div>
         )}
@@ -356,8 +357,8 @@ function TimeTrackingView({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Time Tracking</h3>
-          <p className="text-sm text-gray-400">Total: {totalHours.toFixed(2)} hours</p>
+          <h3 className="text-lg font-semibold text-gray-900">Time Tracking</h3>
+          <p className="text-sm text-gray-500">Total: {totalHours.toFixed(2)} hours</p>
         </div>
         {activeTracker ? (
           <button
@@ -379,8 +380,8 @@ function TimeTrackingView({
       </div>
 
       {activeTracker && (
-        <div className="bg-cyan-500/20 border border-cyan-500/50 rounded-lg p-4">
-          <p className="text-cyan-200 text-sm">
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <p className="text-purple-700 text-sm">
             Timer running since {activeTracker.start_time ? new Date(activeTracker.start_time).toLocaleTimeString() : "just now"}
           </p>
         </div>
@@ -390,24 +391,24 @@ function TimeTrackingView({
         {timeEntries.map((entry) => (
           <div
             key={entry.id}
-            className="bg-white/5 rounded-lg p-3 flex items-center justify-between"
+            className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between"
           >
             <div>
-              <p className="text-white">{entry.description || "Time entry"}</p>
-              <p className="text-sm text-gray-400">
+              <p className="text-gray-900">{entry.description || "Time entry"}</p>
+              <p className="text-sm text-gray-500">
                 {new Date(entry.date).toLocaleDateString()}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-white font-medium">{entry.hours.toFixed(2)}h</p>
+              <p className="text-gray-900 font-medium">{entry.hours.toFixed(2)}h</p>
               {entry.is_billable && (
-                <p className="text-xs text-green-400">Billable</p>
+                <p className="text-xs text-green-600">Billable</p>
               )}
             </div>
           </div>
         ))}
         {timeEntries.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm">
+          <div className="text-center py-8 text-gray-500 text-sm">
             No time entries yet
           </div>
         )}
@@ -446,8 +447,8 @@ function DocumentsView({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Documents</h3>
-        <label className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white cursor-pointer text-sm">
+        <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
+        <label className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-white cursor-pointer text-sm">
           <Upload className="h-4 w-4" />
           Upload
           <input
@@ -462,24 +463,24 @@ function DocumentsView({
         {documents.map((doc) => (
           <div
             key={doc.id}
-            className="bg-white/5 rounded-lg p-3 flex items-center justify-between"
+            className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-gray-400" />
+              <FileText className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-white">{doc.filename}</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-gray-900">{doc.filename}</p>
+                <p className="text-xs text-gray-500">
                   {(doc.file_size / 1024).toFixed(2)} KB • v{doc.version}
                 </p>
               </div>
             </div>
-            <button className="p-1 hover:bg-white/10 rounded text-gray-400">
+            <button className="p-1 hover:bg-gray-100 rounded text-gray-500">
               <Download className="h-4 w-4" />
             </button>
           </div>
         ))}
         {documents.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm">
+          <div className="text-center py-8 text-gray-500 text-sm">
             No documents yet
           </div>
         )}
@@ -516,19 +517,19 @@ function ThreadsView({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-white">Comments & Threads</h3>
+      <h3 className="text-lg font-semibold text-gray-900">Comments & Threads</h3>
 
       <div className="space-y-3">
         <textarea
           placeholder="Add a comment..."
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
-          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
+          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
           rows={3}
         />
         <button
           onClick={handlePostComment}
-          className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white text-sm"
+          className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-white text-sm"
         >
           Post Comment
         </button>
@@ -538,19 +539,19 @@ function ThreadsView({
         {threads.map((thread) => (
           <div
             key={thread.id}
-            className="bg-white/5 rounded-lg p-4"
+            className="bg-gray-50 border border-gray-200 rounded-lg p-4"
           >
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-cyan-500 flex items-center justify-center text-white text-sm">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center text-white text-sm">
                 U
               </div>
               <div className="flex-1">
-                <p className="text-white">{thread.comment}</p>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-gray-900">{thread.comment}</p>
+                <p className="text-xs text-gray-500 mt-1">
                   {new Date(thread.created_at).toLocaleString()}
                 </p>
                 {thread.replies_count > 0 && (
-                  <button className="text-xs text-cyan-400 mt-2">
+                  <button className="text-xs text-purple-600 mt-2 hover:underline">
                     {thread.replies_count} replies
                   </button>
                 )}
@@ -559,7 +560,7 @@ function ThreadsView({
           </div>
         ))}
         {threads.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm">
+          <div className="text-center py-8 text-gray-500 text-sm">
             No comments yet
           </div>
         )}

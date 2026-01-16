@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import health, auth, entitlements, billing, vendor, modules, ai, onboarding, admin, company, users, tasks, onboarding_stages, compliance_stages, workflows_stages
+from app.api.routes import health, auth, entitlements, billing, vendor, modules, ai, onboarding, admin, company, users, tasks, onboarding_stages, compliance_stages, workflows_stages, dashboard
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -18,4 +18,5 @@ api_router.include_router(workflows_stages.router)  # Stage 5 workflows
 api_router.include_router(admin.router)
 api_router.include_router(company.router)
 api_router.include_router(users.router)
+api_router.include_router(dashboard.router)  # Dashboard APIs
 

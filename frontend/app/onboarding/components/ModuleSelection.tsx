@@ -76,8 +76,8 @@ export function ModuleSelection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-white">Select Modules</h2>
-        <p className="text-sm text-gray-200/80 mt-1">
+        <h2 className="text-xl font-semibold text-gray-900">Select Modules</h2>
+        <p className="text-sm text-gray-600 mt-1">
           Choose the modules you want to enable for your workspace.
         </p>
       </div>
@@ -92,29 +92,29 @@ export function ModuleSelection({
             <div
               key={moduleCode}
               onClick={() => toggleModule(moduleCode)}
-              className={`glass rounded-xl p-4 cursor-pointer transition-all border-2 ${
+              className={`bg-white rounded-xl p-4 cursor-pointer transition-all border-2 ${
                 isSelected
-                  ? "border-cyan-400 bg-cyan-400/10"
-                  : "border-white/10 hover:border-cyan-400/50"
+                  ? "border-purple-400 bg-purple-50"
+                  : "border-gray-200 hover:border-purple-300"
               }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     {isAI ? (
-                      <Wand2 className="h-5 w-5 text-purple-400" />
+                      <Wand2 className="h-5 w-5 text-purple-600" />
                     ) : (
-                      <LayoutDashboard className="h-5 w-5 text-cyan-400" />
+                      <LayoutDashboard className="h-5 w-5 text-purple-600" />
                     )}
-                    <h3 className="font-semibold text-white">
+                    <h3 className="font-semibold text-gray-900">
                       {moduleLabels[moduleCode]}
                     </h3>
                   </div>
-                  <p className="text-xs text-gray-200/80 mt-1">
+                  <p className="text-xs text-gray-600 mt-1">
                     {moduleDescriptions[moduleCode]}
                   </p>
                   {!isDevelopmentMode && (
-                    <p className="text-sm font-medium text-cyan-400 mt-2">
+                    <p className="text-sm font-medium text-purple-600 mt-2">
                       {formatPrice(price)}/month
                     </p>
                   )}
@@ -122,12 +122,12 @@ export function ModuleSelection({
                 <div
                   className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${
                     isSelected
-                      ? "border-cyan-400 bg-cyan-400"
-                      : "border-white/30"
+                      ? "border-purple-400 bg-purple-500"
+                      : "border-gray-300"
                   }`}
                 >
                   {isSelected && (
-                    <Check className="h-4 w-4 text-gray-900" />
+                    <Check className="h-4 w-4 text-white" />
                   )}
                 </div>
               </div>
@@ -137,27 +137,27 @@ export function ModuleSelection({
       </div>
 
       {!isDevelopmentMode && selectedModules.length > 0 && (
-        <div className="glass rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-4">
+        <div className="bg-white rounded-xl border border-purple-200 bg-purple-50 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-white">Total Monthly Cost</p>
-              <p className="text-xs text-gray-200/80 mt-1">
+              <p className="text-sm font-medium text-gray-900">Total Monthly Cost</p>
+              <p className="text-xs text-gray-600 mt-1">
                 {selectedModules.length} module{selectedModules.length !== 1 ? "s" : ""} selected
               </p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-cyan-400">
+              <p className="text-2xl font-bold text-purple-600">
                 {formatPrice(calculateTotal())}
               </p>
-              <p className="text-xs text-gray-200/80">per month</p>
+              <p className="text-xs text-gray-600">per month</p>
             </div>
           </div>
         </div>
       )}
 
       {isDevelopmentMode && selectedModules.length > 0 && (
-        <div className="glass rounded-xl border border-green-400/20 bg-green-400/10 p-4">
-          <p className="text-sm text-green-400">
+        <div className="bg-white rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="text-sm text-green-700">
             ✓ Development mode: Billing is disabled. Selected modules will be enabled for free.
           </p>
         </div>
@@ -165,5 +165,6 @@ export function ModuleSelection({
     </div>
   );
 }
+
 
 

@@ -75,15 +75,15 @@ export function TaskListsView() {
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-400">Loading task lists...</div>;
+    return <div className="text-center py-12 text-gray-500">Loading task lists...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Task Lists</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Task Lists</h2>
         {canCreateProject && (
-          <Button onClick={() => { setShowForm(true); setEditingList(null); resetForm(); }} className="glass">
+          <Button onClick={() => { setShowForm(true); setEditingList(null); resetForm(); }} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Create Task List
           </Button>
@@ -93,12 +93,12 @@ export function TaskListsView() {
       {taskLists && taskLists.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {taskLists.map((list) => (
-            <div key={list.id} className="glass rounded-lg p-4 space-y-2">
+            <div key={list.id} className="bg-white rounded-lg p-4 space-y-2 border border-gray-200 shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">{list.name}</h3>
+                  <h3 className="font-semibold text-gray-900">{list.name}</h3>
                   {list.description && (
-                    <p className="text-sm text-gray-300/80 mt-1">{list.description}</p>
+                    <p className="text-sm text-gray-500 mt-1">{list.description}</p>
                   )}
                 </div>
                 {canCreateProject && (
@@ -107,7 +107,7 @@ export function TaskListsView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleEdit(list)}
-                      className="h-8 w-8"
+                      className="h-8 w-8 text-gray-600 hover:text-purple-600 hover:bg-purple-50"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -115,7 +115,7 @@ export function TaskListsView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => setDeletingList(list)}
-                      className="h-8 w-8 text-red-400"
+                      className="h-8 w-8 text-gray-600 hover:text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -126,47 +126,49 @@ export function TaskListsView() {
           ))}
         </div>
       ) : (
-        <div className="glass rounded-lg p-12 text-center">
-          <Layers className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-400">No task lists yet. Create your first task list to get started.</p>
+        <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+          <div className="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+            <Layers className="h-8 w-8 text-purple-600" />
+          </div>
+          <p className="text-gray-500">No task lists yet. Create your first task list to get started.</p>
         </div>
       )}
 
       {/* Create/Edit Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="glass max-w-md">
+        <DialogContent className="bg-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-gray-900">
               {editingList ? "Edit Task List" : "Create Task List"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm text-gray-200/80">List Name *</label>
+              <label className="text-sm text-gray-600 font-medium">List Name *</label>
               <Input
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.name || ""}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Description</label>
+              <label className="text-sm text-gray-600 font-medium">Description</label>
               <Textarea
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.description || ""}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
               />
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Project *</label>
+              <label className="text-sm text-gray-600 font-medium">Project *</label>
               <Select
                 value={formData.project_id?.toString() || ""}
                 onValueChange={(value) => setFormData({ ...formData, project_id: parseInt(value) })}
                 required
               >
-                <SelectTrigger className="mt-1 bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="mt-1 bg-white border-gray-300 text-gray-900">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
@@ -182,7 +184,7 @@ export function TaskListsView() {
               <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" className="glass" disabled={createTaskList.isPending || updateTaskList.isPending}>
+              <Button type="submit" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700" disabled={createTaskList.isPending || updateTaskList.isPending}>
                 {editingList ? "Update" : "Create"}
               </Button>
             </div>

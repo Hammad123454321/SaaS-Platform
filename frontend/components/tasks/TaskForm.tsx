@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { taskFormSchema } from "@/lib/schemas/task";
@@ -24,6 +25,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { DropdownItem } from "@/types/api";
 import { Task } from "@/types/task";
+import { Sparkles, Loader2 } from "lucide-react";
+import { generateTaskWithAI } from "@/hooks/useDashboard";
 
 interface TaskFormProps {
   task?: Task;
@@ -46,6 +49,9 @@ export function TaskForm({
   onCancel,
   isLoading,
 }: TaskFormProps) {
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   const form = useForm<TaskFormData>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
@@ -61,6 +67,53 @@ export function TaskForm({
     },
   });
 
+  const handleGenerateWithAI = async () => {
+    const title = form.getValues("title");
+    if (!title || title.trim().length < 3) {
+      setAiError("Please enter a task title first (at least 3 characters)");
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    setAiError(null);
+
+    try {
+      // Get project context if selected
+      const projectId = form.getValues("project_id");
+      const project = projects.find(p => p.id === projectId);
+      const context = project ? `Project: ${project.name || project.title}` : "";
+
+      const suggestion = await generateTaskWithAI(title, context);
+
+      // Update form with AI suggestions
+      form.setValue("description", suggestion.description);
+
+      // Set suggested priority if available
+      if (suggestion.suggested_priority) {
+        const priorityMatch = priorities.find(
+          p => (p.name || p.title || "").toLowerCase().includes(suggestion.suggested_priority.toLowerCase())
+        );
+        if (priorityMatch) {
+          form.setValue("priority_id", priorityMatch.id);
+        }
+      }
+
+      // Set suggested due date
+      if (suggestion.suggested_due_days > 0) {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + suggestion.suggested_due_days);
+        form.setValue("due_date", dueDate.toISOString().split("T")[0]);
+      }
+    } catch (err: any) {
+      setAiError(err.response?.status === 403 
+        ? "AI features not available in your plan"
+        : "Failed to generate suggestions. Please try again."
+      );
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -70,10 +123,29 @@ export function TaskForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Title</FormLabel>
-              <FormControl>
-                <Input placeholder="Task title" {...field} />
-              </FormControl>
+              <div className="flex gap-2">
+                <FormControl>
+                  <Input placeholder="Task title" {...field} className="flex-1" />
+                </FormControl>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGenerateWithAI}
+                  disabled={isGeneratingAI}
+                  className="shrink-0 bg-gradient-to-r from-purple-50 to-violet-50 border-purple-200 hover:border-purple-300 hover:from-purple-100 hover:to-violet-100"
+                >
+                  {isGeneratingAI ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-purple-600" />
+                  )}
+                  <span className="ml-2 text-purple-700">AI Fill</span>
+                </Button>
+              </div>
               <FormMessage />
+              {aiError && (
+                <p className="text-sm text-amber-600 mt-1">{aiError}</p>
+              )}
             </FormItem>
           )}
         />
@@ -83,10 +155,18 @@ export function TaskForm({
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Description</FormLabel>
+              <div className="flex items-center justify-between">
+                <FormLabel>Description</FormLabel>
+                {isGeneratingAI && (
+                  <span className="text-xs text-purple-600 flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Generating...
+                  </span>
+                )}
+              </div>
               <FormControl>
                 <Textarea
-                  placeholder="Task description"
+                  placeholder="Task description (or click AI Fill to generate)"
                   rows={4}
                   {...field}
                 />

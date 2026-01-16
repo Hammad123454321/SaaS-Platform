@@ -77,25 +77,25 @@ export function TimeTrackerView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Time Tracker</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Time Tracker</h2>
       </div>
 
       {/* Active Tracker */}
       {activeTracker && (
-        <Card className="glass p-6 border-cyan-400/20">
+        <Card className="bg-white p-6 border-purple-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <p className="text-sm text-gray-400">Currently tracking</p>
-              <p className="text-lg font-semibold text-white mt-1">
+              <p className="text-sm text-gray-500">Currently tracking</p>
+              <p className="text-lg font-semibold text-gray-900 mt-1">
                 {tasks?.find(t => t.id === activeTracker.task_id)?.title || "Task"}
               </p>
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-cyan-400" />
-                  <span className="text-2xl font-mono font-bold text-cyan-400">{elapsedTime}</span>
+                  <Clock className="h-4 w-4 text-purple-600" />
+                  <span className="text-2xl font-mono font-bold text-purple-600">{elapsedTime}</span>
                 </div>
                 {activeTracker.start_time && (
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-500">
                     Started {formatDistanceToNow(parseISO(activeTracker.start_time), { addSuffix: true })}
                   </p>
                 )}
@@ -103,7 +103,7 @@ export function TimeTrackerView() {
             </div>
             <Button
               onClick={handleStop}
-              className="bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30 ml-4"
+              className="bg-red-500 text-white hover:bg-red-600 ml-4"
               disabled={stopTracker.isPending}
             >
               <Square className="h-4 w-4 mr-2" />
@@ -115,15 +115,15 @@ export function TimeTrackerView() {
 
       {/* Start Tracker */}
       {!activeTracker && (
-        <Card className="glass p-6">
+        <Card className="bg-white p-6 border border-gray-200 shadow-sm">
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-gray-200/80 mb-2 block">Select Task</label>
+              <label className="text-sm text-gray-600 font-medium mb-2 block">Select Task</label>
               <Select
                 value={selectedTaskId?.toString() || ""}
                 onValueChange={(value) => setSelectedTaskId(value ? parseInt(value) : undefined)}
               >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="bg-white border-gray-300 text-gray-900">
                   <SelectValue placeholder="Choose a task to track" />
                 </SelectTrigger>
                 <SelectContent>
@@ -138,7 +138,7 @@ export function TimeTrackerView() {
             <Button
               onClick={handleStart}
               disabled={!selectedTaskId || startTracker.isPending}
-              className="glass w-full"
+              className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 w-full"
             >
               <Play className="h-4 w-4 mr-2" />
               Start Tracking
@@ -149,17 +149,17 @@ export function TimeTrackerView() {
 
       {/* Recent Time Entries */}
       <div>
-        <h3 className="text-lg font-semibold text-white mb-4">Recent Time Entries</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Time Entries</h3>
         {timeEntries && timeEntries.length > 0 ? (
           <div className="space-y-2">
             {timeEntries.slice(0, 10).map((entry) => (
-              <Card key={entry.id} className="glass p-4">
+              <Card key={entry.id} className="bg-white p-4 border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-white font-medium">
+                    <p className="text-gray-900 font-medium">
                       {tasks?.find(t => t.id === entry.task_id)?.title || "Task"}
                     </p>
-                    <div className="flex items-center gap-4 mt-1 text-xs text-gray-400">
+                    <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {entry.start_time ? new Date(entry.start_time).toLocaleDateString() : entry.date || "N/A"}
@@ -177,9 +177,11 @@ export function TimeTrackerView() {
             ))}
           </div>
         ) : (
-          <Card className="glass p-12 text-center">
-            <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <p className="text-gray-400">No time entries yet. Start tracking time on a task.</p>
+          <Card className="bg-white p-12 text-center border border-gray-200">
+            <div className="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+              <Clock className="h-8 w-8 text-purple-600" />
+            </div>
+            <p className="text-gray-500">No time entries yet. Start tracking time on a task.</p>
           </Card>
         )}
       </div>

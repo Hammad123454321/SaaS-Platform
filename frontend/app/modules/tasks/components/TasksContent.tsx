@@ -99,7 +99,7 @@ export function TasksContent({
       return <TaskMetricsView />;
     default:
       return (
-        <div className="text-center py-12 text-gray-400">
+        <div className="text-center py-12 text-gray-500">
           Content for {activeTab} tab
         </div>
       );

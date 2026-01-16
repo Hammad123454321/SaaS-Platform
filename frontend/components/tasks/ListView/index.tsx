@@ -56,7 +56,7 @@ export function ListView({
 
         return (
           <div key={key} className="space-y-3">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
               {groupTitles[key]} ({groupTasks.length})
             </h3>
             <div className="grid gap-3">

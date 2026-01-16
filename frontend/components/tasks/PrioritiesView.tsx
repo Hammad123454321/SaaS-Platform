@@ -68,15 +68,15 @@ export function PrioritiesView() {
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-400">Loading priorities...</div>;
+    return <div className="text-center py-12 text-gray-500">Loading priorities...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Task Priorities</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Task Priorities</h2>
         {canCreateProject && (
-          <Button onClick={() => { setShowForm(true); setEditingPriority(null); resetForm(); }} className="glass">
+          <Button onClick={() => { setShowForm(true); setEditingPriority(null); resetForm(); }} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Create Priority
           </Button>
@@ -86,11 +86,11 @@ export function PrioritiesView() {
       {priorities && priorities.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {priorities.map((priority) => (
-            <div key={priority.id} className="glass rounded-lg p-4 space-y-2">
+            <div key={priority.id} className="bg-white rounded-lg p-4 space-y-2 border border-gray-200 shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <TaskPriorityBadge name={priority.name || priority.title} color={priority.color} />
-                  <p className="text-xs text-gray-400 mt-2">Level: {priority.level}</p>
+                  <p className="text-xs text-gray-500 mt-2">Level: {priority.level}</p>
                 </div>
                 {canCreateProject && (
                   <div className="flex gap-1">
@@ -98,7 +98,7 @@ export function PrioritiesView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleEdit(priority)}
-                      className="h-8 w-8"
+                      className="h-8 w-8 text-gray-600 hover:text-purple-600 hover:bg-purple-50"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -106,7 +106,7 @@ export function PrioritiesView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => setDeletingPriority(priority)}
-                      className="h-8 w-8 text-red-400"
+                      className="h-8 w-8 text-gray-600 hover:text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -117,25 +117,27 @@ export function PrioritiesView() {
           ))}
         </div>
       ) : (
-        <div className="glass rounded-lg p-12 text-center">
-          <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-400">No priorities yet. Create your first priority to get started.</p>
+        <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+          <div className="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+            <FileText className="h-8 w-8 text-purple-600" />
+          </div>
+          <p className="text-gray-500">No priorities yet. Create your first priority to get started.</p>
         </div>
       )}
 
       {/* Create/Edit Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="glass max-w-md">
+        <DialogContent className="bg-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-gray-900">
               {editingPriority ? "Edit Priority" : "Create Priority"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm text-gray-200/80">Priority Name *</label>
+              <label className="text-sm text-gray-600 font-medium">Priority Name *</label>
               <Input
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.title || ""}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
@@ -143,19 +145,19 @@ export function PrioritiesView() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-sm text-gray-200/80">Level</label>
+                <label className="text-sm text-gray-600 font-medium">Level</label>
                 <Input
                   type="number"
-                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                   value={formData.level || 0}
                   onChange={(e) => setFormData({ ...formData, level: parseInt(e.target.value) || 0 })}
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Color</label>
+                <label className="text-sm text-gray-600 font-medium">Color</label>
                 <Input
                   type="color"
-                  className="mt-1 h-10 bg-white/5 border-white/10"
+                  className="mt-1 h-10 bg-white border-gray-300"
                   value={formData.color || "#6b7280"}
                   onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                 />
@@ -165,7 +167,7 @@ export function PrioritiesView() {
               <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" className="glass" disabled={createPriority.isPending || updatePriority.isPending}>
+              <Button type="submit" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700" disabled={createPriority.isPending || updatePriority.isPending}>
                 {editingPriority ? "Update" : "Create"}
               </Button>
             </div>

@@ -1,17 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
 import { useSessionStore } from "@/lib/store";
 import Link from "next/link";
-import { LayoutDashboard, Wand2, CheckSquare, Clock, AlertCircle } from "lucide-react";
+import { api } from "@/lib/api";
+import { 
+  CheckSquare, Clock, AlertCircle, Bell,
+  Calendar, Timer, TrendingUp, Sparkles, LogOut, Mail
+} from "lucide-react";
 
-type Entitlement = {
-  module_code: string;
-  enabled: boolean;
-  seats: number;
-  ai_access: boolean;
-};
+// Widgets
+import { StatCard } from "@/components/dashboard/widgets/StatCard";
+import { RecentTasksWidget } from "@/components/dashboard/widgets/RecentTasksWidget";
+import { ModuleAccessWidget } from "@/components/dashboard/widgets/ModuleAccessWidget";
+import { UpcomingDeadlinesWidget } from "@/components/dashboard/widgets/UpcomingDeadlinesWidget";
+import { ActivityFeedWidget } from "@/components/dashboard/widgets/ActivityFeedWidget";
+import { QuickActionsWidget } from "@/components/dashboard/widgets/QuickActionsWidget";
+
+// Charts
+import { TaskTrendChart } from "@/components/dashboard/charts/TaskTrendChart";
+
+// API Hooks
+import {
+  useStaffStats,
+  useStaffMyTasks,
+  useStaffTaskTrends,
+  useStaffUpcomingDeadlines,
+  useStaffActivity,
+  useCompanyModules,
+} from "@/hooks/useDashboard";
 
 const moduleLabels: Record<string, string> = {
   crm: "CRM",
@@ -20,231 +36,281 @@ const moduleLabels: Record<string, string> = {
   tasks: "Tasks",
   booking: "Booking",
   landing: "Landing Builder",
-  ai: "AI",
+  ai: "AI Assistant",
 };
 
 export default function StaffDashboard() {
-  const { entitlements, setEntitlements, user } = useSessionStore();
-  const [loading, setLoading] = useState(false);
-  const [myTasks, setMyTasks] = useState<any[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
+  const { entitlements, user, clearSession } = useSessionStore();
 
-  useEffect(() => {
-    const fetchEntitlements = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get<Entitlement[]>("/entitlements");
-        setEntitlements(res.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (err) {
+      // ignore
+    } finally {
+      clearSession();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
       }
-    };
-    fetchEntitlements();
-  }, [setEntitlements]);
-
-  useEffect(() => {
-    const fetchMyTasks = async () => {
-      const tasksEnabled = entitlements.find((e) => e.module_code === "tasks" && e.enabled);
-      if (!tasksEnabled) return;
-      
-      setTasksLoading(true);
-      try {
-        const res = await api.get("/modules/tasks/my-tasks");
-        setMyTasks(res.data?.data || []);
-      } catch (err) {
-        console.error("Failed to load my tasks:", err);
-      } finally {
-        setTasksLoading(false);
-      }
-    };
-    if (entitlements.length > 0) {
-      fetchMyTasks();
     }
-  }, [entitlements]);
-
-  const enabledModules = entitlements.filter((e) => e.enabled);
-  
-  // Get task statistics
-  const tasksStats = {
-    total: myTasks.length,
-    pending: myTasks.filter((t) => t.status_name?.toLowerCase().includes("todo") || t.status_name?.toLowerCase().includes("pending")).length,
-    inProgress: myTasks.filter((t) => t.status_name?.toLowerCase().includes("progress")).length,
-    completed: myTasks.filter((t) => t.status_name?.toLowerCase().includes("done") || t.status_name?.toLowerCase().includes("complete")).length,
-    overdue: myTasks.filter((t) => {
-      if (!t.due_date) return false;
-      return new Date(t.due_date) < new Date() && !t.status_name?.toLowerCase().includes("done");
-    }).length,
   };
 
-  return (
-    <div className="space-y-8">
-      <header className="glass rounded-2xl px-6 py-5 shadow-xl">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">Workspace</p>
-            <h1 className="text-3xl font-semibold text-white">My Dashboard</h1>
-            <p className="text-sm text-gray-200/80">
-              Access your enabled modules and quick actions.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-gray-100">
-            <CheckSquare className="h-5 w-5 text-emerald-300" />
-            Staff Access
-          </div>
-        </div>
-      </header>
+  // Fetch data from APIs
+  const { data: stats, isLoading: statsLoading } = useStaffStats();
+  const { data: myTasks, isLoading: tasksLoading } = useStaffMyTasks(10);
+  const { data: taskTrends, isLoading: trendsLoading } = useStaffTaskTrends();
+  const { data: deadlines, isLoading: deadlinesLoading } = useStaffUpcomingDeadlines(5);
+  const { data: activity, isLoading: activityLoading } = useStaffActivity(10);
+  const { data: modules, isLoading: modulesLoading } = useCompanyModules();
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {enabledModules.length === 0 && !loading && (
-          <div className="glass col-span-full flex items-center justify-between rounded-xl p-4">
-            <div>
-              <p className="font-semibold text-white">No modules enabled</p>
-              <p className="text-sm text-gray-200/80">
-                Contact your administrator to enable modules for your account.
-              </p>
-            </div>
-            <LayoutDashboard className="h-6 w-6 text-cyan-200" />
+  const enabledModules = entitlements.filter((e) => e.enabled);
+  const loading = statsLoading;
+
+  // Transform API data for components
+  const taskTrendData = taskTrends || [];
+
+  const recentTasksData = (myTasks || []).slice(0, 5).map(task => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    statusColor: task.status_color,
+    project: task.project || undefined,
+    dueDate: task.due_date || undefined,
+    isOverdue: task.is_overdue,
+  }));
+
+  const modulesData = (modules || enabledModules.map(m => ({
+    code: m.module_code,
+    name: moduleLabels[m.module_code] || m.module_code.toUpperCase(),
+    enabled: m.enabled,
+    ai_access: m.ai_access,
+    usage_count: 0,
+  }))).map(m => ({
+    code: m.code,
+    name: m.name,
+    enabled: m.enabled,
+    aiAccess: m.ai_access,
+    usageCount: m.usage_count,
+  }));
+
+  const deadlinesData = (deadlines || []).map(d => ({
+    id: d.id,
+    title: d.title,
+    dueDate: d.due_date,
+    daysLeft: d.days_left,
+    project: d.project || undefined,
+  }));
+
+  const activityData = (activity || []).map(a => ({
+    id: a.id,
+    type: a.type as "task" | "user" | "booking" | "ai" | "document",
+    title: a.title,
+    description: a.description,
+    timestamp: a.timestamp,
+    user: a.user || undefined,
+  }));
+
+  // Calculate stats
+  const tasksStats = stats || {
+    total: 0,
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    overdue: 0,
+  };
+
+  const completedThisWeek = taskTrendData.reduce((s, d) => s + d.completed, 0);
+  const totalThisWeek = taskTrendData.reduce((s, d) => s + d.completed + d.created, 0);
+  const completionRate = totalThisWeek > 0 ? Math.round((completedThisWeek / totalThisWeek) * 100) : 0;
+
+  const quickActions = [
+    { label: "View My Tasks", href: "/modules/tasks", icon: CheckSquare, gradient: "btn-gradient-purple" },
+    { label: "Check Calendar", href: "/modules/booking", icon: Calendar, gradient: "btn-gradient-orange" },
+    { label: "Start Time Tracker", href: "/modules/tasks", icon: Timer, gradient: "btn-gradient-cyan" },
+  ];
+
+  // Add CRM action if enabled
+  if (enabledModules.some(m => m.module_code === "crm")) {
+    quickActions.push({ label: "View CRM", href: "/modules/crm", icon: TrendingUp, gradient: "btn-gradient-pink" });
+  }
+
+  // Tabs that match the white navigation bar routes for Staff
+  const tabs = [
+    { label: "Overview", href: "/dashboard", active: true },
+    { label: "Tasks", href: "/modules/tasks", active: false },
+  ];
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-gray-500 text-sm mb-1">Welcome back</p>
+          <h1 className="text-3xl font-bold text-gray-900">{user?.email?.split("@")[0] || "Staff"}&apos;s Dashboard</h1>
+          <p className="text-gray-500 mt-1">Track your tasks, time, and progress</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Email */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 shadow-sm">
+            <Mail className="h-4 w-4 text-purple-500" />
+            <span className="text-sm text-gray-600 font-medium">{user?.email || "user@example.com"}</span>
           </div>
-        )}
-        {enabledModules.map((m) => (
-          <Link
-            key={m.module_code}
-            href={`/modules/${m.module_code}`}
-            className="glass rounded-xl p-4 shadow transition hover:-translate-y-1 hover:shadow-2xl"
+          <button className="w-10 h-10 rounded-xl bg-white/80 shadow-sm flex items-center justify-center hover:bg-white transition relative">
+            <Bell className="h-5 w-5 text-gray-600" />
+            {tasksStats.overdue > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[10px] text-white flex items-center justify-center">
+                {tasksStats.overdue}
+              </span>
+            )}
+          </button>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center text-white font-semibold">
+            {user?.email?.charAt(0).toUpperCase() || "S"}
+          </div>
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 text-white font-medium text-sm shadow-sm hover:opacity-90 transition"
           >
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold text-white">
-                {moduleLabels[m.module_code] || m.module_code.toUpperCase()}
-              </div>
-              <LayoutDashboard className="h-5 w-5 text-cyan-200" />
-            </div>
-            <p className="mt-2 text-sm text-gray-200/80">
-              {m.ai_access ? "AI enabled" : "Standard access"}
-            </p>
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Logout</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 mb-6 border-b border-purple-200 pb-2">
+        {tabs.map((tab) => (
+          <Link
+            key={tab.label}
+            href={tab.href}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${
+              tab.active 
+                ? "text-purple-700 border-b-2 border-purple-500 bg-white/50" 
+                : "text-gray-500 hover:text-gray-700 hover:bg-white/30"
+            }`}
+          >
+            {tab.label}
           </Link>
         ))}
-      </section>
+      </div>
 
-      {/* My Tasks Section */}
-      {enabledModules.some((m) => m.module_code === "tasks") && (
-        <section className="glass rounded-2xl p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <CheckSquare className="h-5 w-5 text-cyan-300" />
-              <h2 className="text-lg font-semibold text-white">My Tasks</h2>
-            </div>
-            <Link
+      {loading ? (
+        <div className="glass rounded-2xl p-12 text-center">
+          <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading your dashboard...</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Stats Grid */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <StatCard
+              title="Total Tasks"
+              value={tasksStats.total}
+              icon={<CheckSquare className="h-6 w-6 text-white" />}
+              gradient="from-slate-500 to-slate-600"
               href="/modules/tasks"
-              className="text-sm text-cyan-300 hover:text-cyan-200 underline"
-            >
-              View All
-            </Link>
-          </div>
-          
-          {/* Task Statistics */}
-          <div className="grid grid-cols-2 gap-3 mb-4 sm:grid-cols-5">
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="text-2xl font-bold text-white">{tasksStats.total}</div>
-              <div className="text-xs text-gray-300">Total</div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="text-2xl font-bold text-yellow-300">{tasksStats.pending}</div>
-              <div className="text-xs text-gray-300">Pending</div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="text-2xl font-bold text-blue-300">{tasksStats.inProgress}</div>
-              <div className="text-xs text-gray-300">In Progress</div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="text-2xl font-bold text-green-300">{tasksStats.completed}</div>
-              <div className="text-xs text-gray-300">Completed</div>
-            </div>
-            <div className="rounded-lg border border-red-400/30 bg-red-500/10 p-3">
-              <div className="text-2xl font-bold text-red-300">{tasksStats.overdue}</div>
-              <div className="text-xs text-gray-300">Overdue</div>
-            </div>
+            />
+            <StatCard
+              title="Pending"
+              value={tasksStats.pending}
+              icon={<Clock className="h-6 w-6 text-white" />}
+              gradient="from-amber-500 to-orange-500"
+              href="/modules/tasks"
+            />
+            <StatCard
+              title="In Progress"
+              value={tasksStats.in_progress}
+              icon={<TrendingUp className="h-6 w-6 text-white" />}
+              gradient="from-blue-500 to-indigo-500"
+              href="/modules/tasks"
+            />
+            <StatCard
+              title="Completed"
+              value={tasksStats.completed}
+              icon={<CheckSquare className="h-6 w-6 text-white" />}
+              gradient="from-emerald-500 to-teal-500"
+              href="/modules/tasks"
+              trend={{ value: 15, isPositive: true }}
+            />
+            <StatCard
+              title="Overdue"
+              value={tasksStats.overdue}
+              icon={<AlertCircle className="h-6 w-6 text-white" />}
+              gradient="from-rose-500 to-pink-500"
+              href="/modules/tasks"
+            />
           </div>
 
-          {/* Recent Tasks */}
-          {tasksLoading ? (
-            <div className="text-center py-4 text-gray-300">Loading tasks...</div>
-          ) : myTasks.length === 0 ? (
-            <div className="text-center py-4 text-gray-300">
-              <CheckSquare className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-              <p>No tasks assigned to you yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {myTasks.slice(0, 5).map((task) => (
-                <Link
-                  key={task.id}
-                  href="/modules/tasks"
-                  className="block rounded-lg border border-white/10 bg-white/5 p-3 hover:bg-white/10 transition"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-white">{task.title}</h3>
-                        {task.due_date && new Date(task.due_date) < new Date() && !task.status_name?.toLowerCase().includes("done") && (
-                          <span className="flex items-center gap-1 text-xs text-red-300">
-                            <AlertCircle className="h-3 w-3" />
-                            Overdue
-                          </span>
-                        )}
-                      </div>
-                      {task.project && (
-                        <p className="text-xs text-gray-300">Project: {task.project.title}</p>
-                      )}
-                      {task.due_date && (
-                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                          <Clock className="h-3 w-3" />
-                          Due: {new Date(task.due_date).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                    {task.status_name && (
-                      <span
-                        className="rounded-full px-2 py-1 text-xs font-medium"
-                        style={{
-                          backgroundColor: `${task.status_color || "#6b7280"}20`,
-                          color: task.status_color || "#6b7280",
-                        }}
-                      >
-                        {task.status_name}
-                      </span>
-                    )}
+          {/* Main Content */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Left Column - Tasks & Progress */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Task Progress Chart */}
+              <div className="glass rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">My Task Progress</h3>
+                  <div className="flex items-center gap-4 text-xs">
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" /> Completed
+                    </span>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" /> Assigned
+                    </span>
                   </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
+                </div>
+                {trendsLoading ? (
+                  <div className="h-[200px] flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : taskTrendData.length > 0 ? (
+                  <TaskTrendChart data={taskTrendData} />
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center text-gray-400">
+                    No task data available
+                  </div>
+                )}
+                <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-gray-500 text-xs">This Week</p>
+                    <p className="text-emerald-600 font-bold text-lg">{completedThisWeek}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-xs">Completion Rate</p>
+                    <p className="text-blue-600 font-bold text-lg">{completionRate}%</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-xs">Total Assigned</p>
+                    <p className="text-purple-600 font-bold text-lg flex items-center justify-center gap-1">
+                      {tasksStats.total}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-      <section className="glass rounded-2xl p-5 shadow-xl">
-        <div className="flex items-center gap-2">
-          <Wand2 className="h-5 w-5 text-emerald-300" />
-          <h2 className="text-lg font-semibold text-white">Quick Actions</h2>
+              {/* Recent Tasks */}
+              <RecentTasksWidget 
+                tasks={recentTasksData} 
+                title="My Tasks"
+              />
+
+              {/* Upcoming Deadlines */}
+              <UpcomingDeadlinesWidget deadlines={deadlinesData} />
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-4">
+              {/* Module Access */}
+              <ModuleAccessWidget modules={modulesData} />
+
+              {/* Activity Feed */}
+              <ActivityFeedWidget activities={activityData} />
+
+              {/* Quick Actions */}
+              <QuickActionsWidget actions={quickActions} />
+            </div>
+          </div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {[
-            { label: "My Tasks", href: "/modules/tasks" },
-            ...(enabledModules.some((m) => m.module_code === "crm") ? [{ label: "View CRM", href: "/modules/crm" }] : []),
-            ...(enabledModules.some((m) => m.module_code === "ai") ? [{ label: "Chat with AI", href: "/modules/ai" }] : []),
-          ].map((action) => (
-            <Link
-              key={action.label}
-              href={action.href}
-              className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-white/10"
-            >
-              {action.label}
-            </Link>
-          ))}
-        </div>
-      </section>
+      )}
     </div>
   );
 }
-

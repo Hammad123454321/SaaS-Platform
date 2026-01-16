@@ -28,14 +28,14 @@ export function TaskCard({ task, onClick, onEdit, onDelete }: TaskCardProps) {
       transition={{ duration: 0.2 }}
     >
       <Card
-        className="glass cursor-pointer hover:bg-white/10 transition p-4 space-y-3"
+        className="bg-white border border-gray-200 cursor-pointer hover:bg-gray-50 hover:shadow-md transition p-4 space-y-3"
         onClick={onClick}
       >
         <div className="flex items-start justify-between">
           <div className="flex-1 space-y-2">
-            <h4 className="font-semibold text-white line-clamp-2">{task.title}</h4>
+            <h4 className="font-semibold text-gray-900 line-clamp-2">{task.title}</h4>
             {task.description && (
-              <p className="text-sm text-gray-300 line-clamp-2">{task.description}</p>
+              <p className="text-sm text-gray-500 line-clamp-2">{task.description}</p>
             )}
           </div>
           <TaskActions
@@ -59,7 +59,7 @@ export function TaskCard({ task, onClick, onEdit, onDelete }: TaskCardProps) {
           <TaskProgressBar percentage={task.completion_percentage} />
         )}
 
-        <div className="flex items-center justify-between text-xs text-gray-400">
+        <div className="flex items-center justify-between text-xs text-gray-500">
           <div className="flex items-center gap-3">
             {task.assignees && task.assignees.length > 0 && (
               <TaskAssignees assignees={task.assignees} />
@@ -69,7 +69,7 @@ export function TaskCard({ task, onClick, onEdit, onDelete }: TaskCardProps) {
             )}
           </div>
           {task.project && (
-            <span className="text-gray-500">{task.project.title}</span>
+            <span className="text-gray-400">{task.project.title}</span>
           )}
         </div>
       </Card>

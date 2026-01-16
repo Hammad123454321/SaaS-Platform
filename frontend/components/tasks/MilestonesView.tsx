@@ -75,15 +75,15 @@ export function MilestonesView() {
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-400">Loading milestones...</div>;
+    return <div className="text-center py-12 text-gray-500">Loading milestones...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Milestones</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Milestones</h2>
         {canCreateProject && (
-          <Button onClick={() => { setShowForm(true); setEditingMilestone(null); resetForm(); }} className="glass">
+          <Button onClick={() => { setShowForm(true); setEditingMilestone(null); resetForm(); }} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Create Milestone
           </Button>
@@ -93,20 +93,20 @@ export function MilestonesView() {
       {milestones && milestones.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {milestones.map((milestone) => (
-            <div key={milestone.id} className="glass rounded-lg p-4 space-y-2">
+            <div key={milestone.id} className="bg-white rounded-lg p-4 space-y-2 border border-gray-200 shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">{milestone.name}</h3>
+                  <h3 className="font-semibold text-gray-900">{milestone.name}</h3>
                   {milestone.description && (
-                    <p className="text-sm text-gray-300/80 mt-1">{milestone.description}</p>
+                    <p className="text-sm text-gray-500 mt-1">{milestone.description}</p>
                   )}
                   {milestone.due_date && (
-                    <p className="text-xs text-gray-400 mt-2">
+                    <p className="text-xs text-gray-500 mt-2">
                       Due: {new Date(milestone.due_date).toLocaleDateString()}
                     </p>
                   )}
                   {milestone.completed_at && (
-                    <p className="text-xs text-green-400 mt-1">
+                    <p className="text-xs text-green-600 mt-1">
                       Completed: {new Date(milestone.completed_at).toLocaleDateString()}
                     </p>
                   )}
@@ -117,7 +117,7 @@ export function MilestonesView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleEdit(milestone)}
-                      className="h-8 w-8"
+                      className="h-8 w-8 text-gray-600 hover:text-purple-600 hover:bg-purple-50"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -125,7 +125,7 @@ export function MilestonesView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => setDeletingMilestone(milestone)}
-                      className="h-8 w-8 text-red-400"
+                      className="h-8 w-8 text-gray-600 hover:text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -136,47 +136,49 @@ export function MilestonesView() {
           ))}
         </div>
       ) : (
-        <div className="glass rounded-lg p-12 text-center">
-          <Target className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-400">No milestones yet. Create your first milestone to get started.</p>
+        <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+          <div className="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+            <Target className="h-8 w-8 text-purple-600" />
+          </div>
+          <p className="text-gray-500">No milestones yet. Create your first milestone to get started.</p>
         </div>
       )}
 
       {/* Create/Edit Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="glass max-w-md">
+        <DialogContent className="bg-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-gray-900">
               {editingMilestone ? "Edit Milestone" : "Create Milestone"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm text-gray-200/80">Milestone Name *</label>
+              <label className="text-sm text-gray-600 font-medium">Milestone Name *</label>
               <Input
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.name || ""}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Description</label>
+              <label className="text-sm text-gray-600 font-medium">Description</label>
               <Textarea
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.description || ""}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
               />
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Project *</label>
+              <label className="text-sm text-gray-600 font-medium">Project *</label>
               <Select
                 value={formData.project_id?.toString() || ""}
                 onValueChange={(value) => setFormData({ ...formData, project_id: parseInt(value) })}
                 required
               >
-                <SelectTrigger className="mt-1 bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="mt-1 bg-white border-gray-300 text-gray-900">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
@@ -189,10 +191,10 @@ export function MilestonesView() {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Due Date</label>
+              <label className="text-sm text-gray-600 font-medium">Due Date</label>
               <Input
                 type="date"
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.due_date || ""}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
               />
@@ -201,7 +203,7 @@ export function MilestonesView() {
               <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" className="glass" disabled={createMilestone.isPending || updateMilestone.isPending}>
+              <Button type="submit" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700" disabled={createMilestone.isPending || updateMilestone.isPending}>
                 {editingMilestone ? "Update" : "Create"}
               </Button>
             </div>

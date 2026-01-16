@@ -61,15 +61,15 @@ export function TagsView() {
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-400">Loading tags...</div>;
+    return <div className="text-center py-12 text-gray-500">Loading tags...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Tags</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Tags</h2>
         {canCreateProject && (
-          <Button onClick={() => { setShowForm(true); setEditingTag(null); resetForm(); }} className="glass">
+          <Button onClick={() => { setShowForm(true); setEditingTag(null); resetForm(); }} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Create Tag
           </Button>
@@ -81,17 +81,17 @@ export function TagsView() {
           {tags.map((tag) => (
             <div
               key={tag.id}
-              className="glass rounded-lg px-4 py-2 flex items-center gap-2"
+              className="bg-white rounded-lg px-4 py-2 flex items-center gap-2 border border-gray-200 shadow-sm"
               style={{ borderLeft: `3px solid ${tag.color || "#6b7280"}` }}
             >
-              <span className="text-white">{tag.name}</span>
+              <span className="text-gray-900">{tag.name}</span>
               {canCreateProject && (
                 <div className="flex gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => handleEdit(tag)}
-                    className="h-6 w-6"
+                    className="h-6 w-6 text-gray-600 hover:text-purple-600 hover:bg-purple-50"
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -99,7 +99,7 @@ export function TagsView() {
                     variant="ghost"
                     size="icon"
                     onClick={() => setDeletingTag(tag)}
-                    className="h-6 w-6 text-red-400"
+                    className="h-6 w-6 text-gray-600 hover:text-red-600 hover:bg-red-50"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -109,35 +109,37 @@ export function TagsView() {
           ))}
         </div>
       ) : (
-        <div className="glass rounded-lg p-12 text-center">
-          <Tag className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-400">No tags yet. Create your first tag to get started.</p>
+        <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+          <div className="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+            <Tag className="h-8 w-8 text-purple-600" />
+          </div>
+          <p className="text-gray-500">No tags yet. Create your first tag to get started.</p>
         </div>
       )}
 
       {/* Create/Edit Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="glass max-w-md">
+        <DialogContent className="bg-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-gray-900">
               {editingTag ? "Edit Tag" : "Create Tag"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm text-gray-200/80">Tag Name *</label>
+              <label className="text-sm text-gray-600 font-medium">Tag Name *</label>
               <Input
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.name || ""}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Color</label>
+              <label className="text-sm text-gray-600 font-medium">Color</label>
               <Input
                 type="color"
-                className="mt-1 h-10 bg-white/5 border-white/10"
+                className="mt-1 h-10 bg-white border-gray-300"
                 value={formData.color || "#6b7280"}
                 onChange={(e) => setFormData({ ...formData, color: e.target.value })}
               />
@@ -146,7 +148,7 @@ export function TagsView() {
               <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" className="glass" disabled={createTag.isPending || updateTag.isPending}>
+              <Button type="submit" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700" disabled={createTag.isPending || updateTag.isPending}>
                 {editingTag ? "Update" : "Create"}
               </Button>
             </div>

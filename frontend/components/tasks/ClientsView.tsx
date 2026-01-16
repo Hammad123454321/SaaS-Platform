@@ -77,15 +77,15 @@ export function ClientsView() {
   };
 
   if (isLoading) {
-    return <div className="text-center py-12 text-gray-400">Loading clients...</div>;
+    return <div className="text-center py-12 text-gray-500">Loading clients...</div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Clients</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Clients</h2>
         {canCreateProject && (
-          <Button onClick={() => { setShowForm(true); setEditingClient(null); resetForm(); }} className="glass">
+          <Button onClick={() => { setShowForm(true); setEditingClient(null); resetForm(); }} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Create Client
           </Button>
@@ -95,20 +95,20 @@ export function ClientsView() {
       {clients && clients.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {clients.map((client) => (
-            <div key={client.id} className="glass rounded-lg p-4 space-y-2">
+            <div key={client.id} className="bg-white rounded-lg p-4 space-y-2 border border-gray-200 shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">
+                  <h3 className="font-semibold text-gray-900">
                     {client.first_name} {client.last_name}
                   </h3>
                   {client.company && (
-                    <p className="text-sm text-gray-300/80">{client.company}</p>
+                    <p className="text-sm text-gray-600">{client.company}</p>
                   )}
                   {client.email && (
-                    <p className="text-xs text-gray-400">{client.email}</p>
+                    <p className="text-xs text-gray-500">{client.email}</p>
                   )}
                   {client.phone && (
-                    <p className="text-xs text-gray-400">{client.phone}</p>
+                    <p className="text-xs text-gray-500">{client.phone}</p>
                   )}
                 </div>
                 {canCreateProject && (
@@ -117,7 +117,7 @@ export function ClientsView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleEdit(client)}
-                      className="h-8 w-8"
+                      className="h-8 w-8 text-gray-600 hover:text-purple-600 hover:bg-purple-50"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -125,7 +125,7 @@ export function ClientsView() {
                       variant="ghost"
                       size="icon"
                       onClick={() => setDeletingClient(client)}
-                      className="h-8 w-8 text-red-400"
+                      className="h-8 w-8 text-gray-600 hover:text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -136,79 +136,81 @@ export function ClientsView() {
           ))}
         </div>
       ) : (
-        <div className="glass rounded-lg p-12 text-center">
-          <Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-400">No clients yet. Create your first client to get started.</p>
+        <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+          <div className="h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+            <Users className="h-8 w-8 text-purple-600" />
+          </div>
+          <p className="text-gray-500">No clients yet. Create your first client to get started.</p>
         </div>
       )}
 
       {/* Create/Edit Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="glass max-w-2xl">
+        <DialogContent className="bg-white max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-gray-900">
               {editingClient ? "Edit Client" : "Create Client"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-sm text-gray-200/80">First Name *</label>
+                <label className="text-sm text-gray-600 font-medium">First Name *</label>
                 <Input
-                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                   value={formData.first_name || ""}
                   onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                   required
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Last Name *</label>
+                <label className="text-sm text-gray-600 font-medium">Last Name *</label>
                 <Input
-                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                   value={formData.last_name || ""}
                   onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                   required
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Email *</label>
+                <label className="text-sm text-gray-600 font-medium">Email *</label>
                 <Input
                   type="email"
-                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                   value={formData.email || ""}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Phone</label>
+                <label className="text-sm text-gray-600 font-medium">Phone</label>
                 <Input
-                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                   value={formData.phone || ""}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Company</label>
+                <label className="text-sm text-gray-600 font-medium">Company</label>
                 <Input
-                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                   value={formData.company || ""}
                   onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-200/80">Address</label>
+                <label className="text-sm text-gray-600 font-medium">Address</label>
                 <Input
-                  className="mt-1 bg-white/5 border-white/10 text-white"
+                  className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                   value={formData.address || ""}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 />
               </div>
             </div>
             <div>
-              <label className="text-sm text-gray-200/80">Notes</label>
+              <label className="text-sm text-gray-600 font-medium">Notes</label>
               <Textarea
-                className="mt-1 bg-white/5 border-white/10 text-white"
+                className="mt-1 bg-white border-gray-300 text-gray-900 focus:border-purple-500 focus:ring-purple-500/20"
                 value={formData.notes || ""}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 rows={3}
@@ -218,7 +220,7 @@ export function ClientsView() {
               <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" className="glass" disabled={createClient.isPending || updateClient.isPending}>
+              <Button type="submit" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700" disabled={createClient.isPending || updateClient.isPending}>
                 {editingClient ? "Update" : "Create"}
               </Button>
             </div>

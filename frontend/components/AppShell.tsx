@@ -80,75 +80,7 @@ export function AppShell({ children }: Props) {
   };
 
   return (
-    <div className="space-y-4">
-      <header className="glass sticky top-4 z-20 flex items-center justify-between rounded-2xl px-4 py-3 shadow-xl">
-        <div className="flex items-center gap-3">
-          <Sparkles className="h-6 w-6 text-cyan-200" />
-          <Link href="/dashboard" className="text-lg font-semibold text-white">
-            {process.env.NEXT_PUBLIC_APP_NAME || "SaaS"}
-          </Link>
-        </div>
-        <div className="flex items-center gap-3 text-sm text-gray-100">
-          <Palette className="h-4 w-4 text-emerald-300" />
-          <span className="font-medium">{user?.email ?? "Guest"}</span>
-          {user?.is_super_admin && (
-            <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-semibold text-yellow-300">
-              Super Admin
-            </span>
-          )}
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 rounded-lg border border-red-400/50 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-300 transition hover:border-red-400 hover:bg-red-500/20"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Logout</span>
-          </button>
-        </div>
-      </header>
-
-      <nav className="glass flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow">
-        <Link className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-white/10" href="/dashboard">
-          <LayoutDashboard className="h-4 w-4 text-cyan-200" />
-          Dashboard
-        </Link>
-        {["crm", "tasks", "booking", "hrm", "pos", "landing", "ai"].map((m) => {
-          if (!enabledModules.includes(m)) return null;
-          return (
-            <Link key={m} className="rounded-lg px-3 py-2 hover:bg-white/10" href={`/modules/${m}`}>
-              {m.toUpperCase()}
-            </Link>
-          );
-        })}
-        {/* Super Admin Navigation */}
-        {user?.is_super_admin && (
-          <>
-            <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/admin/tenants">
-              Tenants
-            </Link>
-            <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/billing">
-              Billing
-            </Link>
-          </>
-        )}
-        {/* Company Admin Navigation */}
-        {(user?.roles?.includes("company_admin") || user?.roles?.includes("admin")) && !user?.is_super_admin && (
-          <>
-            <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/admin/users">
-              Users
-            </Link>
-            <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/onboarding">
-              Settings
-            </Link>
-          </>
-        )}
-        {/* All authenticated users can access AI */}
-        {user && enabledModules.includes("ai") && (
-          <Link className="rounded-lg px-3 py-2 hover:bg-white/10" href="/modules/ai">
-            AI Chat
-          </Link>
-        )}
-      </nav>
-
+    <div>
       <div>{children}</div>
     </div>
   );

@@ -71,16 +71,16 @@ export default function SignupPage() {
   if (success) {
     return (
       <div className="flex min-h-[80vh] items-center justify-center">
-        <div className="glass w-full max-w-md rounded-2xl p-8 shadow-2xl text-center">
+        <div className="bg-white w-full max-w-md rounded-2xl p-8 shadow-lg border border-gray-200 text-center">
           <div className="mb-6 space-y-2">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-              <svg className="h-8 w-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-2xl font-semibold text-white">Registration Successful!</h1>
-            <p className="text-sm text-gray-200/80">{message}</p>
-            <p className="mt-4 text-xs text-gray-300/80">
+            <h1 className="text-2xl font-semibold text-gray-900">Registration Successful!</h1>
+            <p className="text-sm text-gray-600">{message}</p>
+            <p className="mt-4 text-xs text-gray-500">
               {message.toLowerCase().includes("development mode") || message.toLowerCase().includes("auto-verified")
                 ? "Redirecting to onboarding..."
                 : "Redirecting to verification page..."}
@@ -93,17 +93,17 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-[80vh] items-center justify-center p-4">
-      <div className="glass w-full max-w-md rounded-2xl p-8 shadow-2xl">
+      <div className="bg-white w-full max-w-md rounded-2xl p-8 shadow-lg border border-gray-200">
         <div className="mb-6 space-y-2 text-center">
-          <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">Get started</p>
-          <h1 className="text-2xl font-semibold text-white">Create your workspace</h1>
-          <p className="text-sm text-gray-200/80">Tenant, Business Owner Email, and Password policy enforced.</p>
+          <p className="text-sm uppercase tracking-[0.2em] text-gray-500">Get started</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Create your workspace</h1>
+          <p className="text-sm text-gray-600">Tenant, Business Owner Email, and Password policy enforced.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm text-gray-200/80">Tenant / Company name</label>
+            <label className="text-sm text-gray-700 font-medium">Tenant / Company name</label>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-gray-400 outline-none focus:border-cyan-400"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
               type="text"
               placeholder="Acme Corp"
               value={tenantName}
@@ -112,9 +112,9 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="text-sm text-gray-200/80">Business Owner Email</label>
+            <label className="text-sm text-gray-700 font-medium">Business Owner Email</label>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-gray-400 outline-none focus:border-cyan-400"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
               type="email"
               placeholder="you@example.com"
               value={email}
@@ -123,22 +123,22 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="text-sm text-gray-200/80">Password</label>
+            <label className="text-sm text-gray-700 font-medium">Password</label>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-gray-400 outline-none focus:border-cyan-400"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
               type="password"
               placeholder="Strong password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-            <p className="mt-1 text-xs text-gray-300/80">Min length 12, must include a special character.</p>
+            <p className="mt-1 text-xs text-gray-500">Min length 12, must include a special character.</p>
           </div>
 
           {/* Policy Acceptance */}
-          <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-4">
-            <p className="text-sm font-medium text-white">Required Acceptances</p>
-            <label className="flex items-start gap-2 text-sm text-gray-200/80">
+          <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm font-medium text-gray-900">Required Acceptances</p>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={acceptPrivacyPolicy}
@@ -146,9 +146,9 @@ export default function SignupPage() {
                 className="mt-1"
                 required
               />
-              <span>I accept the <Link href="/privacy-policy" className="text-cyan-400 hover:underline">Privacy Policy</Link></span>
+              <span>I accept the <Link href="/privacy-policy" className="text-purple-600 hover:underline">Privacy Policy</Link></span>
             </label>
-            <label className="flex items-start gap-2 text-sm text-gray-200/80">
+            <label className="flex items-start gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={acceptTermsOfService}
@@ -156,14 +156,14 @@ export default function SignupPage() {
                 className="mt-1"
                 required
               />
-              <span>I accept the <Link href="/terms-of-service" className="text-cyan-400 hover:underline">Terms of Service</Link></span>
+              <span>I accept the <Link href="/terms-of-service" className="text-purple-600 hover:underline">Terms of Service</Link></span>
             </label>
           </div>
 
           {/* Communication Preferences */}
-          <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-4">
-            <p className="text-sm font-medium text-white">Communication Preferences</p>
-            <label className="flex items-center gap-2 text-sm text-gray-200/80">
+          <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm font-medium text-gray-900">Communication Preferences</p>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={emailEnabled}
@@ -172,7 +172,7 @@ export default function SignupPage() {
               />
               <span>Email notifications</span>
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-200/80">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={smsEnabled}
@@ -181,7 +181,7 @@ export default function SignupPage() {
               />
               <span>SMS notifications</span>
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-200/80">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={marketingEmailConsent}
@@ -195,18 +195,18 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading || !acceptPrivacyPolicy || !acceptTermsOfService}
-            className="w-full rounded-lg bg-gradient-to-r from-cyan-400 to-blue-600 px-4 py-2 font-semibold text-gray-900 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-60"
+            className="w-full rounded-lg bg-gradient-purple-blue px-4 py-2 font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-60"
           >
             {loading ? "Creating..." : "Create workspace"}
           </button>
         </form>
         {message && (
-          <p className={`mt-4 text-center text-sm ${success ? "text-green-400" : "text-red-400"}`}>
+          <p className={`mt-4 text-center text-sm ${success ? "text-green-600" : "text-red-600"}`}>
             {message}
           </p>
         )}
-        <p className="mt-4 text-center text-xs text-gray-300/80">
-          Already have an account? <Link href="/login" className="text-cyan-400 hover:underline">Log in</Link>
+        <p className="mt-4 text-center text-xs text-gray-600">
+          Already have an account? <Link href="/login" className="text-purple-600 hover:underline">Log in</Link>
         </p>
       </div>
     </div>

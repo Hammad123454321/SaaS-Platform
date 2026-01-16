@@ -78,22 +78,22 @@ export function AIChatInterface() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-2xl glass shadow-2xl">
+        <div className="flex h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-lg border border-gray-100">
             {/* Header */}
-            <div className="border-b border-white/10 bg-white/5 px-6 py-4">
+            <div className="border-b border-gray-100 bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20 shadow-lg">
                         <Sparkles className="h-6 w-6 text-white" />
                     </div>
                     <div>
                         <h2 className="font-semibold text-white">AI Assistant</h2>
-                        <p className="text-xs text-gray-300">Powered by LangChain & GPT</p>
+                        <p className="text-xs text-white/80">Powered by LangChain & GPT</p>
                     </div>
                 </div>
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6" ref={scrollRef}>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50" ref={scrollRef}>
                 {messages.map((msg, idx) => {
                     const isAi = msg.role === "assistant" || msg.role === "system";
                     return (
@@ -102,15 +102,15 @@ export function AIChatInterface() {
                             className={`flex items-start gap-3 ${isAi ? "justify-start" : "justify-end"}`}
                         >
                             {isAi && (
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 ring-1 ring-indigo-500/50">
-                                    <Bot className="h-5 w-5 text-indigo-200" />
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100 ring-2 ring-purple-200">
+                                    <Bot className="h-5 w-5 text-purple-600" />
                                 </div>
                             )}
 
                             <div
                                 className={`max-w-[80%] rounded-2xl px-5 py-3 shadow-sm ${isAi
-                                        ? "bg-white/10 text-gray-100 ring-1 ring-white/10"
-                                        : "bg-cyan-600/90 text-white"
+                                        ? "bg-white text-gray-800 border border-gray-200"
+                                        : "bg-gradient-to-r from-purple-600 to-blue-600 text-white"
                                     }`}
                             >
                                 <div className="whitespace-pre-wrap leading-relaxed text-sm">
@@ -119,8 +119,8 @@ export function AIChatInterface() {
                             </div>
 
                             {!isAi && (
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 ring-1 ring-cyan-500/50">
-                                    <User className="h-5 w-5 text-cyan-200" />
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 ring-2 ring-blue-200">
+                                    <User className="h-5 w-5 text-blue-600" />
                                 </div>
                             )}
                         </div>
@@ -128,11 +128,11 @@ export function AIChatInterface() {
                 })}
                 {loading && (
                     <div className="flex items-start gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 ring-1 ring-indigo-500/50">
-                            <Bot className="h-5 w-5 text-indigo-200" />
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100 ring-2 ring-purple-200">
+                            <Bot className="h-5 w-5 text-purple-600" />
                         </div>
-                        <div className="flex items-center gap-2 rounded-2xl bg-white/5 px-4 py-3 text-sm text-gray-300">
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                        <div className="flex items-center gap-2 rounded-2xl bg-white border border-gray-200 px-4 py-3 text-sm text-gray-600">
+                            <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
                             Thinking...
                         </div>
                     </div>
@@ -140,11 +140,11 @@ export function AIChatInterface() {
             </div>
 
             {/* Input Area */}
-            <div className="border-t border-white/10 bg-black/20 p-4">
+            <div className="border-t border-gray-100 bg-white p-4">
                 <div className="relative mx-auto max-w-4xl">
                     <input
                         type="text"
-                        className="w-full rounded-xl border-0 bg-white/10 px-5 py-4 pr-14 text-white placeholder-gray-400 backdrop-blur-md transition focus:bg-white/15 focus:ring-2 focus:ring-cyan-500/50"
+                        className="w-full rounded-xl border border-gray-300 bg-gray-50 px-5 py-4 pr-14 text-gray-900 placeholder-gray-400 transition focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none"
                         placeholder="Ask AI to create a task, draft an email, or query your data..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -154,7 +154,7 @@ export function AIChatInterface() {
                     <button
                         onClick={handleSend}
                         disabled={loading || !input.trim()}
-                        className="absolute right-2 top-2 rounded-lg p-2 text-cyan-200 transition hover:bg-white/10 disabled:opacity-50"
+                        className="absolute right-2 top-2 rounded-lg p-2 text-purple-600 transition hover:bg-purple-50 disabled:opacity-50"
                     >
                         <Send className="h-5 w-5" />
                     </button>

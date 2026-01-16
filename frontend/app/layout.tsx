@@ -11,9 +11,9 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-radial text-gray-50 antialiased">
+      <body className="bg-cosmic min-h-screen text-gray-900 antialiased">
         <QueryProvider>
-          <main className="min-h-screen px-4 py-6 sm:px-8">{children}</main>
+          <main className="relative z-10 min-h-screen px-4 py-6 sm:px-8">{children}</main>
           <ToastProvider />
         </QueryProvider>
       </body>

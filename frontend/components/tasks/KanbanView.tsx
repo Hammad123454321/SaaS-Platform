@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useKanban, useMoveTask } from "@/hooks/tasks/useKanban";
+import { api } from "@/lib/api";
 import { Task } from "@/types/task";
 import {
   DndContext,
@@ -136,7 +137,7 @@ export function KanbanView({ projectId, onTaskClick }: KanbanViewProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-gray-300">Loading Kanban board...</div>
+        <div className="text-gray-500">Loading Kanban board...</div>
       </div>
     );
   }
@@ -144,7 +145,7 @@ export function KanbanView({ projectId, onTaskClick }: KanbanViewProps) {
   if (error || !columns) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-red-400">Failed to load Kanban board</div>
+        <div className="text-red-600">Failed to load Kanban board</div>
       </div>
     );
   }
@@ -173,8 +174,8 @@ export function KanbanView({ projectId, onTaskClick }: KanbanViewProps) {
         </div>
         <DragOverlay>
           {activeTask ? (
-            <div className="glass rounded-lg p-3 border border-white/10">
-              <p className="text-white font-medium">{activeTask.title}</p>
+            <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-lg">
+              <p className="text-gray-900 font-medium">{activeTask.title}</p>
             </div>
           ) : null}
         </DragOverlay>
@@ -195,13 +196,13 @@ function KanbanColumn({
   return (
     <div className="flex-shrink-0 w-80">
       <div
-        className="glass rounded-xl p-4 shadow-xl h-full flex flex-col"
+        className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-full flex flex-col"
         style={{ borderTop: `4px solid ${column.status_color}` }}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-white">{column.status_name}</h3>
-            <span className="text-xs text-gray-400 bg-white/10 px-2 py-1 rounded-full">
+            <h3 className="font-semibold text-gray-900">{column.status_name}</h3>
+            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
               {column.count}
             </span>
           </div>
@@ -220,7 +221,7 @@ function KanbanColumn({
               />
             ))}
             {column.tasks.length === 0 && (
-              <div className="text-center py-8 text-gray-400 text-sm">
+              <div className="text-center py-8 text-gray-500 text-sm">
                 No tasks
               </div>
             )}
@@ -262,7 +263,7 @@ function SortableTaskCard({
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className="bg-white/5 rounded-lg p-3 cursor-pointer hover:bg-white/10 transition border border-white/10"
+      className="bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition border border-gray-200"
     >
       <TaskCardContent task={task} />
     </div>
@@ -276,14 +277,14 @@ function TaskCardContent({ task }: { task: Task }) {
   return (
     <>
       <div className="flex items-start justify-between mb-2">
-        <h4 className="font-medium text-white text-sm flex-1 line-clamp-2">
+        <h4 className="font-medium text-gray-900 text-sm flex-1 line-clamp-2">
           {task.title}
         </h4>
         <GripVertical className="h-4 w-4 text-gray-400 flex-shrink-0 ml-2" />
       </div>
 
       {task.description && (
-        <p className="text-xs text-gray-300 mb-2 line-clamp-2">
+        <p className="text-xs text-gray-500 mb-2 line-clamp-2">
           {task.description}
         </p>
       )}
@@ -291,7 +292,7 @@ function TaskCardContent({ task }: { task: Task }) {
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         {task.priority_name && (
           <span
-            className="text-xs px-2 py-0.5 rounded"
+            className="text-xs px-2 py-0.5 rounded font-medium"
             style={{
               backgroundColor: `${task.priority_color || "#6b7280"}20`,
               color: task.priority_color || "#6b7280",
@@ -301,7 +302,7 @@ function TaskCardContent({ task }: { task: Task }) {
           </span>
         )}
         {(task.subtasks_count || (task.subtasks && task.subtasks.length > 0)) && (
-          <span className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="text-xs text-gray-500 flex items-center gap-1">
             <CheckSquare className="h-3 w-3" />
             {task.subtasks_count || task.subtasks?.length || 0}
           </span>
@@ -315,7 +316,7 @@ function TaskCardContent({ task }: { task: Task }) {
               {task.assignees.slice(0, 3).map((assignee, idx) => (
                 <div
                   key={assignee.id}
-                  className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center text-xs text-white"
+                  className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center text-xs text-white"
                   style={{ marginLeft: idx > 0 ? "-8px" : "0" }}
                   title={assignee.email || `${assignee.first_name} ${assignee.last_name}`}
                 >
@@ -323,7 +324,7 @@ function TaskCardContent({ task }: { task: Task }) {
                 </div>
               ))}
               {task.assignees.length > 3 && (
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-500">
                   +{task.assignees.length - 3}
                 </span>
               )}
@@ -333,10 +334,10 @@ function TaskCardContent({ task }: { task: Task }) {
 
         <div className="flex items-center gap-2">
           {isOverdue && (
-            <AlertCircle className="h-4 w-4 text-red-400" title="Overdue" />
+            <AlertCircle className="h-4 w-4 text-red-500" title="Overdue" />
           )}
           {task.due_date && (
-            <span className="text-xs text-gray-400 flex items-center gap-1">
+            <span className="text-xs text-gray-500 flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {new Date(task.due_date).toLocaleDateString()}
             </span>
@@ -346,9 +347,9 @@ function TaskCardContent({ task }: { task: Task }) {
 
       {task.completion_percentage > 0 && (
         <div className="mt-2">
-          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
             <div
-              className="h-full bg-cyan-400 transition-all"
+              className="h-full bg-gradient-to-r from-purple-600 to-blue-600 transition-all"
               style={{ width: `${task.completion_percentage}%` }}
             />
           </div>

@@ -107,14 +107,3 @@ async def run_agent_chat(
         return str(result["output"])
 
     return str(result)
-
-{
-  "cells": [],
-  "metadata": {
-    "language_info": {
-      "name": "python"
-    }
-  },
-  "nbformat": 4,
-  "nbformat_minor": 2
-}
