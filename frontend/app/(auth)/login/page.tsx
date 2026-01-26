@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useSessionStore } from "@/lib/store";
 
+export const dynamic = 'force-dynamic';
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

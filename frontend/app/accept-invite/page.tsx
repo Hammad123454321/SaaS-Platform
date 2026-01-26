@@ -7,6 +7,8 @@ import { useHRPoliciesForInvitation } from "@/hooks/compliance/useHRPolicies";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 
+export const dynamic = 'force-dynamic';
+
 export default function AcceptInvitePage() {
   const router = useRouter();
   const searchParams = useSearchParams();

@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import Link from "next/link";
 
+export const dynamic = 'force-dynamic';
+
 export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
