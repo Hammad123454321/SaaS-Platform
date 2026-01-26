@@ -20,3 +20,5 @@ langchain-core==0.3.0
 openai==1.54.0
 python-dateutil==2.9.0
 python-multipart==0.0.12
+sqlmodel==0.0.22
+sqlalchemy==2.0.36

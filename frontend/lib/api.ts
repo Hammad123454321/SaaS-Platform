@@ -1,7 +1,7 @@
 import axios, { AxiosHeaders, AxiosError } from "axios";
 import { useSessionStore } from "./store";
 
-const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 // Ensure baseURL ends with /api/v1 for versioned API
 const apiBaseURL = baseURL.endsWith('/api/v1') 
   ? baseURL 
