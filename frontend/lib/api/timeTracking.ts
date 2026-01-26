@@ -9,6 +9,7 @@ export interface TimeEntry {
   end_time?: string;
   duration_minutes?: number;
   description?: string;
+  date?: string;
   created_at: string;
 }
 

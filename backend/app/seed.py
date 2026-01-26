@@ -1,7 +1,5 @@
 from collections import namedtuple
 
-from sqlmodel import Session, select
-
 from app.models import Permission, Role, RolePermission
 from app.models.role import PermissionCode
 
@@ -33,47 +31,44 @@ DEFAULT_ROLES: list[RoleDef] = [
 ]
 
 
-def seed_permissions(session: Session) -> None:
+async def seed_permissions() -> None:
     """Ensure the global permission catalog exists."""
-    existing_codes = {p.code for p in session.exec(select(Permission)).all()}
+    existing_permissions = await Permission.find_all().to_list()
+    existing_codes = {p.code for p in existing_permissions}
+    
     for code in PermissionCode:
         if code.value not in existing_codes:
-            session.add(Permission(code=code.value, description=code.description))
-    session.commit()
+            permission = Permission(code=code.value, description=code.description)
+            await permission.insert()
+            print(f"Created permission: {code.value}")
 
 
-def ensure_roles_for_tenant(session: Session, tenant_id: int) -> dict[str, Role]:
+async def ensure_roles_for_tenant(tenant_id: str) -> dict[str, Role]:
     """Create default roles for a tenant if they do not exist."""
     roles_by_name: dict[str, Role] = {}
 
-    existing_roles = session.exec(
-        select(Role).where(Role.tenant_id == tenant_id)
-    ).all()
+    existing_roles = await Role.find(Role.tenant_id == tenant_id).to_list()
     roles_by_name.update({r.name: r for r in existing_roles})
 
     for role_def in DEFAULT_ROLES:
         role = roles_by_name.get(role_def.name)
         if not role:
-            role = Role(tenant_id=tenant_id, name=role_def.name)
-            session.add(role)
-            session.flush()
+            role = Role(
+                tenant_id=tenant_id,
+                name=role_def.name,
+                permission_codes=[perm.value for perm in role_def.permissions]
+            )
+            await role.insert()
             roles_by_name[role_def.name] = role
+            print(f"Created role: {role_def.name} for tenant {tenant_id}")
 
-        # Attach permissions
-        permission_ids = {
-            rp.permission_id
-            for rp in session.exec(
-                select(RolePermission).where(RolePermission.role_id == role.id)
-            ).all()
-        }
-        for perm_code in role_def.permissions:
-            perm = session.exec(
-                select(Permission).where(Permission.code == perm_code.value)
-            ).first()
-            if perm and perm.id not in permission_ids:
-                session.add(RolePermission(role_id=role.id, permission_id=perm.id))
+        # Update permissions if needed
+        current_permission_codes = set(role.permission_codes)
+        expected_permission_codes = {perm.value for perm in role_def.permissions}
+        
+        if current_permission_codes != expected_permission_codes:
+            role.permission_codes = list(expected_permission_codes)
+            await role.save()
+            print(f"Updated permissions for role: {role_def.name}")
 
-    session.commit()
     return roles_by_name
-
-

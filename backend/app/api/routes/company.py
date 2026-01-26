@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, func
 from app.api.deps import get_current_user
-from app.db import get_session
 from app.models import User, Tenant, ModuleEntitlement, Subscription
 
 router = APIRouter(prefix="/company", tags=["company"])
@@ -10,7 +9,6 @@ router = APIRouter(prefix="/company", tags=["company"])
 @router.get("/stats")
 async def get_company_stats(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get company-specific statistics."""
     tenant = session.get(Tenant, current_user.tenant_id)

@@ -18,8 +18,8 @@ export function ListView({
   onEdit,
   onDelete,
 }: ListViewProps) {
-  const groupedTasks = useMemo(() => {
-    const groups: Record<string, Task[]> = {
+  const { groups, subtasksByParent } = useMemo(() => {
+    const taskGroups: Record<string, Task[]> = {
       pinned: [],
       overdue: [],
       today: [],
@@ -28,16 +28,34 @@ export function ListView({
       "no-date": [],
     };
 
+    // Separate parent tasks from subtasks
+    const parentTasks: Task[] = [];
+    const subtasksByParentId: Record<number, Task[]> = {};
+
     tasks.forEach((task) => {
-      if (task.is_pinned) {
-        groups.pinned.push(task);
+      // Check if task has parent_id (it's a subtask)
+      if (task.parent_id) {
+        if (!subtasksByParentId[task.parent_id]) {
+          subtasksByParentId[task.parent_id] = [];
+        }
+        subtasksByParentId[task.parent_id].push(task);
       } else {
-        const group = getDateGroup(task.due_date);
-        groups[group].push(task);
+        // It's a parent task
+        parentTasks.push(task);
       }
     });
 
-    return groups;
+    // Group only parent tasks by date
+    parentTasks.forEach((task) => {
+      if (task.is_pinned) {
+        taskGroups.pinned.push(task);
+      } else {
+        const group = getDateGroup(task.due_date);
+        taskGroups[group].push(task);
+      }
+    });
+
+    return { groups: taskGroups, subtasksByParent: subtasksByParentId };
   }, [tasks]);
 
   const groupTitles: Record<string, string> = {
@@ -51,7 +69,7 @@ export function ListView({
 
   return (
     <div className="space-y-6">
-      {Object.entries(groupedTasks).map(([key, groupTasks]) => {
+      {Object.entries(groups).map(([key, groupTasks]) => {
         if (groupTasks.length === 0) return null;
 
         return (
@@ -59,15 +77,31 @@ export function ListView({
             <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
               {groupTitles[key]} ({groupTasks.length})
             </h3>
-            <div className="grid gap-3">
+            <div className="space-y-3">
               {groupTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onClick={() => onTaskClick?.(task.id)}
-                  onEdit={() => onEdit?.(task.id)}
-                  onDelete={() => onDelete?.(task.id)}
-                />
+                <div key={task.id}>
+                  <TaskCard
+                    task={task}
+                    onClick={() => onTaskClick?.(task.id)}
+                    onEdit={() => onEdit?.(task.id)}
+                    onDelete={() => onDelete?.(task.id)}
+                  />
+                  {/* Render subtasks nested under parent */}
+                  {subtasksByParent[task.id] && subtasksByParent[task.id].length > 0 && (
+                    <div className="ml-8 mt-2 space-y-2 border-l-2 border-gray-200 pl-4">
+                      {subtasksByParent[task.id].map((subtask) => (
+                        <div key={subtask.id} className="opacity-90">
+                          <TaskCard
+                            task={subtask}
+                            onClick={() => onTaskClick?.(subtask.id)}
+                            onEdit={() => onEdit?.(subtask.id)}
+                            onDelete={() => onDelete?.(subtask.id)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>

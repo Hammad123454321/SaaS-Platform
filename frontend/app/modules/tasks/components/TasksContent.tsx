@@ -12,7 +12,7 @@ import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
 import { CheckSquare } from "lucide-react";
-import { useSessionStore } from "@/lib/store";
+import { useSessionStore, UserInfo } from "@/lib/store";
 import { ProjectsView } from "@/components/tasks/ProjectsView";
 import { ClientsView } from "@/components/tasks/ClientsView";
 import { StatusesView } from "@/components/tasks/StatusesView";
@@ -35,7 +35,7 @@ interface TasksContentProps {
   users: DropdownItem[];
   isLoading: boolean;
   error: string | null;
-  user: ReturnType<typeof useSessionStore>["user"];
+  user: UserInfo | null;
   onTaskClick?: (taskId: number) => void;
 }
 

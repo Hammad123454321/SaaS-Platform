@@ -14,14 +14,14 @@ import {
   Tag,
   Clock,
 } from "lucide-react";
-import { useSessionStore } from "@/lib/store";
+import { UserInfo } from "@/lib/store";
 
 type Tab = "tasks" | "projects" | "clients" | "statuses" | "priorities" | "team" | "milestones" | "task-lists" | "time-tracker" | "tags";
 
 interface TasksTabsProps {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
-  user: ReturnType<typeof useSessionStore>["user"];
+  user: UserInfo | null;
 }
 
 export function TasksTabs({ activeTab, onTabChange, user }: TasksTabsProps) {

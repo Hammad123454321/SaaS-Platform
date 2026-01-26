@@ -40,7 +40,7 @@ def is_onboarding_complete(session: Session, user: User) -> tuple[bool, Optional
     owner_confirmation = session.exec(
         select(OwnerConfirmation).where(OwnerConfirmation.tenant_id == tenant_id)
     ).first()
-    if not owner_confirmation or not owner_confirmation.confirmed:
+    if not owner_confirmation or not owner_confirmation.confirmed_at:
         return False, "owner_confirmation"
     
     # Stage 3: At least one module must be enabled (REQUIRED even in dev)

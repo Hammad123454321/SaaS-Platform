@@ -8,7 +8,8 @@ type Entitlement = {
   ai_access: boolean;
 };
 
-type UserInfo = {
+export type UserInfo = {
+  id?: number;
   email: string;
   is_super_admin?: boolean;
   roles?: string[];

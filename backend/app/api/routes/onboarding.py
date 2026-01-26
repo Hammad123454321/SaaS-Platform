@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
-from app.db import get_session
 from app.models import ModuleEntitlement, ModuleCode, Tenant, User
 from app.schemas import (
     OnboardingRequest,
@@ -21,7 +20,6 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 async def onboarding(
     payload: OnboardingRequest,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> OnboardingResponse:
     tenant = session.get(Tenant, current_user.tenant_id)
     if not tenant:
@@ -91,7 +89,6 @@ async def onboarding(
 async def onboard_taskify(
     payload: TaskifyOnboardingRequest,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> TaskifyOnboardingResponse:
     await onboard_tenant_to_taskify(
         session=session,

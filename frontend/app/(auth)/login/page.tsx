@@ -71,6 +71,7 @@ export default function LoginPage() {
         accessToken,
         refreshToken,
         user: { 
+          id: me.data.id,
           email: me.data.email, 
           is_super_admin: me.data.is_super_admin, 
           roles: me.data.roles || [] 

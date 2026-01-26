@@ -83,55 +83,19 @@ export function KanbanView({ projectId, onTaskClick }: KanbanViewProps) {
 
     // Find current status
     let currentStatusId: number | null = null;
-    for (const [statusName, column] of Object.entries(columns)) {
-      if (column.tasks.some((t) => t.id === taskId)) {
-        currentStatusId = column.status_id;
-        break;
+    if (columns) {
+      for (const [statusName, column] of Object.entries(columns)) {
+        if (column.tasks.some((t) => t.id === taskId)) {
+          currentStatusId = column.status_id;
+          break;
+        }
       }
     }
 
     if (currentStatusId === targetStatusId) return;
 
-    try {
-      // Optimistic update
-      const updatedColumns = { ...columns };
-      let movedTask: KanbanTask | null = null;
-
-      // Remove from old column
-      for (const [statusName, column] of Object.entries(updatedColumns)) {
-        const taskIndex = column.tasks.findIndex((t) => t.id === taskId);
-        if (taskIndex !== -1) {
-          movedTask = column.tasks[taskIndex];
-          column.tasks.splice(taskIndex, 1);
-          column.count = column.tasks.length;
-          break;
-        }
-      }
-
-      // Add to new column
-      if (movedTask) {
-        for (const [statusName, column] of Object.entries(updatedColumns)) {
-          if (column.status_id === targetStatusId) {
-            column.tasks.push(movedTask);
-            column.count = column.tasks.length;
-            break;
-          }
-        }
-      }
-
-      setColumns(updatedColumns);
-
-      // Update on server
-      await api.patch(`/modules/tasks/kanban/${taskId}/move`, null, {
-        params: { status_id: targetStatusId },
-      });
-
-      // Reload to ensure consistency
-      await loadKanbanData();
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "Failed to move task");
-      await loadKanbanData(); // Revert on error
-    }
+    // Update on server using mutation
+    moveTask.mutate({ taskId, statusId: targetStatusId });
   };
 
   if (isLoading) {
@@ -334,7 +298,7 @@ function TaskCardContent({ task }: { task: Task }) {
 
         <div className="flex items-center gap-2">
           {isOverdue && (
-            <AlertCircle className="h-4 w-4 text-red-500" title="Overdue" />
+            <AlertCircle className="h-4 w-4 text-red-500" />
           )}
           {task.due_date && (
             <span className="text-xs text-gray-500 flex items-center gap-1">

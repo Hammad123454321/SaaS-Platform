@@ -1,0 +1,44 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          sudo apt-get update && sudo apt-get install -y sshpass
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if [ -n "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            echo "SSH_CMD=ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa" >> $GITHUB_ENV
+            echo "RSYNC_CMD=rsync -avz -e 'ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa'" >> $GITHUB_ENV
+          else
+            echo "SSH_CMD=sshpass -p '${{ secrets.VPS_PASSWORD }}' ssh -o StrictHostKeyChecking=no" >> $GITHUB_ENV
+            echo "RSYNC_CMD=sshpass -p '${{ secrets.VPS_PASSWORD }}' rsync -avz -e 'ssh -o StrictHostKeyChecking=no'" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy
+        run: |
+          eval $RSYNC_CMD \
+            --exclude '.git' --exclude 'node_modules' --exclude '__pycache__' \
+            --exclude '*.pyc' --exclude '.env*' --exclude 'venv' --exclude '.next' \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/saas-platform/
+          
+          eval $SSH_CMD ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            cd ~/saas-platform
+            [ ! -f .env ] && [ -f .env.example ] && cp .env.example .env
+            docker-compose down || true
+            docker-compose build && docker-compose up -d
+            sleep 15
+            docker-compose exec -T backend python -c "from app.db import init_db; init_db()" || true
+          EOF

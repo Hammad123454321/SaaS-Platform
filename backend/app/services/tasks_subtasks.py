@@ -33,9 +33,37 @@ def create_subtask(
         )
     
     # Ensure subtask has required fields
-    if "status_id" not in subtask_data:
-        # Use parent's status or default
-        subtask_data["status_id"] = parent.status_id
+    # Check if status_id is None or not provided
+    if "status_id" not in subtask_data or subtask_data.get("status_id") is None:
+        # Use parent's status if available, otherwise get default "To Do" status
+        if parent.status_id:
+            subtask_data["status_id"] = parent.status_id
+        else:
+            # Get default "To Do" status
+            from app.services.tasks import ensure_default_statuses
+            ensure_default_statuses(session, tenant_id)
+            default_status = session.exec(
+                select(TaskStatus).where(
+                    and_(
+                        TaskStatus.tenant_id == tenant_id,
+                        TaskStatus.name == "To Do"
+                    )
+                )
+            ).first()
+            if not default_status:
+                # Fallback: get any status for this tenant
+                default_status = session.exec(
+                    select(TaskStatus).where(
+                        TaskStatus.tenant_id == tenant_id
+                    )
+                ).first()
+            if default_status:
+                subtask_data["status_id"] = default_status.id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No status available. Please create a status first."
+                )
     
     if "project_id" not in subtask_data:
         subtask_data["project_id"] = parent.project_id
@@ -234,6 +262,7 @@ def _update_parent_completion(session: Session, tenant_id: int, parent_task_id: 
             
             if done_status and parent.status_id != done_status.id:
                 update_task(session, tenant_id, parent_task_id, {"status_id": done_status.id})
+
 
 
 

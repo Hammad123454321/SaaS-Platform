@@ -3,7 +3,6 @@ from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
 from app.api.authz import require_permission
-from app.db import get_session
 from app.models import ModuleEntitlement, ModuleCode, User, Tenant
 from app.schemas import EntitlementRead, EntitlementToggleRequest
 from app.models.role import PermissionCode
@@ -14,8 +13,7 @@ router = APIRouter(prefix="/entitlements", tags=["entitlements"])
 
 @router.get("", response_model=list[EntitlementRead])
 def list_entitlements(
-    current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
-) -> list[EntitlementRead]:
+    current_user: User = Depends(get_current_user)) -> list[EntitlementRead]:
     statement = select(ModuleEntitlement).where(ModuleEntitlement.tenant_id == current_user.tenant_id)
     entitlements = session.exec(statement).all()
     return [EntitlementRead.model_validate({
@@ -31,7 +29,6 @@ async def toggle_entitlement(
     module_code: ModuleCode,
     payload: EntitlementToggleRequest,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_ENTITLEMENTS)),
-    session: Session = Depends(get_session),
 ) -> EntitlementRead:
     # Ensure tenant exists (guards against stale users)
     tenant = session.get(Tenant, current_user.tenant_id)

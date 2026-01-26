@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_current_user
-from app.db import get_session
 from app.models import User
 from app.services.ai.agent import run_agent_chat
 
@@ -30,7 +29,6 @@ class AgentChatResponse(BaseModel):
 async def ai_chat(
     payload: AgentChatRequest,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> AgentChatResponse:
     """Chat with the LangChain + GPT-3.5-turbo business agent.
 
@@ -67,7 +65,6 @@ class TaskAIResponse(BaseModel):
 @router.get("/insights", response_model=InsightsResponse)
 async def get_ai_insights(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> InsightsResponse:
     """Get AI-powered insights and 'What Needs Attention' summary for the dashboard."""
     from app.services.ai.insights import generate_insights
@@ -83,7 +80,6 @@ async def get_ai_insights(
 async def generate_task_description(
     payload: TaskAIRequest,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> TaskAIResponse:
     """Generate AI-powered task description from a title."""
     from app.services.ai.task_generator import generate_task_details

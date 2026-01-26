@@ -85,7 +85,7 @@ export default function SuperAdminDashboard() {
   const systemServicesData = (systemHealth || []).map(s => ({
     name: s.name,
     status: s.status,
-    latency: s.latency,
+    latency: s.latency ?? undefined,
     icon: s.icon,
   }));
 

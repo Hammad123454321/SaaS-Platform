@@ -26,7 +26,6 @@ export function StatusesView() {
     title: "",
     color: "#6b7280",
     category: "todo",
-    display_order: 0,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,7 +45,6 @@ export function StatusesView() {
       title: "",
       color: "#6b7280",
       category: "todo",
-      display_order: 0,
     });
   };
 
@@ -56,7 +54,6 @@ export function StatusesView() {
       title: status.name || status.title,
       color: status.color,
       category: status.category,
-      display_order: status.display_order,
     });
     setShowForm(true);
   };

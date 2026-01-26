@@ -1,25 +1,9 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, List
 
-from sqlmodel import SQLModel, Field, Relationship
-
-if TYPE_CHECKING:
-    from app.models.user import User
-
-
-class RolePermission(SQLModel, table=True):
-    __tablename__ = "role_permissions"
-
-    role_id: int = Field(foreign_key="roles.id", primary_key=True)
-    permission_id: int = Field(foreign_key="permissions.id", primary_key=True)
-
-
-class UserRole(SQLModel, table=True):
-    __tablename__ = "user_roles"
-
-    user_id: int = Field(foreign_key="users.id", primary_key=True)
-    role_id: int = Field(foreign_key="roles.id", primary_key=True)
+from beanie import Document
+from pydantic import Field
 
 
 class PermissionCode(StrEnum):
@@ -45,31 +29,61 @@ class PermissionCode(StrEnum):
         return descriptions[self]
 
 
-class Role(SQLModel, table=True):
-    __tablename__ = "roles"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    name: str = Field(index=True)
+class Role(Document):
+    """Role model for MongoDB."""
+    
+    tenant_id: Optional[str] = Field(default=None, index=True)
+    name: str = Field(..., index=True)
+    permission_codes: List[str] = Field(default_factory=list)  # Store permission codes
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    users: list["User"] = Relationship(
-        back_populates="roles", link_model=UserRole  # type: ignore[arg-type]
-    )
-    permissions: list["Permission"] = Relationship(
-        back_populates="roles", link_model=RolePermission  # type: ignore[arg-type]
-    )
+    class Settings:
+        name = "roles"
+        indexes = [
+            "tenant_id",
+            "name",
+        ]
 
 
-class Permission(SQLModel, table=True):
-    __tablename__ = "permissions"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    code: str = Field(index=True, unique=True)
+class Permission(Document):
+    """Permission catalog model for MongoDB."""
+    
+    code: str = Field(..., index=True, unique=True)
     description: str = Field(default="")
 
-    roles: list["Role"] = Relationship(
-        back_populates="permissions", link_model=RolePermission  # type: ignore[arg-type]
-    )
+    class Settings:
+        name = "permissions"
+        indexes = [
+            "code",
+        ]
 
+
+class RolePermission(Document):
+    """Many-to-many relationship between roles and permissions."""
+    
+    role_id: str = Field(..., index=True)
+    permission_id: str = Field(..., index=True)
+
+    class Settings:
+        name = "role_permissions"
+        indexes = [
+            "role_id",
+            "permission_id",
+            ("role_id", "permission_id"),  # Compound index
+        ]
+
+
+class UserRole(Document):
+    """Many-to-many relationship between users and roles."""
+    
+    user_id: str = Field(..., index=True)
+    role_id: str = Field(..., index=True)
+
+    class Settings:
+        name = "user_roles"
+        indexes = [
+            "user_id",
+            "role_id",
+            ("user_id", "role_id"),  # Compound index
+        ]

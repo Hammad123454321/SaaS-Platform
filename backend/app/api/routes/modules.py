@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
 
 from app.api.authz import require_permission
-from app.db import get_session
 from app.models import User, ModuleCode, ModuleEntitlement
 from app.services.vendor_stub import VendorStubClient
 from app.services.vendor_clients.factory import create_vendor_client
@@ -53,7 +52,6 @@ def _require_entitlement(
 async def module_health(
     module_code: ModuleCode,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     _require_entitlement(session, current_user.tenant_id, module_code)
     client = await _get_client_for(module_code, current_user.tenant_id, session)
@@ -79,7 +77,6 @@ async def list_records(
     resource: str,
     request: Request,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     _require_entitlement(session, current_user.tenant_id, module_code)
     client = await _get_client_for(module_code, current_user.tenant_id, session)
@@ -106,7 +103,6 @@ async def create_record(
     resource: str,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     _require_entitlement(session, current_user.tenant_id, module_code)
     client = await _get_client_for(module_code, current_user.tenant_id, session)
@@ -144,7 +140,6 @@ async def update_record(
     resource: str,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     _require_entitlement(session, current_user.tenant_id, module_code)
     client = await _get_client_for(module_code, current_user.tenant_id, session)
@@ -194,7 +189,6 @@ async def add_note(
     record_id: str,
     note: str,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     _require_entitlement(session, current_user.tenant_id, module_code)
     client = await _get_client_for(module_code, current_user.tenant_id, session)
@@ -231,7 +225,6 @@ async def delete_record(
     record_id: str,
     resource: str,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Delete a record from the module (pure wrapper - forwards to Taskify)."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -270,7 +263,6 @@ async def add_comment(
     resource: str,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Add a comment to a record (pure wrapper - forwards to Taskify)."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -316,7 +308,6 @@ async def get_comments(
     record_id: str,
     resource: str,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get comments for a record (pure wrapper - forwards to Taskify)."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -349,7 +340,6 @@ async def draft_email(
     subject: str,
     body: str,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     _require_entitlement(session, current_user.tenant_id, module_code)
     client = await _get_client_for(module_code, current_user.tenant_id, session)
@@ -385,7 +375,6 @@ async def list_milestones(
     module_code: ModuleCode,
     project_id: Optional[int] = None,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """List milestones, optionally filtered by project."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -411,7 +400,6 @@ async def create_milestone(
     module_code: ModuleCode,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Create a new milestone."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -439,7 +427,6 @@ async def update_milestone(
     milestone_id: int,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Update a milestone."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -466,7 +453,6 @@ async def delete_milestone(
     module_code: ModuleCode,
     milestone_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Delete a milestone."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -493,7 +479,6 @@ async def delete_milestone(
 async def list_task_lists(
     module_code: ModuleCode,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """List all task lists."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -519,7 +504,6 @@ async def create_task_list(
     module_code: ModuleCode,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Create a new task list."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -547,7 +531,6 @@ async def update_task_list(
     task_list_id: int,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Update a task list."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -574,7 +557,6 @@ async def delete_task_list(
     module_code: ModuleCode,
     task_list_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Delete a task list."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -602,7 +584,6 @@ async def list_time_trackers(
     module_code: ModuleCode,
     task_id: Optional[int] = None,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """List time tracker entries."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -628,7 +609,6 @@ async def create_time_tracker(
     module_code: ModuleCode,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Create a new time tracker entry."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -656,7 +636,6 @@ async def update_time_tracker(
     time_id: int,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Update a time tracker entry."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -683,7 +662,6 @@ async def delete_time_tracker(
     module_code: ModuleCode,
     time_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Delete a time tracker entry."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -710,7 +688,6 @@ async def list_task_time_entries(
     module_code: ModuleCode,
     task_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """List time entries for a specific task."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -736,7 +713,6 @@ async def list_task_time_entries(
 async def list_tags(
     module_code: ModuleCode,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """List all tags."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -762,7 +738,6 @@ async def create_tag(
     module_code: ModuleCode,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Create a new tag."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -790,7 +765,6 @@ async def update_tag(
     tag_id: int,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Update a tag."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -817,7 +791,6 @@ async def delete_tag(
     module_code: ModuleCode,
     tag_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Delete a tag."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -845,7 +818,6 @@ async def get_status_timelines(
     module_code: ModuleCode,
     task_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get status change timeline for a task."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -872,7 +844,6 @@ async def update_task_favorite(
     task_id: int,
     is_favorite: bool,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Update task favorite status."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -900,7 +871,6 @@ async def update_task_pinned(
     task_id: int,
     is_pinned: bool,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Update task pinned status."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -928,7 +898,6 @@ async def upload_task_media(
     task_id: int,
     request: Request,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Upload media/file to a task."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -963,7 +932,6 @@ async def delete_task_media(
     module_code: ModuleCode,
     media_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Delete media from a task."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -990,7 +958,6 @@ async def get_task_subtasks(
     module_code: ModuleCode,
     task_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get subtasks/dependencies for a task."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1016,7 +983,6 @@ async def get_recurring_task(
     module_code: ModuleCode,
     task_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get recurring task configuration for a task."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1043,7 +1009,6 @@ async def bulk_delete_tasks(
     module_code: ModuleCode,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Bulk delete tasks."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1074,7 +1039,6 @@ async def duplicate_task(
     module_code: ModuleCode,
     task_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Duplicate a task."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1103,7 +1067,6 @@ async def get_activity_log(
     task_id: Optional[int] = None,
     limit: Optional[int] = None,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get activity log."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1130,7 +1093,6 @@ async def list_custom_fields(
     module_code: ModuleCode,
     module: str = "task",
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """List custom fields for a module."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1156,7 +1118,6 @@ async def create_custom_field(
     module_code: ModuleCode,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Create a custom field."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1184,7 +1145,6 @@ async def update_custom_field(
     field_id: int,
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Update a custom field."""
     _require_entitlement(session, current_user.tenant_id, module_code)
@@ -1211,7 +1171,6 @@ async def delete_custom_field(
     module_code: ModuleCode,
     field_id: int,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Delete a custom field."""
     _require_entitlement(session, current_user.tenant_id, module_code)

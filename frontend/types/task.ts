@@ -22,6 +22,7 @@ export interface Task {
   updated_at?: string;
   is_favorite?: boolean;
   is_pinned?: boolean;
+  parent_id?: number;
   subtasks?: Task[];
   subtasks_count?: number;
 }

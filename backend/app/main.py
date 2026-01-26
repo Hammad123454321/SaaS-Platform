@@ -32,11 +32,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(api_router)
+    # API versioning - all routes under /api/v1
+    app.include_router(api_router, prefix="/api/v1")
 
     @app.on_event("startup")
-    def _startup() -> None:
-        init_db()
+    async def _startup() -> None:
+        await init_db()
+    
+    @app.on_event("shutdown")
+    async def _shutdown() -> None:
+        from app.db import close_db
+        await close_db()
 
     return app
 

@@ -52,9 +52,6 @@ from app.models.tasks import (
     # Link models for many-to-many
     TaskAssignment,
     TaskTagLink,
-    # Association tables (legacy references)
-    task_assignments_table,
-    task_tags_table,
     # Core models
     Client,
     Project,
@@ -125,9 +122,6 @@ __all__ = [
     # Link Models
     "TaskAssignment",
     "TaskTagLink",
-    # Association Tables (legacy references)
-    "task_assignments_table",
-    "task_tags_table",
     # Task Management Models
     "Client",
     "Project",

@@ -4,7 +4,6 @@ from fastapi import Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
-from app.db import get_session
 from app.models import Permission, RolePermission, UserRole, User
 from app.models.role import PermissionCode
 from app.config import is_development
@@ -17,7 +16,7 @@ def require_permission(permission: PermissionCode) -> Callable:
     """
 
     def _checker(
-        current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
+        current_user: User = Depends(get_current_user)
     ) -> User:
         if current_user.is_super_admin:
             return current_user
