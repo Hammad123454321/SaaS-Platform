@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+# Note: User is a Beanie Document, use Beanie queries instead of SQLModel
 from pydantic import BaseModel, Field
 import secrets
 import logging
@@ -215,8 +215,7 @@ async def signup(
 @router.post("/login")
 async def login(payload: LoginRequest, response: Response):
     """Login endpoint - blocks unverified users (Stage 0 hard gate)."""
-    statement = select(User).where(User.email == payload.email.lower())
-    result = session.exec(statement).first()
+    result = await User.find_one(User.email == payload.email.lower())
     if not result or not verify_password(payload.password, result.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
     
@@ -279,15 +278,14 @@ def refresh_tokens(payload: RefreshRequest, response: Response) -> TokenResponse
 
 @router.post("/password-reset/request")
 async def request_password_reset(payload: PasswordResetRequest) -> dict[str, str]:
-    user = session.exec(select(User).where(User.email == payload.email.lower())).first()
+    user = await User.find_one(User.email == payload.email.lower())
     if not user:
         return {"status": "ok"}  # Avoid user enumeration
 
     raw_token = secrets.token_urlsafe(32)
     token_hash = hash_password(raw_token)
-    reset = PasswordResetToken(user_id=user.id, token_hash=token_hash)  # type: ignore[arg-type]
-    session.add(reset)
-    session.commit()
+    reset = PasswordResetToken(user_id=str(user.id), token_hash=token_hash)
+    await reset.insert()
 
     reset_link = f"{settings.frontend_base_url}/reset-password?token={raw_token}"
     send_password_reset(user.email, reset_link)
@@ -485,7 +483,7 @@ def resend_verification(
     payload: ResendVerificationRequest,
 ) -> dict:
     """Resend verification email."""
-    user = session.exec(select(User).where(User.email == payload.email.lower())).first()
+    user = await User.find_one(User.email == payload.email.lower())
     if not user:
         # Don't reveal if user exists
         return {"status": "success", "message": "If the email exists, a verification link has been sent."}
