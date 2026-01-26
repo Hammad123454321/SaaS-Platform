@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useHRPoliciesForInvitation } from "@/hooks/compliance/useHRPolicies";
@@ -9,7 +9,7 @@ import { Loader2 } from "lucide-react";
 
 export const dynamic = 'force-dynamic';
 
-export default function AcceptInvitePage() {
+function AcceptInviteForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -29,6 +29,21 @@ export default function AcceptInvitePage() {
         <p className="mt-2 text-sm text-gray-500">Please wait while we redirect you to the login page.</p>
       </div>
     </div>
+  );
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[80vh] items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-purple-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <AcceptInviteForm />
+    </Suspense>
   );
 }
 
