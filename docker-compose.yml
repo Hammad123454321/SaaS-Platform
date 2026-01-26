@@ -122,7 +122,14 @@ services:
       - "${NGINX_HTTPS_PORT:-443}:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/saas-platform.conf:/etc/nginx/sites-available/saas-platform.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+    command: >
+      sh -c "
+      mkdir -p /etc/nginx/sites-enabled &&
+      ln -sf /etc/nginx/sites-available/saas-platform.conf /etc/nginx/sites-enabled/saas-platform.conf &&
+      nginx -g 'daemon off;'
+      "
     depends_on:
       - frontend
       - backend

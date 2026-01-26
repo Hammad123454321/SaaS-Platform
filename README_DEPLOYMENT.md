@@ -40,7 +40,7 @@ sudo usermod -aG docker $USER
 
 Go to your GitHub repository → Settings → Secrets and variables → Actions, and add:
 
-- `VPS_HOST`: Your VPS IP or domain (e.g., `192.168.1.100` or `app.yourdomain.com`)
+- `VPS_HOST`: Your VPS IP or domain (e.g., `192.168.1.100` or `urielsi.ca`)
 - `VPS_USER`: SSH username (e.g., `root` or `ubuntu`)
 - `VPS_SSH_KEY`: Your private SSH key content (for key-based auth)
 - `VPS_PASSWORD`: Your VPS password (for password-based auth)
@@ -83,8 +83,8 @@ docker-compose up -d
 
 All API endpoints are now versioned under `/api/v1/`:
 
-- **Before:** `http://yourdomain.com/auth/login`
-- **After:** `http://yourdomain.com/api/v1/auth/login`
+- **Before:** `http://urielsi.ca/auth/login`
+- **After:** `https://urielsi.ca/api/v1/auth/login`
 
 The frontend automatically uses the versioned API path.
 
@@ -122,7 +122,7 @@ The frontend automatically uses the versioned API path.
 Check service health:
 ```bash
 # Backend health
-curl http://yourdomain.com/api/v1/health
+curl https://urielsi.ca/api/v1/health
 
 # Container status
 docker-compose ps
