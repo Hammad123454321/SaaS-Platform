@@ -9,7 +9,6 @@ from app.api.deps import get_current_user
 from app.models.role import PermissionCode
 from app.api.authz import require_permission
 from app.config import settings
-from app.db import get_session
 from app.models import (
     BillingHistory,
     Subscription,
@@ -66,7 +65,6 @@ def _apply_plan_entitlements(
 async def stripe_webhook(
     request: Request,
     stripe_signature: str | None = Header(default=None, convert_underscores=False, alias="Stripe-Signature"),
-    session: Session = Depends(get_session),
 ) -> dict[str, str]:
     payload = await request.body()
     if not stripe_signature:
@@ -169,7 +167,6 @@ async def stripe_webhook(
 @router.get("/history", response_model=list[BillingHistoryRead])
 def list_billing_history(
     current_user: User = Depends(require_permission(PermissionCode.VIEW_BILLING)),
-    session: Session = Depends(get_session)
 ) -> list[BillingHistoryRead]:
     stmt = (
         select(BillingHistory)

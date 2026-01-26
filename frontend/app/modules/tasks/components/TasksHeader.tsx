@@ -1,9 +1,9 @@
 "use client";
 
-import { useSessionStore } from "@/lib/store";
+import { UserInfo } from "@/lib/store";
 
 interface TasksHeaderProps {
-  user: ReturnType<typeof useSessionStore>["user"];
+  user: UserInfo | null;
 }
 
 export function TasksHeader({ user }: TasksHeaderProps) {

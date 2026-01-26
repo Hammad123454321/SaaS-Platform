@@ -15,7 +15,6 @@ from app.core.security import (
     verify_password,
     decode_token,
 )
-from app.db import get_session
 from app.models import (
     Tenant,
     User,
@@ -86,7 +85,6 @@ def _validate_password_strength(password: str) -> None:
 async def signup(
     payload: SignupRequest,
     request: Request,
-    session: Session = Depends(get_session)
 ) -> dict:
     """Stage 0: Register account with policy acceptance and communication preferences."""
     # Validate policy acceptance
@@ -215,7 +213,7 @@ async def signup(
 
 
 @router.post("/login")
-def login(payload: LoginRequest, response: Response, session: Session = Depends(get_session)):
+async def login(payload: LoginRequest, response: Response):
     """Login endpoint - blocks unverified users (Stage 0 hard gate)."""
     statement = select(User).where(User.email == payload.email.lower())
     result = session.exec(statement).first()
@@ -250,7 +248,6 @@ def login(payload: LoginRequest, response: Response, session: Session = Depends(
 @router.get("/me", response_model=UserRead)
 def me(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
 ) -> UserRead:
     roles = [r.name for r in current_user.roles]
     return UserRead.model_validate({**current_user.model_dump(), "roles": roles})
@@ -259,7 +256,6 @@ def me(
 @router.get("/onboarding-status")
 def get_onboarding_status(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
 ) -> dict:
     """Check if user's onboarding is complete."""
     from app.services.onboarding_completion_service import is_onboarding_complete
@@ -282,7 +278,7 @@ def refresh_tokens(payload: RefreshRequest, response: Response) -> TokenResponse
 
 
 @router.post("/password-reset/request")
-def request_password_reset(payload: PasswordResetRequest, session: Session = Depends(get_session)) -> dict[str, str]:
+async def request_password_reset(payload: PasswordResetRequest) -> dict[str, str]:
     user = session.exec(select(User).where(User.email == payload.email.lower())).first()
     if not user:
         return {"status": "ok"}  # Avoid user enumeration
@@ -300,7 +296,7 @@ def request_password_reset(payload: PasswordResetRequest, session: Session = Dep
 
 @router.post("/password-reset/confirm")
 def confirm_password_reset(
-    payload: PasswordResetConfirm, session: Session = Depends(get_session)
+    payload: PasswordResetConfirm
 ) -> dict[str, str]:
     stmt = select(PasswordResetToken).where(
         PasswordResetToken.used_at.is_(None),
@@ -350,7 +346,6 @@ def change_password_first_login(
     payload: FirstLoginPasswordChangeRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
 ) -> dict[str, str]:
     """Change password on first login and accept policies."""
     # Check if password change is required
@@ -442,7 +437,6 @@ def change_password_first_login(
 def impersonate(
     payload: ImpersonateRequest,
     current_user: User = Depends(require_permission(PermissionCode.IMPERSONATE_USER)),
-    session: Session = Depends(get_session),
 ) -> TokenResponse:
     target = session.get(User, payload.target_user_id)
     if not target or target.tenant_id != current_user.tenant_id:
@@ -470,7 +464,7 @@ def logout() -> dict[str, str]:
 # ========== Stage 0: Email Verification Endpoints ==========
 
 @router.post("/verify-email", response_model=dict)
-def verify_email(payload: VerifyEmailRequest, session: Session = Depends(get_session)) -> dict:
+async def verify_email(payload: VerifyEmailRequest) -> dict:
     """Verify email address using token."""
     user = verify_email_token(session, payload.token)
     if not user:
@@ -489,7 +483,6 @@ def verify_email(payload: VerifyEmailRequest, session: Session = Depends(get_ses
 @router.post("/resend-verification", response_model=dict)
 def resend_verification(
     payload: ResendVerificationRequest,
-    session: Session = Depends(get_session)
 ) -> dict:
     """Resend verification email."""
     user = session.exec(select(User).where(User.email == payload.email.lower())).first()

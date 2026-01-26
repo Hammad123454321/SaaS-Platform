@@ -1,19 +1,15 @@
 """
-Task Management Module - Database Models
+Task Management Module - Database Models for MongoDB
 
 All models include tenant_id for multi-tenant isolation.
 """
-from datetime import datetime, date, timezone
+from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, List
 from enum import Enum
 
-from sqlalchemy import JSON, Column, ForeignKey, Text, CheckConstraint, DECIMAL, Integer
-from sqlmodel import SQLModel, Field, Relationship
-
-if TYPE_CHECKING:
-    from app.models.user import User
-    from app.models.tenant import Tenant
+from beanie import Document
+from pydantic import Field
 
 
 # ========== Enums ==========
@@ -41,44 +37,48 @@ class BillingType(str, Enum):
 
 
 # ========== Link Models for Many-to-Many Relationships ==========
-class TaskAssignment(SQLModel, table=True):
+class TaskAssignment(Document):
     """Link model for Task-User many-to-many relationship."""
-    __tablename__ = "task_assignments"
     
-    task_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
-    )
-    user_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    )
+    task_id: str = Field(..., index=True)
+    user_id: str = Field(..., index=True)
     is_primary: bool = Field(default=False)
     assigned_at: datetime = Field(default_factory=datetime.utcnow)
 
+    class Settings:
+        name = "task_assignments"
+        indexes = [
+            "task_id",
+            "user_id",
+            ("task_id", "user_id"),  # Compound index
+        ]
 
-class TaskTagLink(SQLModel, table=True):
+
+class TaskTagLink(Document):
     """Link model for Task-Tag many-to-many relationship."""
-    __tablename__ = "task_tags"
     
-    task_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
-    )
-    tag_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
-    )
+    task_id: str = Field(..., index=True)
+    tag_id: str = Field(..., index=True)
+
+    class Settings:
+        name = "task_tags"
+        indexes = [
+            "task_id",
+            "tag_id",
+            ("task_id", "tag_id"),  # Compound index
+        ]
 
 
-# Keep legacy table references for backward compatibility with existing code
-task_assignments_table = TaskAssignment.__table__
-task_tags_table = TaskTagLink.__table__
+# Legacy references (not used in MongoDB but kept for compatibility)
+task_assignments_table = None
+task_tags_table = None
 
 
 # ========== Core Models ==========
-class Client(SQLModel, table=True):
+class Client(Document):
     """Client model - belongs to a tenant."""
-    __tablename__ = "clients"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
     
     # Client information
     first_name: str = Field(max_length=255)
@@ -86,8 +86,8 @@ class Client(SQLModel, table=True):
     email: str = Field(max_length=255, index=True)
     phone: Optional[str] = Field(default=None, max_length=50)
     company: Optional[str] = Field(default=None, max_length=255)
-    address: Optional[str] = Field(default=None, sa_column=Column(Text))
-    notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+    address: Optional[str] = None
+    notes: Optional[str] = None
     
     # Status
     is_active: bool = Field(default=True)
@@ -95,48 +95,45 @@ class Client(SQLModel, table=True):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    projects: list["Project"] = Relationship(back_populates="client")
+
+    class Settings:
+        name = "clients"
+        indexes = [
+            "tenant_id",
+            "email",
+        ]
 
 
-class Project(SQLModel, table=True):
+class Project(Document):
     """Project model - belongs to a client and tenant."""
-    __tablename__ = "projects"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    client_id: int = Field(foreign_key="clients.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    client_id: str = Field(..., index=True)
     
     # Project information
     name: str = Field(max_length=255)
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
-    budget: Optional[Decimal] = Field(default=None, sa_column=Column(DECIMAL(10, 2), nullable=True))
-    start_date: Optional[date] = Field(default=None)
-    deadline: Optional[date] = Field(default=None)
+    description: Optional[str] = None
+    budget: Optional[Decimal] = None
+    start_date: Optional[date] = None
+    deadline: Optional[date] = None
     status: ProjectStatus = Field(default=ProjectStatus.ACTIVE)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    client: Optional["Client"] = Relationship(back_populates="projects")
-    tasks: list["Task"] = Relationship(back_populates="project")
-    milestones: list["Milestone"] = Relationship(back_populates="project")
-    task_lists: list["TaskList"] = Relationship(back_populates="project")
-    threads: list["TaskComment"] = Relationship(back_populates="project")
-    documents: list["TaskAttachment"] = Relationship(back_populates="project")
-    document_folders: list["DocumentFolder"] = Relationship(back_populates="project")
-    resource_allocations: list["ResourceAllocation"] = Relationship(back_populates="project")
+
+    class Settings:
+        name = "projects"
+        indexes = [
+            "tenant_id",
+            "client_id",
+        ]
 
 
-class TaskStatus(SQLModel, table=True):
+class TaskStatus(Document):
     """Custom task status - per tenant."""
-    __tablename__ = "task_statuses"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
     
     # Status information
     name: str = Field(max_length=100)
@@ -148,17 +145,18 @@ class TaskStatus(SQLModel, table=True):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    tasks: list["Task"] = Relationship(back_populates="status")
+
+    class Settings:
+        name = "task_statuses"
+        indexes = [
+            "tenant_id",
+        ]
 
 
-class TaskPriority(SQLModel, table=True):
+class TaskPriority(Document):
     """Custom task priority - per tenant."""
-    __tablename__ = "task_priorities"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
     
     # Priority information
     name: str = Field(max_length=100)
@@ -170,63 +168,62 @@ class TaskPriority(SQLModel, table=True):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    tasks: list["Task"] = Relationship(back_populates="priority")
+
+    class Settings:
+        name = "task_priorities"
+        indexes = [
+            "tenant_id",
+        ]
 
 
-class TaskList(SQLModel, table=True):
+class TaskList(Document):
     """Task list within a project."""
-    __tablename__ = "task_lists"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    project_id: int = Field(foreign_key="projects.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    project_id: str = Field(..., index=True)
     
     # List information
     name: str = Field(max_length=255)
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    description: Optional[str] = None
     display_order: int = Field(default=0)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    project: Optional["Project"] = Relationship(back_populates="task_lists")
-    tasks: list["Task"] = Relationship(back_populates="task_list")
+
+    class Settings:
+        name = "task_lists"
+        indexes = [
+            "tenant_id",
+            "project_id",
+        ]
 
 
-class Task(SQLModel, table=True):
+class Task(Document):
     """Main task model."""
-    __tablename__ = "tasks"
-    __table_args__ = (
-        CheckConstraint("completion_percentage >= 0 AND completion_percentage <= 100", name="check_completion_percentage"),
-    )
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    project_id: int = Field(foreign_key="projects.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    project_id: str = Field(..., index=True)
     
     # Task information
     title: str = Field(max_length=255)
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
-    notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+    description: Optional[str] = None
+    notes: Optional[str] = None
     
-    # Relationships
-    status_id: int = Field(foreign_key="task_statuses.id", index=True)
-    priority_id: Optional[int] = Field(default=None, foreign_key="task_priorities.id", index=True)
-    task_list_id: Optional[int] = Field(default=None, foreign_key="task_lists.id", index=True)
+    # Relationships (stored as IDs)
+    status_id: str = Field(..., index=True)
+    priority_id: Optional[str] = Field(default=None, index=True)
+    task_list_id: Optional[str] = Field(default=None, index=True)
     
     # Dates
-    start_date: Optional[date] = Field(default=None)
-    due_date: Optional[date] = Field(default=None)
+    start_date: Optional[date] = None
+    due_date: Optional[date] = None
     
     # Task hierarchy
-    parent_id: Optional[int] = Field(default=None, foreign_key="tasks.id", index=True)
+    parent_id: Optional[str] = Field(default=None, index=True)
     
     # Progress
-    completion_percentage: int = Field(default=0)
+    completion_percentage: int = Field(default=0, ge=0, le=100)
     
     # Stage 5: Required tasks (non-deletable)
     is_required: bool = Field(default=False)
@@ -238,147 +235,144 @@ class Task(SQLModel, table=True):
     client_can_discuss: bool = Field(default=False)
     
     # Creator
-    created_by: int = Field(foreign_key="users.id", index=True)
+    created_by: str = Field(..., index=True)
+    
+    # Assignees (stored as list of user IDs)
+    assignee_ids: List[str] = Field(default_factory=list)
+    
+    # Tags (stored as list of tag IDs)
+    tag_ids: List[str] = Field(default_factory=list)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    project: Optional["Project"] = Relationship(back_populates="tasks")
-    status: Optional["TaskStatus"] = Relationship(back_populates="tasks")
-    priority: Optional["TaskPriority"] = Relationship(back_populates="tasks")
-    task_list: Optional["TaskList"] = Relationship(back_populates="tasks")
-    parent: Optional["Task"] = Relationship(
-        back_populates="subtasks",
-        sa_relationship_kwargs={"remote_side": "Task.id"}
-    )
-    subtasks: list["Task"] = Relationship(back_populates="parent")
-    # Assignees via link model (one-sided relationship, no back_populates on User)
-    assignees: list["User"] = Relationship(link_model=TaskAssignment)
-    comments: list["TaskComment"] = Relationship(back_populates="task")
-    attachments: list["TaskAttachment"] = Relationship(back_populates="task")
-    favorites: list["TaskFavorite"] = Relationship(back_populates="task")
-    pins: list["TaskPin"] = Relationship(back_populates="task")
-    # Tags via link model (one-sided relationship, Tag references Task)
-    tags: list["Tag"] = Relationship(link_model=TaskTagLink)
-    time_entries: list["TimeEntry"] = Relationship(back_populates="task")
-    time_trackers: list["TimeTracker"] = Relationship(back_populates="task")
-    # dependencies relationship handled via TaskDependency model
-    recurring_config: Optional["RecurringTask"] = Relationship(back_populates="task")
+
+    class Settings:
+        name = "tasks"
+        indexes = [
+            "tenant_id",
+            "project_id",
+            "status_id",
+            "priority_id",
+            "task_list_id",
+            "parent_id",
+            "created_by",
+        ]
 
 
-class TaskComment(SQLModel, table=True):
+class TaskComment(Document):
     """Comments/Threads on tasks - supports nesting."""
-    __tablename__ = "task_comments"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: Optional[int] = Field(default=None, foreign_key="tasks.id", index=True)
-    project_id: Optional[int] = Field(default=None, foreign_key="projects.id", index=True)  # For project-level threads
-    user_id: int = Field(foreign_key="users.id", index=True)
-    parent_id: Optional[int] = Field(default=None, foreign_key="task_comments.id", index=True)  # For nested replies
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: Optional[str] = Field(default=None, index=True)
+    project_id: Optional[str] = Field(default=None, index=True)  # For project-level threads
+    user_id: str = Field(..., index=True)
+    parent_id: Optional[str] = Field(default=None, index=True)  # For nested replies
     
     # Comment content
-    comment: str = Field(sa_column=Column(Text))
+    comment: str
     is_edited: bool = Field(default=False)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    task: Optional["Task"] = Relationship(back_populates="comments")
-    project: Optional["Project"] = Relationship(back_populates="threads")
-    user: Optional["User"] = Relationship()  # User who made the comment
-    parent: Optional["TaskComment"] = Relationship(
-        back_populates="replies",
-        sa_relationship_kwargs={"remote_side": "TaskComment.id"}
-    )
-    replies: list["TaskComment"] = Relationship(back_populates="parent")
-    attachments: list["CommentAttachment"] = Relationship(back_populates="comment")
+
+    class Settings:
+        name = "task_comments"
+        indexes = [
+            "tenant_id",
+            "task_id",
+            "project_id",
+            "user_id",
+            "parent_id",
+        ]
 
 
-class TaskAttachment(SQLModel, table=True):
+class TaskAttachment(Document):
     """File attachments/documents for tasks - with versioning and organization."""
-    __tablename__ = "task_attachments"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: Optional[int] = Field(default=None, foreign_key="tasks.id", index=True)
-    project_id: Optional[int] = Field(default=None, foreign_key="projects.id", index=True)  # For project-level docs
-    user_id: int = Field(foreign_key="users.id", index=True)  # Uploader
-    parent_id: Optional[int] = Field(default=None, foreign_key="task_attachments.id", index=True)  # For document versions
-    folder_id: Optional[int] = Field(default=None, foreign_key="document_folders.id", index=True)
-    category_id: Optional[int] = Field(default=None, foreign_key="document_categories.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: Optional[str] = Field(default=None, index=True)
+    project_id: Optional[str] = Field(default=None, index=True)  # For project-level docs
+    user_id: str = Field(..., index=True)  # Uploader
+    parent_id: Optional[str] = Field(default=None, index=True)  # For document versions
+    folder_id: Optional[str] = Field(default=None, index=True)
+    category_id: Optional[str] = Field(default=None, index=True)
     
     # File information
     filename: str = Field(max_length=255)
     original_filename: str = Field(max_length=255)  # Original name before upload
     file_path: str = Field(max_length=500)  # Storage path
-    file_size: int = Field()  # Size in bytes
+    file_size: int  # Size in bytes
     mime_type: str = Field(max_length=100)
     version: int = Field(default=1)  # Version number
     is_current_version: bool = Field(default=True)
     
     # Metadata
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
-    tags: Optional[str] = Field(default=None, sa_column=Column(JSON))  # JSON array of tags
+    description: Optional[str] = None
+    tags: Optional[List[str]] = Field(default=None)  # Array of tags
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    task: Optional["Task"] = Relationship(back_populates="attachments")
-    project: Optional["Project"] = Relationship(back_populates="documents")
-    folder: Optional["DocumentFolder"] = Relationship(back_populates="documents")
-    category: Optional["DocumentCategory"] = Relationship(back_populates="documents")
-    parent_version: Optional["TaskAttachment"] = Relationship(
-        back_populates="versions",
-        sa_relationship_kwargs={"remote_side": "TaskAttachment.id"}
-    )
-    versions: list["TaskAttachment"] = Relationship(back_populates="parent_version")
+
+    class Settings:
+        name = "task_attachments"
+        indexes = [
+            "tenant_id",
+            "task_id",
+            "project_id",
+            "user_id",
+            "parent_id",
+            "folder_id",
+            "category_id",
+        ]
 
 
-class TaskFavorite(SQLModel, table=True):
+class TaskFavorite(Document):
     """User favorites for tasks."""
-    __tablename__ = "task_favorites"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: int = Field(foreign_key="tasks.id", index=True)
-    user_id: int = Field(foreign_key="users.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: str = Field(..., index=True)
+    user_id: str = Field(..., index=True)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    task: Optional["Task"] = Relationship(back_populates="favorites")
+
+    class Settings:
+        name = "task_favorites"
+        indexes = [
+            "tenant_id",
+            "task_id",
+            "user_id",
+            ("task_id", "user_id"),  # Compound index
+        ]
 
 
-class TaskPin(SQLModel, table=True):
+class TaskPin(Document):
     """Pinned tasks for users."""
-    __tablename__ = "task_pins"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: int = Field(foreign_key="tasks.id", index=True)
-    user_id: int = Field(foreign_key="users.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: str = Field(..., index=True)
+    user_id: str = Field(..., index=True)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    task: Optional["Task"] = Relationship(back_populates="pins")
+
+    class Settings:
+        name = "task_pins"
+        indexes = [
+            "tenant_id",
+            "task_id",
+            "user_id",
+            ("task_id", "user_id"),  # Compound index
+        ]
 
 
-class Tag(SQLModel, table=True):
+class Tag(Document):
     """Tags for tasks."""
-    __tablename__ = "tags"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
     
     # Tag information
     name: str = Field(max_length=100, index=True)
@@ -387,250 +381,279 @@ class Tag(SQLModel, table=True):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships (one-sided, Task has the primary relationship)
-    # Access tasks via Task.tags relationship
+
+    class Settings:
+        name = "tags"
+        indexes = [
+            "tenant_id",
+            "name",
+        ]
 
 
-class Milestone(SQLModel, table=True):
+class Milestone(Document):
     """Project milestones."""
-    __tablename__ = "milestones"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    project_id: int = Field(foreign_key="projects.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    project_id: str = Field(..., index=True)
     
     # Milestone information
     title: str = Field(max_length=255)
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
-    due_date: Optional[date] = Field(default=None)
+    description: Optional[str] = None
+    due_date: Optional[date] = None
     is_completed: bool = Field(default=False)
-    completed_at: Optional[datetime] = Field(default=None)
+    completed_at: Optional[datetime] = None
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    project: Optional["Project"] = Relationship(back_populates="milestones")
+
+    class Settings:
+        name = "milestones"
+        indexes = [
+            "tenant_id",
+            "project_id",
+        ]
 
 
-class TimeEntry(SQLModel, table=True):
+class TimeEntry(Document):
     """Time tracking entries for tasks."""
-    __tablename__ = "time_entries"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: int = Field(foreign_key="tasks.id", index=True)
-    user_id: int = Field(foreign_key="users.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: str = Field(..., index=True)
+    user_id: str = Field(..., index=True)
     
     # Time information
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
-    hours: Decimal = Field(sa_column=Column("hours", DECIMAL(10, 2)))
-    entry_date: date = Field()
+    description: Optional[str] = None
+    hours: Decimal
+    entry_date: date
     is_billable: bool = Field(default=True)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    task: Optional["Task"] = Relationship(back_populates="time_entries")
+
+    class Settings:
+        name = "time_entries"
+        indexes = [
+            "tenant_id",
+            "task_id",
+            "user_id",
+        ]
 
 
-class TimeTracker(SQLModel, table=True):
+class TimeTracker(Document):
     """Active time tracker sessions (start/stop timer)."""
-    __tablename__ = "time_trackers"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: Optional[int] = Field(default=None, foreign_key="tasks.id", index=True)
-    user_id: int = Field(foreign_key="users.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: Optional[str] = Field(default=None, index=True)
+    user_id: str = Field(..., index=True)
     
     # Timer information
-    start_date_time: datetime = Field()
-    end_date_time: Optional[datetime] = Field(default=None)
-    duration: Optional[Decimal] = Field(default=None, sa_column=Column("duration", DECIMAL(10, 2), nullable=True))  # Calculated duration in hours
-    message: Optional[str] = Field(default=None, sa_column=Column(Text))
+    start_date_time: datetime
+    end_date_time: Optional[datetime] = None
+    duration: Optional[Decimal] = None  # Calculated duration in hours
+    message: Optional[str] = None
     is_running: bool = Field(default=True)  # True if timer is currently running
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    task: Optional["Task"] = Relationship(back_populates="time_trackers")
+
+    class Settings:
+        name = "time_trackers"
+        indexes = [
+            "tenant_id",
+            "task_id",
+            "user_id",
+        ]
 
 
-class CommentAttachment(SQLModel, table=True):
+class CommentAttachment(Document):
     """File attachments for comments."""
-    __tablename__ = "comment_attachments"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    comment_id: int = Field(foreign_key="task_comments.id", index=True)
-    user_id: int = Field(foreign_key="users.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    comment_id: str = Field(..., index=True)
+    user_id: str = Field(..., index=True)
     
     # File information
     filename: str = Field(max_length=255)
     file_path: str = Field(max_length=500)
-    file_size: int = Field()
+    file_size: int
     mime_type: str = Field(max_length=100)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    comment: Optional["TaskComment"] = Relationship(back_populates="attachments")
+
+    class Settings:
+        name = "comment_attachments"
+        indexes = [
+            "tenant_id",
+            "comment_id",
+            "user_id",
+        ]
 
 
-class DocumentFolder(SQLModel, table=True):
+class DocumentFolder(Document):
     """Folders for organizing documents."""
-    __tablename__ = "document_folders"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    project_id: Optional[int] = Field(default=None, foreign_key="projects.id", index=True)
-    parent_id: Optional[int] = Field(default=None, foreign_key="document_folders.id", index=True)  # Nested folders
+    
+    tenant_id: str = Field(..., index=True)
+    project_id: Optional[str] = Field(default=None, index=True)
+    parent_id: Optional[str] = Field(default=None, index=True)  # Nested folders
     
     # Folder information
     name: str = Field(max_length=255)
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    description: Optional[str] = None
     display_order: int = Field(default=0)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    project: Optional["Project"] = Relationship(back_populates="document_folders")
-    parent: Optional["DocumentFolder"] = Relationship(
-        back_populates="subfolders",
-        sa_relationship_kwargs={"remote_side": "DocumentFolder.id"}
-    )
-    subfolders: list["DocumentFolder"] = Relationship(back_populates="parent")
-    documents: list["TaskAttachment"] = Relationship(back_populates="folder")
+
+    class Settings:
+        name = "document_folders"
+        indexes = [
+            "tenant_id",
+            "project_id",
+            "parent_id",
+        ]
 
 
-class DocumentCategory(SQLModel, table=True):
+class DocumentCategory(Document):
     """Categories for organizing documents."""
-    __tablename__ = "document_categories"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
     
     # Category information
     name: str = Field(max_length=100)
     color: Optional[str] = Field(default=None, max_length=7)  # Hex color
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    description: Optional[str] = None
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    documents: list["TaskAttachment"] = Relationship(back_populates="category")
+
+    class Settings:
+        name = "document_categories"
+        indexes = [
+            "tenant_id",
+        ]
 
 
-class ResourceAllocation(SQLModel, table=True):
+class ResourceAllocation(Document):
     """Resource allocation for projects."""
-    __tablename__ = "resource_allocations"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    project_id: int = Field(foreign_key="projects.id", index=True)
-    user_id: int = Field(foreign_key="users.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    project_id: str = Field(..., index=True)
+    user_id: str = Field(..., index=True)
     
     # Allocation information
-    allocated_hours: Decimal = Field(sa_column=Column("allocated_hours", DECIMAL(10, 2)))  # Total hours allocated
-    start_date: date = Field()
-    end_date: Optional[date] = Field(default=None)
+    allocated_hours: Decimal  # Total hours allocated
+    start_date: date
+    end_date: Optional[date] = None
     is_active: bool = Field(default=True)
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    project: Optional["Project"] = Relationship(back_populates="resource_allocations")
+
+    class Settings:
+        name = "resource_allocations"
+        indexes = [
+            "tenant_id",
+            "project_id",
+            "user_id",
+        ]
 
 
-class ActivityLog(SQLModel, table=True):
+class ActivityLog(Document):
     """Activity log for tracking all changes in task management."""
-    __tablename__ = "activity_logs"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    user_id: Optional[int] = Field(default=None, foreign_key="users.id", index=True)
+    
+    tenant_id: str = Field(..., index=True)
+    user_id: Optional[str] = Field(default=None, index=True)
     
     # Activity information
     entity_type: str = Field(max_length=50, index=True)  # 'task', 'project', 'client', etc.
-    entity_id: int = Field(index=True)
+    entity_id: str = Field(index=True)
     action: str = Field(max_length=50)  # 'created', 'updated', 'deleted', 'assigned', etc.
-    description: str = Field(sa_column=Column(Text))
-    changes: Optional[str] = Field(default=None, sa_column=Column(JSON))  # JSON of field changes
+    description: str
+    changes: Optional[dict] = None  # Dict of field changes
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
+    class Settings:
+        name = "activity_logs"
+        indexes = [
+            "tenant_id",
+            "user_id",
+            "entity_type",
+            "entity_id",
+            "created_at",
+        ]
 
-class TaskDependency(SQLModel, table=True):
+
+class TaskDependency(Document):
     """Task dependencies - defines blocking relationships between tasks."""
-    __tablename__ = "task_dependencies"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: int = Field(foreign_key="tasks.id", index=True)  # Task that depends on another
-    depends_on_task_id: int = Field(foreign_key="tasks.id", index=True)  # Task that must be completed first
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: str = Field(..., index=True)  # Task that depends on another
+    depends_on_task_id: str = Field(..., index=True)  # Task that must be completed first
     
     # Dependency type
     dependency_type: str = Field(default="blocks", max_length=50)  # 'blocks', 'blocks_start', 'blocks_completion'
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships - Note: SQLModel doesn't support multiple foreign keys to same table easily
-    # We'll access tasks via queries instead
+
+    class Settings:
+        name = "task_dependencies"
+        indexes = [
+            "tenant_id",
+            "task_id",
+            "depends_on_task_id",
+        ]
 
 
-class RecurringTask(SQLModel, table=True):
+class RecurringTask(Document):
     """Recurring task configuration."""
-    __tablename__ = "recurring_tasks"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    task_id: int = Field(foreign_key="tasks.id", index=True, unique=True)  # Template task
+    
+    tenant_id: str = Field(..., index=True)
+    task_id: str = Field(..., index=True, unique=True)  # Template task
     
     # Recurrence pattern
     recurrence_type: str = Field(max_length=50)  # 'daily', 'weekly', 'monthly', 'yearly', 'custom'
     recurrence_interval: int = Field(default=1)  # Every N days/weeks/months
     
     # Weekly recurrence
-    days_of_week: Optional[str] = Field(default=None, sa_column=Column(JSON))  # [0,1,2,3,4,5,6] for Mon-Sun
+    days_of_week: Optional[List[int]] = None  # [0,1,2,3,4,5,6] for Mon-Sun
     
     # Monthly recurrence
-    day_of_month: Optional[int] = Field(default=None)  # Day of month (1-31)
-    week_of_month: Optional[int] = Field(default=None)  # Week of month (1-4, -1 for last)
-    weekday_of_month: Optional[int] = Field(default=None)  # Weekday (0-6)
+    day_of_month: Optional[int] = None  # Day of month (1-31)
+    week_of_month: Optional[int] = None  # Week of month (1-4, -1 for last)
+    weekday_of_month: Optional[int] = None  # Weekday (0-6)
     
     # Yearly recurrence
-    month_of_year: Optional[int] = Field(default=None)  # Month (1-12)
+    month_of_year: Optional[int] = None  # Month (1-12)
     
     # Custom recurrence rule (RRULE format)
-    custom_rule: Optional[str] = Field(default=None, sa_column=Column(Text))
+    custom_rule: Optional[str] = None
     
     # End conditions
-    end_date: Optional[date] = Field(default=None)  # Stop recurring after this date
-    max_occurrences: Optional[int] = Field(default=None)  # Stop after N occurrences
+    end_date: Optional[date] = None  # Stop recurring after this date
+    max_occurrences: Optional[int] = None  # Stop after N occurrences
     occurrence_count: int = Field(default=0)  # Number of occurrences created
     
     # Status
     is_active: bool = Field(default=True)
-    last_created_at: Optional[datetime] = Field(default=None)  # Last time a task was created
+    last_created_at: Optional[datetime] = None  # Last time a task was created
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Relationships
-    task: Optional["Task"] = Relationship(back_populates="recurring_config")
+
+    class Settings:
+        name = "recurring_tasks"
+        indexes = [
+            "tenant_id",
+            "task_id",
+        ]

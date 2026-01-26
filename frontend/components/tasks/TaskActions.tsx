@@ -27,7 +27,7 @@ export function TaskActions({
   const { canUpdateTask, canDeleteTask, isReadOnly } = useTaskAccess();
   
   // Required tasks cannot be deleted
-  const canDelete = canDeleteTask && !task.is_required;
+  const canDelete = canDeleteTask;
   
   return (
     <div className={`flex items-center gap-1 ${className}`}>
@@ -79,11 +79,6 @@ export function TaskActions({
             {canDelete && onDelete && (
               <DropdownMenuItem onClick={onDelete} className="text-red-400">
                 Delete
-              </DropdownMenuItem>
-            )}
-            {task.is_required && (
-              <DropdownMenuItem disabled className="text-gray-400">
-                Required task (cannot delete)
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>

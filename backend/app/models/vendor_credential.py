@@ -1,16 +1,20 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlmodel import SQLModel, Field, Column, JSON
+from beanie import Document
+from pydantic import Field
 
 
-class VendorCredential(SQLModel, table=True):
-    __tablename__ = "vendor_credentials"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    vendor: str = Field(index=True)
-    credentials: dict = Field(default_factory=dict, sa_column=Column(JSON))
+class VendorCredential(Document):
+    tenant_id: str = Field(..., index=True)
+    vendor: str = Field(..., index=True)
+    credentials: dict = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    class Settings:
+        name = "vendor_credentials"
+        indexes = [
+            "tenant_id",
+            "vendor",
+        ]

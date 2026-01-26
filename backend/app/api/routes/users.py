@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.api.deps import get_current_user
-from app.db import get_session
 from app.models import User, Tenant, UserRole, Role
 from app.api.authz import require_permission
 from app.models.role import PermissionCode
@@ -17,7 +16,6 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("", response_model=List[UserRead])
 async def list_users(
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
-    session: Session = Depends(get_session),
     skip: int = 0,
     limit: int = 100,
 ) -> List[UserRead]:
@@ -41,7 +39,6 @@ async def list_users(
 async def create_user(
     payload: UserCreate,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
-    session: Session = Depends(get_session),
 ) -> UserRead:
     """Create a new user in the current tenant."""
     # Check if email already exists in tenant
@@ -103,7 +100,6 @@ async def create_user(
 async def get_user(
     user_id: int,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
-    session: Session = Depends(get_session),
 ) -> UserRead:
     """Get a specific user."""
     user = session.get(User, user_id)
@@ -119,7 +115,6 @@ async def update_user(
     user_id: int,
     payload: UserUpdate,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
-    session: Session = Depends(get_session),
 ) -> UserRead:
     """Update a user."""
     user = session.get(User, user_id)
@@ -176,7 +171,6 @@ async def update_user(
 async def delete_user(
     user_id: int,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
-    session: Session = Depends(get_session),
 ) -> None:
     """Delete (deactivate) a user."""
     user = session.get(User, user_id)

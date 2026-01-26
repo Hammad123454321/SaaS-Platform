@@ -4,14 +4,20 @@ from typing import List
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8", 
+        case_sensitive=False,
+        extra="ignore"  # Ignore extra fields like old database_url
+    )
 
     app_name: str = "SaaS Core API"
     environment: str = Field(default="local", description="Deployment environment label")
     debug: bool = False
 
-    # Database
-    database_url: AnyUrl = Field(default="postgresql+psycopg://saas:saas@localhost:5432/saas")
+    # MongoDB
+    mongodb_uri: str = Field(default="mongodb://localhost:27017", description="MongoDB connection URI")
+    mongodb_db_name: str = Field(default="saas", description="MongoDB database name")
 
     # Auth/JWT
     jwt_secret_key: str = Field(default="change-me", description="HS256 secret for access tokens")

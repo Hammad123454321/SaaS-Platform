@@ -14,11 +14,18 @@ type User = {
   roles: string[];
 };
 
+type Role = {
+  id: number;
+  name: string;
+};
+
 export default function UsersPage() {
   const router = useRouter();
   const { user } = useSessionStore();
   const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingRoles, setLoadingRoles] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({ email: "", password: "", role_names: [] as string[], is_active: true });
@@ -30,6 +37,7 @@ export default function UsersPage() {
       return;
     }
     loadUsers();
+    loadRoles();
   }, [user, router]);
 
   const loadUsers = async () => {
@@ -41,6 +49,18 @@ export default function UsersPage() {
       setError(err?.response?.data?.detail || "Failed to load users");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRoles = async () => {
+    setLoadingRoles(true);
+    try {
+      const res = await api.get<Role[]>("/onboarding/roles");
+      setRoles(res.data);
+    } catch (err: any) {
+      console.error("Failed to load roles:", err);
+    } finally {
+      setLoadingRoles(false);
     }
   };
 
@@ -223,6 +243,46 @@ export default function UsersPage() {
                   />
                 </div>
               )}
+              <div>
+                <label className="text-sm text-gray-600 font-medium">Roles</label>
+                {loadingRoles ? (
+                  <div className="mt-1 text-xs text-gray-500">Loading roles...</div>
+                ) : roles.length === 0 ? (
+                  <div className="mt-1 text-xs text-gray-500">No roles available. Create roles in onboarding.</div>
+                ) : (
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {roles.map((role) => (
+                      <label
+                        key={role.id}
+                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.role_names.includes(role.name)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                role_names: [...formData.role_names, role.name],
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                role_names: formData.role_names.filter((r) => r !== role.name),
+                              });
+                            }
+                          }}
+                          className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">{role.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  Select one or more roles to assign to this user.
+                </p>
+              </div>
               {editingUser && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">Status</label>

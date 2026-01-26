@@ -2,12 +2,17 @@ import axios, { AxiosInstance, AxiosError } from "axios";
 import { useSessionStore } from "@/lib/store";
 
 // Create axios instance
+const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || 
+                process.env.NEXT_PUBLIC_API_URL || 
+                "http://localhost:8000";
+
+// Ensure baseURL ends with /api/v1 for versioned API
+const apiBaseURL = baseURL.endsWith('/api/v1') 
+  ? baseURL 
+  : `${baseURL.replace(/\/$/, '')}/api/v1`;
+
 const apiClient: AxiosInstance = axios.create({
-  // Default to the local dev backend port we run uvicorn on
-  baseURL:
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:5000",
+  baseURL: apiBaseURL,
   headers: {
     "Content-Type": "application/json",
   },

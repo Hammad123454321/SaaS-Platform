@@ -5,7 +5,6 @@ from fastapi import Request as FastAPIRequest
 from sqlmodel import Session, select
 from typing import List
 
-from app.db import get_session
 from app.api.deps import get_current_user
 from app.models import User, Tenant
 from app.models.role import Role
@@ -63,7 +62,6 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding-stages"])
 def create_business_profile(
     payload: BusinessProfileCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> BusinessProfileResponse:
     """Stage 1: Create business profile with jurisdiction mapping."""
     # Check if profile already exists
@@ -124,7 +122,6 @@ def create_business_profile(
 @router.get("/business-profile", response_model=BusinessProfileResponse)
 def get_business_profile(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> BusinessProfileResponse:
     """Get business profile for current tenant."""
     business_profile = session.exec(
@@ -165,7 +162,6 @@ def get_business_profile(
 def update_business_profile(
     payload: BusinessProfileCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> BusinessProfileResponse:
     """Update business profile."""
     business_profile = session.exec(
@@ -227,7 +223,6 @@ def confirm_owner_role(
     payload: OwnerConfirmationRequest,
     request: FastAPIRequest,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> OwnerConfirmationResponse:
     """Stage 2: Confirm Owner role with responsibility disclaimer."""
     if not payload.responsibility_disclaimer_accepted:
@@ -261,7 +256,6 @@ def confirm_owner_role(
 @router.get("/owner/status")
 def get_owner_status(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Check if current user is owner."""
     is_owner = is_user_owner(session, current_user.id, current_user.tenant_id)
@@ -279,7 +273,6 @@ def get_owner_status(
 @router.post("/roles/seed-templates", response_model=List[RoleTemplateResponse])
 def seed_role_templates_endpoint(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> List[RoleTemplateResponse]:
     """Seed default role templates (Manager, Staff, Accountant) for tenant."""
     # Only owner can seed templates
@@ -296,7 +289,6 @@ def seed_role_templates_endpoint(
 @router.get("/roles/templates", response_model=List[RoleTemplateResponse])
 def get_role_templates_endpoint(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> List[RoleTemplateResponse]:
     """Get role templates for tenant."""
     roles = get_role_templates(session, current_user.tenant_id)
@@ -307,7 +299,6 @@ def get_role_templates_endpoint(
 def create_role(
     payload: RoleCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> RoleResponse:
     """Create a custom role."""
     # Only owner can create roles
@@ -348,7 +339,6 @@ def create_role(
 @router.get("/roles", response_model=List[RoleResponse])
 def list_roles(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> List[RoleResponse]:
     """List all roles for tenant."""
     roles = session.exec(
@@ -363,7 +353,6 @@ def list_roles(
 def create_team_invitation(
     payload: TeamInvitationCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> TeamInvitationResponse:
     """Create a team member account with auto-generated credentials."""
     # Only owner can invite team members
@@ -419,7 +408,6 @@ def create_team_invitation(
 @router.get("/invitations", response_model=List[TeamInvitationResponse])
 def list_invitations(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> List[TeamInvitationResponse]:
     """List all team members (users) for tenant."""
     # List all users in the tenant (excluding super admins)

@@ -3,7 +3,6 @@ from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
 from app.api.authz import require_permission
-from app.db import get_session
 from app.models import VendorCredential, User
 from app.schemas import VendorCredentialCreate, VendorCredentialRead
 from app.models.role import PermissionCode
@@ -14,8 +13,7 @@ router = APIRouter(prefix="/vendor-credentials", tags=["vendors"])
 
 @router.get("", response_model=list[VendorCredentialRead])
 def list_credentials(
-    current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
-) -> list[VendorCredentialRead]:
+    current_user: User = Depends(get_current_user)) -> list[VendorCredentialRead]:
     creds = session.exec(
         select(VendorCredential).where(VendorCredential.tenant_id == current_user.tenant_id)
     ).all()
@@ -26,7 +24,6 @@ def list_credentials(
 def upsert_credentials(
     payload: VendorCredentialCreate,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_VENDOR_CREDENTIALS)),
-    session: Session = Depends(get_session),
 ) -> VendorCredentialRead:
     cred = session.exec(
         select(VendorCredential).where(

@@ -62,7 +62,7 @@ export function TaskForm({
       priority_id: task?.priority_id,
       due_date: task?.due_date ? task.due_date.split("T")[0] : undefined,
       start_date: task?.start_date ? task.start_date.split("T")[0] : undefined,
-      user_id: task?.user_id || [],
+      user_id: task?.user_id || task?.assignees?.map(a => a.id) || [],
       completion_percentage: task?.completion_percentage || 0,
     },
   });
@@ -316,6 +316,51 @@ export function TaskForm({
             )}
           />
         </div>
+
+        <FormField
+          control={form.control}
+          name="user_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Assignees</FormLabel>
+              {users.length === 0 ? (
+                <div className="text-sm text-gray-500 mt-1">
+                  No team members available. Add users in User Management.
+                </div>
+              ) : (
+                <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                  {users.filter(u => u.id).map((user) => (
+                    <label
+                      key={user.id}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={field.value?.includes(user.id) || false}
+                        onChange={(e) => {
+                          const currentValue = field.value || [];
+                          if (e.target.checked) {
+                            field.onChange([...currentValue, user.id]);
+                          } else {
+                            field.onChange(currentValue.filter((id) => id !== user.id));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {user.name || user.title || user.email || `User ${user.id}`}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <FormMessage />
+              <p className="text-xs text-gray-500 mt-1">
+                Select one or more team members to assign this task to.
+              </p>
+            </FormItem>
+          )}
+        />
 
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onCancel}>

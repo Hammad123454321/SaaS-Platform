@@ -25,7 +25,6 @@ export function PrioritiesView() {
     title: "",
     color: "#6b7280",
     level: 0,
-    display_order: 0,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,7 +44,6 @@ export function PrioritiesView() {
       title: "",
       color: "#6b7280",
       level: 0,
-      display_order: 0,
     });
   };
 
@@ -55,7 +53,6 @@ export function PrioritiesView() {
       title: priority.name || priority.title,
       color: priority.color,
       level: priority.level,
-      display_order: priority.display_order,
     });
     setShowForm(true);
   };

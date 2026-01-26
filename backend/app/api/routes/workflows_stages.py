@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from typing import List
 
-from app.db import get_session
 from app.api.deps import get_current_user
 from app.models import User
 from app.models.workflows import (
@@ -46,7 +45,6 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 def create_template(
     payload: TaskTemplateCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> TaskTemplateResponse:
     """Create a task template."""
     # Only owner can create templates
@@ -76,7 +74,6 @@ def create_template(
 def list_templates(
     template_type: str = None,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> List[TaskTemplateResponse]:
     """List task templates for tenant."""
     templates = get_task_templates(session, current_user.tenant_id, template_type)
@@ -88,7 +85,6 @@ def update_template(
     template_id: int,
     payload: TaskTemplateCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> TaskTemplateResponse:
     """Update a task template."""
     # Only owner can update templates
@@ -113,7 +109,6 @@ def update_template(
 def delete_template(
     template_id: int,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> None:
     """Delete a task template."""
     # Only owner can delete templates
@@ -131,7 +126,6 @@ def create_task_from_template_endpoint(
     template_id: int,
     payload: CreateTaskFromTemplateRequest,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Create a Task from a template."""
     task = create_task_from_template(
@@ -157,7 +151,6 @@ def create_task_from_template_endpoint(
 def generate_onboarding_tasks(
     assigned_to_user_id: int = None,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Generate onboarding tasks for tenant."""
     # Only owner can trigger task generation
@@ -183,7 +176,6 @@ def generate_onboarding_tasks(
 @router.get("/onboarding-tasks", response_model=List[OnboardingTaskResponse])
 def list_onboarding_tasks(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> List[OnboardingTaskResponse]:
     """List onboarding tasks for tenant."""
     tasks = session.exec(
@@ -197,7 +189,6 @@ def create_task_from_onboarding_task_endpoint(
     task_id: int,
     project_id: int,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Create an actual Task from an OnboardingTask."""
     onboarding_task = session.get(OnboardingTask, task_id)
@@ -227,7 +218,6 @@ def create_task_from_onboarding_task_endpoint(
 def create_escalation_rule(
     payload: EscalationRuleCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> EscalationRuleResponse:
     """Create an escalation rule."""
     # Only owner can create escalation rules
@@ -255,7 +245,6 @@ def create_escalation_rule(
 @router.get("/escalation-rules", response_model=List[EscalationRuleResponse])
 def list_escalation_rules(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> List[EscalationRuleResponse]:
     """List escalation rules for tenant."""
     rules = session.exec(
@@ -267,7 +256,6 @@ def list_escalation_rules(
 @router.post("/escalation-rules/check")
 def check_escalations(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Manually trigger escalation check (usually done by cron)."""
     # Only owner can trigger escalation check

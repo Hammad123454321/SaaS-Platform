@@ -1,15 +1,12 @@
 from fastapi import Depends, Header, HTTPException, status, Query
-from sqlmodel import Session, select
 
 from app.core.security import decode_token
-from app.db import get_session
 from app.models import User
 
 
-def get_current_user(
+async def get_current_user(
     authorization: str | None = Header(default=None),
     token_param: str | None = Query(default=None, alias="token"),
-    session: Session = Depends(get_session),
 ) -> User:
     import logging
     logger = logging.getLogger(__name__)
@@ -41,11 +38,11 @@ def get_current_user(
         
         logger.debug(f"Token decoded successfully. Subject: {data['sub']}")
         user_id_str, tenant_id_str = data["sub"].split(":")
-        user_id = int(user_id_str)
-        tenant_id = int(tenant_id_str)
+        user_id = user_id_str  # MongoDB uses string IDs
+        tenant_id = tenant_id_str
         
         logger.debug(f"Looking up user {user_id} in tenant {tenant_id}")
-        user = session.get(User, user_id)
+        user = await User.get(user_id)
         if not user:
             logger.warning(f"User {user_id} not found")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive.")
@@ -54,11 +51,10 @@ def get_current_user(
             logger.warning(f"User {user_id} is inactive")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive.")
         
-        if user.tenant_id != tenant_id:
+        if str(user.tenant_id) != tenant_id:
             logger.warning(f"User {user_id} tenant mismatch: expected {tenant_id}, got {user.tenant_id}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive.")
         
-        session.refresh(user, attribute_names=["roles"])
         logger.debug(f"User {user_id} authenticated successfully")
         return user
     except (ValueError, KeyError) as e:
@@ -66,7 +62,3 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token format.") from e
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Unexpected error in get_current_user: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed.") from e
-

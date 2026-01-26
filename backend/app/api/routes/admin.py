@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, func
 from app.api.deps import get_current_user
-from app.db import get_session
 from app.models import User, Tenant, ModuleEntitlement, Subscription
 from app.api.authz import require_permission
 from app.models.role import PermissionCode
@@ -12,7 +11,6 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/stats")
 async def get_admin_stats(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get platform-wide statistics (Super Admin only)."""
     if not current_user.is_super_admin:
@@ -43,7 +41,6 @@ async def get_admin_stats(
 @router.get("/tenants")
 async def list_tenants(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     skip: int = 0,
     limit: int = 100,
 ) -> dict:
@@ -58,7 +55,6 @@ async def list_tenants(
 @router.get("/users")
 async def list_all_users(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     skip: int = 0,
     limit: int = 100,
 ) -> dict:

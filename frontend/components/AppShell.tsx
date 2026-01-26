@@ -42,6 +42,7 @@ export function AppShell({ children }: Props) {
             accessToken,
             refreshToken: useSessionStore.getState().refreshToken,
             user: {
+              id: me.data.id,
               email: me.data.email,
               is_super_admin: me.data.is_super_admin,
               roles: me.data.roles || [],

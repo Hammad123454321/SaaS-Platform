@@ -18,6 +18,9 @@
     "jsx": "preserve",
     "incremental": true,
     "paths": {
+      "@/*": [
+        "./*"
+      ],
       "@/components/*": [
         "./components/*"
       ],
@@ -26,6 +29,9 @@
       ],
       "@/hooks/*": [
         "./hooks/*"
+      ],
+      "@/types/*": [
+        "./types/*"
       ]
     },
     "noEmit": true,

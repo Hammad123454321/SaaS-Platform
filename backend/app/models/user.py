@@ -1,20 +1,18 @@
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, List
 
-from sqlmodel import SQLModel, Field, Relationship
+from beanie import Document, Link
+from pydantic import Field, EmailStr
 
-from app.models.role import Role, UserRole
-
-if TYPE_CHECKING:
-    from app.models.tenant import Tenant
+from app.models.tenant import Tenant
+from app.models.role import Role
 
 
-class User(SQLModel, table=True):
-    __tablename__ = "users"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
-    email: str = Field(index=True)
+class User(Document):
+    """User model for MongoDB."""
+    
+    tenant_id: Optional[str] = Field(default=None, index=True)
+    email: EmailStr = Field(..., index=True)
     hashed_password: str
     is_active: bool = Field(default=True)
     is_super_admin: bool = Field(default=False)
@@ -23,12 +21,14 @@ class User(SQLModel, table=True):
     password_change_required: bool = Field(default=False)  # Require password change on first login
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships (using Link for references)
+    tenant: Optional[Link[Tenant]] = None
+    role_ids: List[str] = Field(default_factory=list)  # Store role IDs
 
-    tenant: Optional["Tenant"] = Relationship(back_populates="users")
-    roles: list[Role] = Relationship(
-        back_populates="users", link_model=UserRole
-    )
-    # Task Management relationships
-    # Note: The assigned_tasks relationship is managed from Task side only
-    # because of circular import limitations. Access via Task.assignees
-
+    class Settings:
+        name = "users"
+        indexes = [
+            "tenant_id",
+            "email",
+        ]

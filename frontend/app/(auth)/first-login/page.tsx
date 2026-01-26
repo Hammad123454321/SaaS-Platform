@@ -22,7 +22,7 @@ export default function FirstLoginPage() {
   const [loading, setLoading] = useState(false);
   
   const { data: hrPoliciesData, isLoading: loadingPolicies } = useHRPolicies();
-  const hrPolicies = hrPoliciesData?.policies || [];
+  const hrPolicies = hrPoliciesData || [];
 
   // Redirect if not logged in
   useEffect(() => {

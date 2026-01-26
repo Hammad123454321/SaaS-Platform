@@ -386,7 +386,8 @@ def list_tasks(
                 selectinload(Task.project),
                 selectinload(Task.status),
                 selectinload(Task.priority),
-                selectinload(Task.assignees)
+                selectinload(Task.assignees),
+                selectinload(Task.subtasks)
             )
             .order_by(Task.created_at.desc())
             .limit(limit)

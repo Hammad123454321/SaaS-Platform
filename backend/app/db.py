@@ -1,82 +1,195 @@
-from sqlmodel import SQLModel, create_engine, Session, select
-from sqlalchemy import text, inspect
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
 import logging
 
 from app.config import settings
 from app.seed import seed_permissions, ensure_roles_for_tenant
-from app.models import Tenant
+from app.models import (
+    # Core models
+    User,
+    Tenant,
+    Role,
+    Permission,
+    RolePermission,
+    UserRole,
+    # Entitlements
+    ModuleEntitlement,
+    Subscription,
+    BillingHistory,
+    WebhookEvent,
+    # Vendor
+    VendorCredential,
+    # Auth and Audit
+    PasswordResetToken,
+    ImpersonationAudit,
+    AuditLog,
+    # Taskify Config
+    TenantTaskifyConfig,
+    TaskifyUserMapping,
+    # Onboarding
+    EmailVerificationToken,
+    PolicyAcceptance,
+    CommunicationPreferences,
+    RegistrationEvent,
+    BusinessProfile,
+    TenantComplianceRule,
+    OwnerConfirmation,
+    TeamInvitation,
+    StaffOnboardingTask,
+    # Compliance
+    FinancialSetup,
+    HRPolicy,
+    PolicyAcknowledgement,
+    PrivacyWording,
+    # Workflows
+    TaskTemplate,
+    OnboardingTask,
+    EscalationRule,
+    EscalationEvent,
+    # Permissions
+    UserPermission,
+    # Tasks
+    Client,
+    Project,
+    Task,
+    TaskStatus,
+    TaskPriority,
+    TaskList,
+    TaskComment,
+    TaskAttachment,
+    TaskFavorite,
+    TaskPin,
+    Tag,
+    Milestone,
+    TimeEntry,
+    TimeTracker,
+    CommentAttachment,
+    DocumentFolder,
+    DocumentCategory,
+    ResourceAllocation,
+    ActivityLog,
+    TaskDependency,
+    RecurringTask,
+    TaskAssignment,
+    TaskTagLink,
+)
 
-engine = create_engine(str(settings.database_url), echo=settings.debug)
 logger = logging.getLogger(__name__)
 
+# Global MongoDB client
+client: AsyncIOMotorClient | None = None
 
-def _migrate_subscriptions_table() -> None:
-    """Add missing columns to subscriptions table if they don't exist."""
+
+async def init_db() -> None:
+    """Initialize MongoDB connection and Beanie."""
+    global client
+    
     try:
-        inspector = inspect(engine)
+        # Create Motor client
+        client = AsyncIOMotorClient(settings.mongodb_uri)
         
-        if 'subscriptions' not in inspector.get_table_names():
-            logger.info("subscriptions table doesn't exist yet, will be created by SQLModel")
-            return
+        # Test connection
+        await client.admin.command('ping')
+        logger.info(f"Connected to MongoDB: {settings.mongodb_db_name}")
         
-        columns = {col['name'] for col in inspector.get_columns('subscriptions')}
-        migrations = []
+        # Initialize Beanie with all document models
+        await init_beanie(
+            database=client[settings.mongodb_db_name],
+            document_models=[
+                # Core models
+                User,
+                Tenant,
+                Role,
+                Permission,
+                RolePermission,
+                UserRole,
+                # Entitlements
+                ModuleEntitlement,
+                Subscription,
+                BillingHistory,
+                WebhookEvent,
+                # Vendor
+                VendorCredential,
+                # Auth and Audit
+                PasswordResetToken,
+                ImpersonationAudit,
+                AuditLog,
+                # Taskify Config
+                TenantTaskifyConfig,
+                TaskifyUserMapping,
+                # Onboarding
+                EmailVerificationToken,
+                PolicyAcceptance,
+                CommunicationPreferences,
+                RegistrationEvent,
+                BusinessProfile,
+                TenantComplianceRule,
+                OwnerConfirmation,
+                TeamInvitation,
+                StaffOnboardingTask,
+                # Compliance
+                FinancialSetup,
+                HRPolicy,
+                PolicyAcknowledgement,
+                PrivacyWording,
+                # Workflows
+                TaskTemplate,
+                OnboardingTask,
+                EscalationRule,
+                EscalationEvent,
+                # Permissions
+                UserPermission,
+                # Tasks
+                Client,
+                Project,
+                Task,
+                TaskStatus,
+                TaskPriority,
+                TaskList,
+                TaskComment,
+                TaskAttachment,
+                TaskFavorite,
+                TaskPin,
+                Tag,
+                Milestone,
+                TimeEntry,
+                TimeTracker,
+                CommentAttachment,
+                DocumentFolder,
+                DocumentCategory,
+                ResourceAllocation,
+                ActivityLog,
+                TaskDependency,
+                RecurringTask,
+                TaskAssignment,
+                TaskTagLink,
+            ]
+        )
         
-        if 'stripe_price_id' not in columns:
-            migrations.append("ALTER TABLE subscriptions ADD COLUMN stripe_price_id VARCHAR")
+        logger.info("Beanie initialized successfully")
         
-        if 'amount' not in columns:
-            migrations.append("ALTER TABLE subscriptions ADD COLUMN amount INTEGER DEFAULT 0")
+        # Seed permissions and roles
+        await seed_permissions()
         
-        if 'currency' not in columns:
-            migrations.append("ALTER TABLE subscriptions ADD COLUMN currency VARCHAR DEFAULT 'usd'")
-        
-        if 'interval' not in columns:
-            migrations.append("ALTER TABLE subscriptions ADD COLUMN interval VARCHAR DEFAULT 'month'")
-        
-        if 'current_period_start' not in columns:
-            migrations.append("ALTER TABLE subscriptions ADD COLUMN current_period_start TIMESTAMP")
-        
-        if 'current_period_end' not in columns:
-            migrations.append("ALTER TABLE subscriptions ADD COLUMN current_period_end TIMESTAMP")
-        
-        if 'modules' not in columns:
-            migrations.append("ALTER TABLE subscriptions ADD COLUMN modules JSONB DEFAULT '{}'")
-        
-        if migrations:
-            logger.info(f"Migrating subscriptions table: adding {len(migrations)} column(s)")
-            with engine.connect() as conn:
-                for migration in migrations:
-                    conn.execute(text(migration))
-                conn.commit()
-            logger.info("✓ Subscriptions table migration completed")
-    except Exception as e:
-        logger.warning(f"Failed to migrate subscriptions table: {e}. This is OK if tables don't exist yet.")
-
-
-def init_db() -> None:
-    """Initialize database: create tables and run migrations."""
-    # First, try to migrate existing tables
-    _migrate_subscriptions_table()
-    
-    # Then create all tables (SQLModel will skip existing ones)
-    SQLModel.metadata.create_all(engine)
-    
-    with Session(engine) as session:
-        # Seed permissions catalog
-        seed_permissions(session)
-        
-        # Update roles for all existing tenants (ensures new permissions are added)
-        tenants = session.exec(select(Tenant)).all()
+        # Update roles for all existing tenants
+        tenants = await Tenant.find_all().to_list()
         for tenant in tenants:
             try:
-                ensure_roles_for_tenant(session, tenant.id)
+                await ensure_roles_for_tenant(tenant.id)
                 logger.info(f"Updated roles for tenant {tenant.id} ({tenant.name})")
             except Exception as e:
                 logger.warning(f"Failed to update roles for tenant {tenant.id}: {e}")
+        
+        logger.info("Database initialization completed")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
 
 
-def get_session() -> Session:
-    with Session(engine) as session:
-        yield session
-
+async def close_db() -> None:
+    """Close MongoDB connection."""
+    global client
+    if client:
+        client.close()
+        logger.info("MongoDB connection closed")

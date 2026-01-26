@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
 from typing import List
 
-from app.db import get_session
 from app.api.deps import get_current_user
 from app.models import User
 from app.models.compliance import (
@@ -67,7 +66,6 @@ def confirm_privacy_wording_endpoint(
     payload: PrivacyWordingConfirm,
     request: Request,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Confirm privacy policy or CASL wording."""
     # Only owner can confirm
@@ -97,7 +95,6 @@ def confirm_privacy_wording_endpoint(
 def create_financial_setup(
     payload: FinancialSetupCreate,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> FinancialSetupResponse:
     """Create or update financial setup."""
     # Only owner can configure financial setup
@@ -121,7 +118,6 @@ def create_financial_setup(
 @router.get("/financial-setup", response_model=FinancialSetupResponse)
 def get_financial_setup(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> FinancialSetupResponse:
     """Get financial setup for tenant."""
     financial_setup = session.exec(
@@ -141,7 +137,6 @@ def get_financial_setup(
 def confirm_financial_setup_endpoint(
     payload: FinancialSetupConfirm,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> FinancialSetupResponse:
     """Confirm financial setup values."""
     if not payload.confirm:
@@ -170,7 +165,6 @@ def confirm_financial_setup_endpoint(
 
 @router.post("/hr-policies/seed", response_model=List[HRPolicyResponse])
 def seed_hr_policies_endpoint(
-    session: Session = Depends(get_session),
 ) -> List[HRPolicyResponse]:
     """Seed predefined HR policies (idempotent)."""
     policies = seed_hr_policies(session)
@@ -179,7 +173,6 @@ def seed_hr_policies_endpoint(
 
 @router.get("/hr-policies", response_model=List[HRPolicyResponse])
 def get_hr_policies(
-    session: Session = Depends(get_session),
 ) -> List[HRPolicyResponse]:
     """Get all required HR policies."""
     policies = get_required_hr_policies(session)
@@ -191,7 +184,6 @@ def acknowledge_hr_policies_endpoint(
     payload: PolicyAcknowledgementRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Acknowledge HR policies."""
     ip_address = request.client.host if request.client else None
@@ -215,7 +207,6 @@ def acknowledge_hr_policies_endpoint(
 @router.get("/hr-policies/acknowledgement-status")
 def get_acknowledgement_status(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Check if user has acknowledged all required HR policies."""
     has_acknowledged = has_user_acknowledged_all_required_policies(session, current_user.id)

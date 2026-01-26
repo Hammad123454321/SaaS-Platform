@@ -8,7 +8,6 @@ from sqlmodel import Session, select, func, and_, or_
 from pydantic import BaseModel
 
 from app.api.deps import get_current_user
-from app.db import get_session
 from app.models import (
     User, Tenant, ModuleEntitlement, Subscription, BillingHistory,
     Task, TaskStatus, TaskStatusCategory, Project, ActivityLog,
@@ -168,7 +167,6 @@ def get_module_name(code: str) -> str:
 @router.get("/company/stats")
 async def get_company_dashboard_stats(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get company-level dashboard statistics."""
     tenant_id = current_user.tenant_id
@@ -217,7 +215,6 @@ async def get_company_dashboard_stats(
 @router.get("/company/module-usage", response_model=list[ModuleUsageItem])
 async def get_company_module_usage(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[ModuleUsageItem]:
     """Get module usage statistics for the company."""
     tenant_id = current_user.tenant_id
@@ -268,7 +265,6 @@ async def get_company_module_usage(
 @router.get("/company/task-trends", response_model=list[TaskTrendItem])
 async def get_company_task_trends(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[TaskTrendItem]:
     """Get task creation and completion trends for the past 7 days."""
     tenant_id = current_user.tenant_id
@@ -320,7 +316,6 @@ async def get_company_task_trends(
 @router.get("/company/team-overview", response_model=list[TeamMemberItem])
 async def get_company_team_overview(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 10,
 ) -> list[TeamMemberItem]:
     """Get team members with their task completion stats."""
@@ -378,7 +373,7 @@ async def get_company_team_overview(
         
         team_data.append(TeamMemberItem(
             id=user.id,
-            name=user.full_name or user.email.split("@")[0],
+            name=user.email.split("@")[0],
             email=user.email,
             role=role_name,
             tasks_completed=tasks_completed,
@@ -393,7 +388,6 @@ async def get_company_team_overview(
 @router.get("/company/recent-tasks", response_model=list[RecentTaskItem])
 async def get_company_recent_tasks(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 5,
 ) -> list[RecentTaskItem]:
     """Get recent tasks for the company."""
@@ -445,7 +439,6 @@ async def get_company_recent_tasks(
 @router.get("/company/upcoming-deadlines", response_model=list[DeadlineItem])
 async def get_company_upcoming_deadlines(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 5,
 ) -> list[DeadlineItem]:
     """Get upcoming task deadlines for the company."""
@@ -493,7 +486,6 @@ async def get_company_upcoming_deadlines(
 @router.get("/company/activity", response_model=list[ActivityItem])
 async def get_company_activity(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 10,
 ) -> list[ActivityItem]:
     """Get recent activity feed for the company."""
@@ -535,7 +527,6 @@ async def get_company_activity(
 @router.get("/company/modules", response_model=list[ModuleItem])
 async def get_company_modules(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[ModuleItem]:
     """Get list of enabled modules for the company."""
     tenant_id = current_user.tenant_id
@@ -575,7 +566,6 @@ async def get_company_modules(
 @router.get("/staff/stats")
 async def get_staff_dashboard_stats(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get personal task statistics for staff member."""
     tenant_id = current_user.tenant_id
@@ -666,7 +656,6 @@ async def get_staff_dashboard_stats(
 @router.get("/staff/my-tasks", response_model=list[RecentTaskItem])
 async def get_staff_my_tasks(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 10,
 ) -> list[RecentTaskItem]:
     """Get tasks assigned to current user."""
@@ -728,7 +717,6 @@ async def get_staff_my_tasks(
 @router.get("/staff/task-trends", response_model=list[TaskTrendItem])
 async def get_staff_task_trends(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[TaskTrendItem]:
     """Get personal task completion trends."""
     tenant_id = current_user.tenant_id
@@ -781,7 +769,6 @@ async def get_staff_task_trends(
 @router.get("/staff/upcoming-deadlines", response_model=list[DeadlineItem])
 async def get_staff_upcoming_deadlines(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 5,
 ) -> list[DeadlineItem]:
     """Get upcoming deadlines for tasks assigned to user."""
@@ -837,7 +824,6 @@ async def get_staff_upcoming_deadlines(
 @router.get("/staff/activity", response_model=list[ActivityItem])
 async def get_staff_activity(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 10,
 ) -> list[ActivityItem]:
     """Get personal activity feed."""
@@ -876,7 +862,6 @@ async def get_staff_activity(
 @router.get("/admin/stats")
 async def get_admin_dashboard_stats(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> dict:
     """Get platform-wide statistics for super admin."""
     if not current_user.is_super_admin:
@@ -913,7 +898,6 @@ async def get_admin_dashboard_stats(
 @router.get("/admin/growth", response_model=list[GrowthDataItem])
 async def get_admin_growth_data(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[GrowthDataItem]:
     """Get tenant and user growth data for the past 6 months."""
     if not current_user.is_super_admin:
@@ -946,7 +930,6 @@ async def get_admin_growth_data(
 @router.get("/admin/revenue", response_model=list[RevenueDataItem])
 async def get_admin_revenue_data(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[RevenueDataItem]:
     """Get revenue data for the past 6 months."""
     if not current_user.is_super_admin:
@@ -976,7 +959,6 @@ async def get_admin_revenue_data(
 @router.get("/admin/module-popularity", response_model=list[ModulePopularityItem])
 async def get_admin_module_popularity(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[ModulePopularityItem]:
     """Get module subscription popularity across all tenants."""
     if not current_user.is_super_admin:
@@ -1009,7 +991,6 @@ async def get_admin_module_popularity(
 @router.get("/admin/recent-tenants", response_model=list[TenantItem])
 async def get_admin_recent_tenants(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 5,
 ) -> list[TenantItem]:
     """Get recently registered tenants."""
@@ -1051,7 +1032,6 @@ async def get_admin_recent_tenants(
 @router.get("/admin/system-health", response_model=list[ServiceStatusItem])
 async def get_admin_system_health(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
 ) -> list[ServiceStatusItem]:
     """Get system health status."""
     if not current_user.is_super_admin:
@@ -1080,7 +1060,6 @@ async def get_admin_system_health(
 @router.get("/admin/activity", response_model=list[ActivityItem])
 async def get_admin_activity(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
     limit: int = 10,
 ) -> list[ActivityItem]:
     """Get platform-wide activity feed."""
