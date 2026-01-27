@@ -479,7 +479,7 @@ async def verify_email(payload: VerifyEmailRequest) -> dict:
 
 
 @router.post("/resend-verification", response_model=dict)
-def resend_verification(
+async def resend_verification(
     payload: ResendVerificationRequest,
 ) -> dict:
     """Resend verification email."""
