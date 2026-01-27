@@ -1,5 +1,5 @@
 """Service for role templates (Manager, Staff, Accountant)."""
-from sqlmodel import Session, select
+from typing import List
 
 from app.models.role import Role
 from app.models.onboarding import RoleTemplateCode
@@ -22,7 +22,7 @@ ROLE_TEMPLATE_PERMISSIONS = {
 }
 
 
-def seed_role_templates(session: Session, tenant_id: int) -> list[Role]:
+async def seed_role_templates(tenant_id: str) -> List[Role]:
     """
     Seed default role templates for a tenant.
     
@@ -33,12 +33,10 @@ def seed_role_templates(session: Session, tenant_id: int) -> list[Role]:
     
     for template_code in RoleTemplateCode:
         # Check if role already exists
-        existing = session.exec(
-            select(Role).where(
-                Role.tenant_id == tenant_id,
-                Role.name == template_code.value
-            )
-        ).first()
+        existing = await Role.find_one(
+            Role.tenant_id == tenant_id,
+            Role.name == template_code.value
+        )
         
         if existing:
             templates.append(existing)
@@ -47,28 +45,20 @@ def seed_role_templates(session: Session, tenant_id: int) -> list[Role]:
         # Create new role
         role = Role(
             tenant_id=tenant_id,
-            name=template_code.value
+            name=template_code.value,
+            permission_codes=ROLE_TEMPLATE_PERMISSIONS.get(template_code, [])
         )
-        session.add(role)
+        await role.insert()
         templates.append(role)
-    
-    session.commit()
-    
-    # Refresh all roles
-    for role in templates:
-        session.refresh(role)
     
     return templates
 
 
-def get_role_templates(session: Session, tenant_id: int) -> list[Role]:
+async def get_role_templates(tenant_id: str) -> List[Role]:
     """Get all role templates for a tenant."""
     template_names = [code.value for code in RoleTemplateCode]
-    roles = session.exec(
-        select(Role).where(
-            Role.tenant_id == tenant_id,
-            Role.name.in_(template_names)
-        )
-    ).all()
-    return list(roles)
-
+    roles = await Role.find(
+        Role.tenant_id == tenant_id,
+        {"name": {"$in": template_names}}
+    ).to_list()
+    return roles

@@ -3,13 +3,15 @@ Task Management Service
 
 Business logic for task management operations.
 All operations are tenant-isolated.
+All functions are async and use Beanie for MongoDB.
 """
 import logging
+import re
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 
-from sqlmodel import Session, select, and_, or_, func
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
 from app.models import (
@@ -28,28 +30,19 @@ from app.models import (
     Milestone,
     TimeEntry,
 )
-from app.models.tasks import (
-    task_assignments_table,
-    task_tags_table,
-    TaskStatusCategory,
-)
-from sqlalchemy.orm import selectinload
+from app.models.tasks import TaskStatusCategory
 
 logger = logging.getLogger(__name__)
 
 
 # ========== Client Operations ==========
-def create_client(session: Session, tenant_id: int, client_data: Dict[str, Any]) -> Client:
+async def create_client(tenant_id: str, client_data: Dict[str, Any]) -> Client:
     """Create a new client."""
     # Check if email already exists for this tenant
-    existing = session.exec(
-        select(Client).where(
-            and_(
-                Client.tenant_id == tenant_id,
-                Client.email == client_data["email"]
-            )
-        )
-    ).first()
+    existing = await Client.find_one(
+        Client.tenant_id == tenant_id,
+        Client.email == client_data["email"]
+    )
     
     if existing:
         raise HTTPException(
@@ -61,58 +54,53 @@ def create_client(session: Session, tenant_id: int, client_data: Dict[str, Any])
         tenant_id=tenant_id,
         **client_data
     )
-    session.add(client)
-    session.commit()
-    session.refresh(client)
+    await client.insert()
     return client
 
 
-def get_client(session: Session, tenant_id: int, client_id: int) -> Optional[Client]:
+async def get_client(tenant_id: str, client_id: str) -> Optional[Client]:
     """Get a client by ID."""
-    return session.exec(
-        select(Client).where(
-            and_(
-                Client.id == client_id,
-                Client.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    return await Client.find_one(
+        Client.id == PydanticObjectId(client_id),
+        Client.tenant_id == tenant_id
+    )
 
 
-def list_clients(session: Session, tenant_id: int, search: Optional[str] = None) -> List[Client]:
+async def list_clients(tenant_id: str, search: Optional[str] = None) -> List[Client]:
     """List all clients for a tenant."""
-    query = select(Client).where(Client.tenant_id == tenant_id)
+    query = Client.find(Client.tenant_id == tenant_id)
     
     if search:
-        query = query.where(
-            or_(
-                Client.first_name.ilike(f"%{search}%"),
-                Client.last_name.ilike(f"%{search}%"),
-                Client.email.ilike(f"%{search}%"),
-                Client.company.ilike(f"%{search}%")
-            )
+        # Use regex for case-insensitive search
+        search_regex = re.compile(f".*{re.escape(search)}.*", re.IGNORECASE)
+        query = Client.find(
+            Client.tenant_id == tenant_id,
+            {
+                "$or": [
+                    {"first_name": {"$regex": search_regex}},
+                    {"last_name": {"$regex": search_regex}},
+                    {"email": {"$regex": search_regex}},
+                    {"company": {"$regex": search_regex}}
+                ]
+            }
         )
     
-    return list(session.exec(query.order_by(Client.created_at.desc())).all())
+    return await query.sort(-Client.created_at).to_list()
 
 
-def update_client(session: Session, tenant_id: int, client_id: int, updates: Dict[str, Any]) -> Client:
+async def update_client(tenant_id: str, client_id: str, updates: Dict[str, Any]) -> Client:
     """Update a client."""
-    client = get_client(session, tenant_id, client_id)
+    client = await get_client(tenant_id, client_id)
     if not client:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
     
     # Check email uniqueness if email is being updated
     if "email" in updates and updates["email"] != client.email:
-        existing = session.exec(
-            select(Client).where(
-                and_(
-                    Client.tenant_id == tenant_id,
-                    Client.email == updates["email"],
-                    Client.id != client_id
-                )
-            )
-        ).first()
+        existing = await Client.find_one(
+            Client.tenant_id == tenant_id,
+            Client.email == updates["email"],
+            Client.id != PydanticObjectId(client_id)
+        )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -120,46 +108,40 @@ def update_client(session: Session, tenant_id: int, client_id: int, updates: Dic
             )
     
     for key, value in updates.items():
-        setattr(client, key, value)
+        if hasattr(client, key):
+            setattr(client, key, value)
     
     client.updated_at = datetime.utcnow()
-    session.add(client)
-    session.commit()
-    session.refresh(client)
+    await client.save()
     return client
 
 
-def delete_client(session: Session, tenant_id: int, client_id: int) -> None:
+async def delete_client(tenant_id: str, client_id: str) -> None:
     """Delete a client. Fails if client has projects."""
-    client = get_client(session, tenant_id, client_id)
+    client = await get_client(tenant_id, client_id)
     if not client:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
     
     # Check if client has projects
-    projects_count = session.exec(
-        select(func.count(Project.id)).where(
-            and_(
-                Project.tenant_id == tenant_id,
-                Project.client_id == client_id
-            )
-        )
-    ).first()
+    projects_count = await Project.find(
+        Project.tenant_id == tenant_id,
+        Project.client_id == client_id
+    ).count()
     
-    if projects_count and projects_count > 0:
+    if projects_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete client with existing projects"
         )
     
-    session.delete(client)
-    session.commit()
+    await client.delete()
 
 
 # ========== Project Operations ==========
-def create_project(session: Session, tenant_id: int, user_id: int, project_data: Dict[str, Any]) -> Project:
+async def create_project(tenant_id: str, user_id: str, project_data: Dict[str, Any]) -> Project:
     """Create a new project."""
     # Verify client exists and belongs to tenant
-    client = get_client(session, tenant_id, project_data["client_id"])
+    client = await get_client(tenant_id, project_data["client_id"])
     if not client:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
     
@@ -167,238 +149,177 @@ def create_project(session: Session, tenant_id: int, user_id: int, project_data:
         tenant_id=tenant_id,
         **project_data
     )
-    session.add(project)
-    session.commit()
-    session.refresh(project)
+    await project.insert()
     return project
 
 
-def get_project(session: Session, tenant_id: int, project_id: int) -> Optional[Project]:
+async def get_project(tenant_id: str, project_id: str) -> Optional[Project]:
     """Get a project by ID."""
-    return session.exec(
-        select(Project).where(
-            and_(
-                Project.id == project_id,
-                Project.tenant_id == tenant_id
-            )
-        )
-    ).first()
-
-
-def list_projects(session: Session, tenant_id: int, client_id: Optional[int] = None) -> List[Project]:
-    """List projects for a tenant."""
-    query = select(Project).where(Project.tenant_id == tenant_id)
-    
-    if client_id:
-        query = query.where(Project.client_id == client_id)
-    
-    return list(
-        session.exec(
-            query.options(selectinload(Project.client))
-            .order_by(Project.created_at.desc())
-        ).all()
+    return await Project.find_one(
+        Project.id == PydanticObjectId(project_id),
+        Project.tenant_id == tenant_id
     )
 
 
-def update_project(session: Session, tenant_id: int, project_id: int, updates: Dict[str, Any]) -> Project:
+async def list_projects(tenant_id: str, client_id: Optional[str] = None) -> List[Project]:
+    """List projects for a tenant."""
+    if client_id:
+        projects = await Project.find(
+            Project.tenant_id == tenant_id,
+            Project.client_id == client_id
+        ).sort(-Project.created_at).to_list()
+    else:
+        projects = await Project.find(
+            Project.tenant_id == tenant_id
+        ).sort(-Project.created_at).to_list()
+    
+    return projects
+
+
+async def update_project(tenant_id: str, project_id: str, updates: Dict[str, Any]) -> Project:
     """Update a project."""
-    project = get_project(session, tenant_id, project_id)
+    project = await get_project(tenant_id, project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
     # Verify client if being updated
     if "client_id" in updates:
-        client = get_client(session, tenant_id, updates["client_id"])
+        client = await get_client(tenant_id, updates["client_id"])
         if not client:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
     
     for key, value in updates.items():
-        setattr(project, key, value)
+        if hasattr(project, key):
+            setattr(project, key, value)
     
     project.updated_at = datetime.utcnow()
-    session.add(project)
-    session.commit()
-    session.refresh(project)
+    await project.save()
     return project
 
 
-def delete_project(session: Session, tenant_id: int, project_id: int) -> None:
+async def delete_project(tenant_id: str, project_id: str) -> None:
     """Delete a project. Fails if project has tasks."""
-    project = get_project(session, tenant_id, project_id)
+    project = await get_project(tenant_id, project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
     # Check if project has tasks
-    tasks_count = session.exec(
-        select(func.count(Task.id)).where(
-            and_(
-                Task.tenant_id == tenant_id,
-                Task.project_id == project_id
-            )
-        )
-    ).first()
+    tasks_count = await Task.find(
+        Task.tenant_id == tenant_id,
+        Task.project_id == project_id
+    ).count()
     
-    if tasks_count and tasks_count > 0:
+    if tasks_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete project with existing tasks"
         )
     
-    session.delete(project)
-    session.commit()
+    await project.delete()
 
 
 # ========== Task Operations ==========
-def create_task(session: Session, tenant_id: int, user_id: int, task_data: Dict[str, Any]) -> Task:
+async def create_task(tenant_id: str, user_id: str, task_data: Dict[str, Any]) -> Task:
     """Create a new task."""
     # Verify project exists
-    project = get_project(session, tenant_id, task_data["project_id"])
+    project = await get_project(tenant_id, task_data["project_id"])
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
     # Verify status exists
-    status_obj = session.exec(
-        select(TaskStatus).where(
-            and_(
-                TaskStatus.id == task_data["status_id"],
-                TaskStatus.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    status_obj = await TaskStatus.find_one(
+        TaskStatus.id == PydanticObjectId(task_data["status_id"]),
+        TaskStatus.tenant_id == tenant_id
+    )
     if not status_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status not found")
     
     # Verify priority if provided
     if "priority_id" in task_data and task_data["priority_id"]:
-        priority = session.exec(
-            select(TaskPriority).where(
-                and_(
-                    TaskPriority.id == task_data["priority_id"],
-                    TaskPriority.tenant_id == tenant_id
-                )
-            )
-        ).first()
+        priority = await TaskPriority.find_one(
+            TaskPriority.id == PydanticObjectId(task_data["priority_id"]),
+            TaskPriority.tenant_id == tenant_id
+        )
         if not priority:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Priority not found")
     
     # Verify task_list if provided
     if "task_list_id" in task_data and task_data["task_list_id"]:
-        task_list = session.exec(
-            select(TaskList).where(
-                and_(
-                    TaskList.id == task_data["task_list_id"],
-                    TaskList.tenant_id == tenant_id,
-                    TaskList.project_id == task_data["project_id"]
-                )
-            )
-        ).first()
+        task_list = await TaskList.find_one(
+            TaskList.id == PydanticObjectId(task_data["task_list_id"]),
+            TaskList.tenant_id == tenant_id,
+            TaskList.project_id == task_data["project_id"]
+        )
         if not task_list:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task list not found")
     
     # Extract assignees if provided
     assignee_ids = task_data.pop("assignee_ids", []) or task_data.pop("user_id", [])
     
+    # Validate assignees belong to tenant
+    valid_assignee_ids = []
+    if assignee_ids:
+        for assignee_id in assignee_ids:
+            user = await User.get(assignee_id)
+            if user and user.tenant_id == tenant_id:
+                valid_assignee_ids.append(str(assignee_id))
+    
     # Create task
     task = Task(
         tenant_id=tenant_id,
         created_by=user_id,
+        assignee_ids=valid_assignee_ids,
         **task_data
     )
-    session.add(task)
-    session.flush()  # Get task ID
-    
-    # Assign users
-    if assignee_ids:
-        for assignee_id in assignee_ids:
-            # Verify user belongs to tenant
-            user = session.get(User, assignee_id)
-            if user and user.tenant_id == tenant_id:
-                session.execute(
-                    task_assignments_table.insert().values(
-                        task_id=task.id,
-                        user_id=assignee_id,
-                        is_primary=False
-                    )
-                )
-    
-    session.commit()
-    session.refresh(task)
+    await task.insert()
     return task
 
 
-def get_task(session: Session, tenant_id: int, task_id: int) -> Optional[Task]:
-    """Get a task by ID with relationships."""
-    return session.exec(
-        select(Task)
-        .where(
-            and_(
-                Task.id == task_id,
-                Task.tenant_id == tenant_id
-            )
-        )
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.status),
-            selectinload(Task.priority),
-            selectinload(Task.assignees),
-            selectinload(Task.comments),
-            selectinload(Task.attachments)
-        )
-    ).first()
+async def get_task(tenant_id: str, task_id: str) -> Optional[Task]:
+    """Get a task by ID."""
+    return await Task.find_one(
+        Task.id == PydanticObjectId(task_id),
+        Task.tenant_id == tenant_id
+    )
 
 
-def list_tasks(
-    session: Session,
-    tenant_id: int,
-    project_id: Optional[int] = None,
-    status_id: Optional[int] = None,
-    assignee_id: Optional[int] = None,
+async def list_tasks(
+    tenant_id: str,
+    project_id: Optional[str] = None,
+    status_id: Optional[str] = None,
+    assignee_id: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 100,
     offset: int = 0
 ) -> List[Task]:
     """List tasks with filters."""
-    query = select(Task).where(Task.tenant_id == tenant_id)
+    conditions = [Task.tenant_id == tenant_id]
     
     if project_id:
-        query = query.where(Task.project_id == project_id)
+        conditions.append(Task.project_id == project_id)
     
     if status_id:
-        query = query.where(Task.status_id == status_id)
+        conditions.append(Task.status_id == status_id)
     
     if assignee_id:
-        query = query.join(task_assignments_table).where(
-            task_assignments_table.c.user_id == assignee_id
-        )
+        conditions.append({"assignee_ids": str(assignee_id)})
     
     if search:
-        query = query.where(
-            or_(
-                Task.title.ilike(f"%{search}%"),
-                Task.description.ilike(f"%{search}%")
-            )
-        )
+        search_regex = re.compile(f".*{re.escape(search)}.*", re.IGNORECASE)
+        conditions.append({
+            "$or": [
+                {"title": {"$regex": search_regex}},
+                {"description": {"$regex": search_regex}}
+            ]
+        })
     
-    return list(
-        session.exec(
-            query
-            .options(
-                selectinload(Task.project),
-                selectinload(Task.status),
-                selectinload(Task.priority),
-                selectinload(Task.assignees),
-                selectinload(Task.subtasks)
-            )
-            .order_by(Task.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        ).all()
-    )
+    tasks = await Task.find(*conditions).sort(-Task.created_at).skip(offset).limit(limit).to_list()
+    return tasks
 
 
-def update_task(session: Session, tenant_id: int, task_id: int, updates: Dict[str, Any]) -> Task:
+async def update_task(tenant_id: str, task_id: str, updates: Dict[str, Any]) -> Task:
     """Update a task."""
-    task = get_task(session, tenant_id, task_id)
+    task = await get_task(tenant_id, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     
@@ -412,50 +333,31 @@ def update_task(session: Session, tenant_id: int, task_id: int, updates: Dict[st
     
     # Update assignees if provided
     if assignee_ids is not None:
-        # Remove existing assignments
-        session.execute(
-            task_assignments_table.delete().where(
-                task_assignments_table.c.task_id == task_id
-            )
-        )
-        
-        # Add new assignments
+        # Validate assignees belong to tenant
+        valid_assignee_ids = []
         for assignee_id in assignee_ids:
-            user = session.get(User, assignee_id)
+            user = await User.get(assignee_id)
             if user and user.tenant_id == tenant_id:
-                session.execute(
-                    task_assignments_table.insert().values(
-                        task_id=task_id,
-                        user_id=assignee_id,
-                        is_primary=False
-                    )
-                )
+                valid_assignee_ids.append(str(assignee_id))
+        task.assignee_ids = valid_assignee_ids
     
     task.updated_at = datetime.utcnow()
-    session.add(task)
-    session.commit()
-    session.refresh(task)
+    await task.save()
     return task
 
 
-def delete_task(session: Session, tenant_id: int, task_id: int) -> None:
+async def delete_task(tenant_id: str, task_id: str) -> None:
     """Delete a task."""
-    task = get_task(session, tenant_id, task_id)
+    task = await get_task(tenant_id, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     
-    # Delete related records (cascade should handle most, but be explicit)
-    session.execute(
-        task_assignments_table.delete().where(task_assignments_table.c.task_id == task_id)
-    )
-    
-    session.delete(task)
-    session.commit()
+    await task.delete()
 
 
-def duplicate_task(session: Session, tenant_id: int, task_id: int, user_id: int) -> Task:
+async def duplicate_task(tenant_id: str, task_id: str, user_id: str) -> Task:
     """Duplicate a task."""
-    original = get_task(session, tenant_id, task_id)
+    original = await get_task(tenant_id, task_id)
     if not original:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     
@@ -473,20 +375,15 @@ def duplicate_task(session: Session, tenant_id: int, task_id: int, user_id: int)
         "completion_percentage": 0,
         "billing_type": original.billing_type,
         "client_can_discuss": original.client_can_discuss,
+        "assignee_ids": original.assignee_ids or [],
     }
     
-    new_task = create_task(session, tenant_id, user_id, new_task_data)
-    
-    # Copy assignees
-    if original.assignees:
-        assignee_ids = [user.id for user in original.assignees]
-        update_task(session, tenant_id, new_task.id, {"assignee_ids": assignee_ids})
-    
+    new_task = await create_task(tenant_id, user_id, new_task_data)
     return new_task
 
 
 # ========== Status Operations ==========
-def ensure_default_statuses(session: Session, tenant_id: int) -> None:
+async def ensure_default_statuses(tenant_id: str) -> None:
     """Ensure default statuses exist for a tenant. Creates them if they don't exist."""
     default_statuses = [
         {"name": "To Do", "color": "#6b7280", "category": TaskStatusCategory.TODO, "display_order": 0, "is_default": True},
@@ -495,180 +392,138 @@ def ensure_default_statuses(session: Session, tenant_id: int) -> None:
         {"name": "Cancelled", "color": "#ef4444", "category": TaskStatusCategory.CANCELLED, "display_order": 3, "is_default": True},
     ]
     
-    existing_statuses = session.exec(
-        select(TaskStatus).where(
-            and_(
-                TaskStatus.tenant_id == tenant_id,
-                TaskStatus.is_default == True
-            )
-        )
-    ).all()
+    existing_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.is_default == True
+    ).to_list()
     
     existing_names = {s.name for s in existing_statuses}
     
     for status_data in default_statuses:
         if status_data["name"] not in existing_names:
             status_obj = TaskStatus(tenant_id=tenant_id, **status_data)
-            session.add(status_obj)
-    
-    session.commit()
+            await status_obj.insert()
 
 
-def list_statuses(session: Session, tenant_id: int) -> List[TaskStatus]:
+async def list_statuses(tenant_id: str) -> List[TaskStatus]:
     """List all statuses for a tenant. Ensures default statuses exist."""
-    ensure_default_statuses(session, tenant_id)
-    return list(
-        session.exec(
-            select(TaskStatus)
-            .where(TaskStatus.tenant_id == tenant_id)
-            .order_by(TaskStatus.display_order, TaskStatus.id)
-        ).all()
-    )
+    await ensure_default_statuses(tenant_id)
+    return await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id
+    ).sort(+TaskStatus.display_order).to_list()
 
 
-def create_status(session: Session, tenant_id: int, status_data: Dict[str, Any]) -> TaskStatus:
+async def create_status(tenant_id: str, status_data: Dict[str, Any]) -> TaskStatus:
     """Create a new custom status. Users cannot create default statuses."""
     # Ensure is_default is False for user-created statuses
     status_data = {**status_data, "is_default": False}
     
     # Get max display_order for custom statuses
-    max_order = session.exec(
-        select(func.max(TaskStatus.display_order))
-        .where(TaskStatus.tenant_id == tenant_id)
-    ).first() or 3  # Default statuses go up to 3
+    all_statuses = await TaskStatus.find(TaskStatus.tenant_id == tenant_id).to_list()
+    max_order = max((s.display_order for s in all_statuses), default=3)
     
     # Set display_order if not provided
     if "display_order" not in status_data or status_data["display_order"] is None:
         status_data["display_order"] = max_order + 1
     
     status_obj = TaskStatus(tenant_id=tenant_id, **status_data)
-    session.add(status_obj)
-    session.commit()
-    session.refresh(status_obj)
+    await status_obj.insert()
     return status_obj
 
 
-def update_status(session: Session, tenant_id: int, status_id: int, updates: Dict[str, Any]) -> TaskStatus:
+async def update_status(tenant_id: str, status_id: str, updates: Dict[str, Any]) -> TaskStatus:
     """Update a status."""
-    status_obj = session.exec(
-        select(TaskStatus).where(
-            and_(
-                TaskStatus.id == status_id,
-                TaskStatus.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    status_obj = await TaskStatus.find_one(
+        TaskStatus.id == PydanticObjectId(status_id),
+        TaskStatus.tenant_id == tenant_id
+    )
     
     if not status_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status not found")
     
     for key, value in updates.items():
-        setattr(status_obj, key, value)
+        if hasattr(status_obj, key):
+            setattr(status_obj, key, value)
     
     status_obj.updated_at = datetime.utcnow()
-    session.add(status_obj)
-    session.commit()
-    session.refresh(status_obj)
+    await status_obj.save()
     return status_obj
 
 
-def delete_status(session: Session, tenant_id: int, status_id: int) -> None:
+async def delete_status(tenant_id: str, status_id: str) -> None:
     """Delete a status. Fails if status is used by tasks."""
-    status_obj = session.exec(
-        select(TaskStatus).where(
-            and_(
-                TaskStatus.id == status_id,
-                TaskStatus.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    status_obj = await TaskStatus.find_one(
+        TaskStatus.id == PydanticObjectId(status_id),
+        TaskStatus.tenant_id == tenant_id
+    )
     
     if not status_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status not found")
     
     # Check if status is used
-    tasks_count = session.exec(
-        select(func.count(Task.id)).where(Task.status_id == status_id)
-    ).first()
+    tasks_count = await Task.find(Task.status_id == status_id).count()
     
-    if tasks_count and tasks_count > 0:
+    if tasks_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete status that is used by tasks"
         )
     
-    session.delete(status_obj)
-    session.commit()
+    await status_obj.delete()
 
 
 # ========== Priority Operations ==========
-def list_priorities(session: Session, tenant_id: int) -> List[TaskPriority]:
+async def list_priorities(tenant_id: str) -> List[TaskPriority]:
     """List all priorities for a tenant."""
-    return list(
-        session.exec(
-            select(TaskPriority)
-            .where(TaskPriority.tenant_id == tenant_id)
-            .order_by(TaskPriority.display_order, TaskPriority.id)
-        ).all()
-    )
+    return await TaskPriority.find(
+        TaskPriority.tenant_id == tenant_id
+    ).sort(+TaskPriority.display_order).to_list()
 
 
-def create_priority(session: Session, tenant_id: int, priority_data: Dict[str, Any]) -> TaskPriority:
+async def create_priority(tenant_id: str, priority_data: Dict[str, Any]) -> TaskPriority:
     """Create a new priority."""
     priority = TaskPriority(tenant_id=tenant_id, **priority_data)
-    session.add(priority)
-    session.commit()
-    session.refresh(priority)
+    await priority.insert()
     return priority
 
 
-def update_priority(session: Session, tenant_id: int, priority_id: int, updates: Dict[str, Any]) -> TaskPriority:
+async def update_priority(tenant_id: str, priority_id: str, updates: Dict[str, Any]) -> TaskPriority:
     """Update a priority."""
-    priority = session.exec(
-        select(TaskPriority).where(
-            and_(
-                TaskPriority.id == priority_id,
-                TaskPriority.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    priority = await TaskPriority.find_one(
+        TaskPriority.id == PydanticObjectId(priority_id),
+        TaskPriority.tenant_id == tenant_id
+    )
     
     if not priority:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Priority not found")
     
     for key, value in updates.items():
-        setattr(priority, key, value)
+        if hasattr(priority, key):
+            setattr(priority, key, value)
     
     priority.updated_at = datetime.utcnow()
-    session.add(priority)
-    session.commit()
-    session.refresh(priority)
+    await priority.save()
     return priority
 
 
-def delete_priority(session: Session, tenant_id: int, priority_id: int) -> None:
+async def delete_priority(tenant_id: str, priority_id: str) -> None:
     """Delete a priority."""
-    priority = session.exec(
-        select(TaskPriority).where(
-            and_(
-                TaskPriority.id == priority_id,
-                TaskPriority.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    priority = await TaskPriority.find_one(
+        TaskPriority.id == PydanticObjectId(priority_id),
+        TaskPriority.tenant_id == tenant_id
+    )
     
     if not priority:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Priority not found")
     
-    session.delete(priority)
-    session.commit()
+    await priority.delete()
 
 
 # ========== Comment Operations ==========
-def add_comment(session: Session, tenant_id: int, task_id: int, user_id: int, comment_text: str) -> TaskComment:
+async def add_comment(tenant_id: str, task_id: str, user_id: str, comment_text: str) -> TaskComment:
     """Add a comment to a task."""
     # Verify task exists
-    task = get_task(session, tenant_id, task_id)
+    task = await get_task(tenant_id, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     
@@ -678,45 +533,30 @@ def add_comment(session: Session, tenant_id: int, task_id: int, user_id: int, co
         user_id=user_id,
         comment=comment_text
     )
-    session.add(comment)
-    session.commit()
-    session.refresh(comment)
+    await comment.insert()
     return comment
 
 
-def list_comments(session: Session, tenant_id: int, task_id: int) -> List[TaskComment]:
+async def list_comments(tenant_id: str, task_id: str) -> List[TaskComment]:
     """List comments for a task."""
-    return list(
-        session.exec(
-            select(TaskComment)
-            .where(
-                and_(
-                    TaskComment.task_id == task_id,
-                    TaskComment.tenant_id == tenant_id
-                )
-            )
-            .order_by(TaskComment.created_at.asc())
-            .options(selectinload(TaskComment.user))
-        ).all()
-    )
+    return await TaskComment.find(
+        TaskComment.task_id == task_id,
+        TaskComment.tenant_id == tenant_id
+    ).sort(+TaskComment.created_at).to_list()
 
 
 # ========== Favorite/Pin Operations ==========
-def toggle_favorite(session: Session, tenant_id: int, task_id: int, user_id: int, is_favorite: bool) -> None:
+async def toggle_favorite(tenant_id: str, task_id: str, user_id: str, is_favorite: bool) -> None:
     """Toggle favorite status for a task."""
-    task = get_task(session, tenant_id, task_id)
+    task = await get_task(tenant_id, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     
-    existing = session.exec(
-        select(TaskFavorite).where(
-            and_(
-                TaskFavorite.task_id == task_id,
-                TaskFavorite.user_id == user_id,
-                TaskFavorite.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    existing = await TaskFavorite.find_one(
+        TaskFavorite.task_id == task_id,
+        TaskFavorite.user_id == user_id,
+        TaskFavorite.tenant_id == tenant_id
+    )
     
     if is_favorite:
         if not existing:
@@ -725,29 +565,23 @@ def toggle_favorite(session: Session, tenant_id: int, task_id: int, user_id: int
                 task_id=task_id,
                 user_id=user_id
             )
-            session.add(favorite)
-            session.commit()
+            await favorite.insert()
     else:
         if existing:
-            session.delete(existing)
-            session.commit()
+            await existing.delete()
 
 
-def toggle_pin(session: Session, tenant_id: int, task_id: int, user_id: int, is_pinned: bool) -> None:
+async def toggle_pin(tenant_id: str, task_id: str, user_id: str, is_pinned: bool) -> None:
     """Toggle pin status for a task."""
-    task = get_task(session, tenant_id, task_id)
+    task = await get_task(tenant_id, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     
-    existing = session.exec(
-        select(TaskPin).where(
-            and_(
-                TaskPin.task_id == task_id,
-                TaskPin.user_id == user_id,
-                TaskPin.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    existing = await TaskPin.find_one(
+        TaskPin.task_id == task_id,
+        TaskPin.user_id == user_id,
+        TaskPin.tenant_id == tenant_id
+    )
     
     if is_pinned:
         if not existing:
@@ -756,38 +590,27 @@ def toggle_pin(session: Session, tenant_id: int, task_id: int, user_id: int, is_
                 task_id=task_id,
                 user_id=user_id
             )
-            session.add(pin)
-            session.commit()
+            await pin.insert()
     else:
         if existing:
-            session.delete(existing)
-            session.commit()
+            await existing.delete()
 
 
-def is_task_favorite(session: Session, tenant_id: int, task_id: int, user_id: int) -> bool:
+async def is_task_favorite(tenant_id: str, task_id: str, user_id: str) -> bool:
     """Check if task is favorited by user."""
-    favorite = session.exec(
-        select(TaskFavorite).where(
-            and_(
-                TaskFavorite.task_id == task_id,
-                TaskFavorite.user_id == user_id,
-                TaskFavorite.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    favorite = await TaskFavorite.find_one(
+        TaskFavorite.task_id == task_id,
+        TaskFavorite.user_id == user_id,
+        TaskFavorite.tenant_id == tenant_id
+    )
     return favorite is not None
 
 
-def is_task_pinned(session: Session, tenant_id: int, task_id: int, user_id: int) -> bool:
+async def is_task_pinned(tenant_id: str, task_id: str, user_id: str) -> bool:
     """Check if task is pinned by user."""
-    pin = session.exec(
-        select(TaskPin).where(
-            and_(
-                TaskPin.task_id == task_id,
-                TaskPin.user_id == user_id,
-                TaskPin.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    pin = await TaskPin.find_one(
+        TaskPin.task_id == task_id,
+        TaskPin.user_id == user_id,
+        TaskPin.tenant_id == tenant_id
+    )
     return pin is not None
-

@@ -10,40 +10,38 @@ from typing import Optional, List, Dict, Any
 from dateutil.rrule import rrule, DAILY, WEEKLY, MONTHLY, YEARLY, MO, TU, WE, TH, FR, SA, SU
 from dateutil.relativedelta import relativedelta
 
-from sqlmodel import Session, select, and_
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
-from app.models import Task
+from app.models import Task, User
 from app.models.tasks import RecurringTask
 
 logger = logging.getLogger(__name__)
 
 
 # ========== Recurring Task Operations ==========
-def create_recurring_task(
-    session: Session,
-    tenant_id: int,
-    task_id: int,
+async def create_recurring_task(
+    tenant_id: str,
+    task_id: str,
     recurrence_data: Dict[str, Any]
 ) -> RecurringTask:
     """Create a recurring task configuration."""
     # Verify task exists
-    task = session.get(Task, task_id)
-    if not task or task.tenant_id != tenant_id:
+    task = await Task.find_one(
+        Task.id == PydanticObjectId(task_id),
+        Task.tenant_id == tenant_id
+    )
+    if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
         )
     
     # Check if task already has recurring configuration
-    existing = session.exec(
-        select(RecurringTask).where(
-            and_(
-                RecurringTask.tenant_id == tenant_id,
-                RecurringTask.task_id == task_id
-            )
-        )
-    ).first()
+    existing = await RecurringTask.find_one(
+        RecurringTask.tenant_id == tenant_id,
+        RecurringTask.task_id == task_id
+    )
     
     if existing:
         raise HTTPException(
@@ -67,46 +65,38 @@ def create_recurring_task(
         is_active=recurrence_data.get("is_active", True),
     )
     
-    session.add(recurring)
-    session.commit()
-    session.refresh(recurring)
+    await recurring.insert()
     return recurring
 
 
-def get_recurring_task(session: Session, tenant_id: int, task_id: int) -> Optional[RecurringTask]:
+async def get_recurring_task(tenant_id: str, task_id: str) -> Optional[RecurringTask]:
     """Get recurring task configuration for a task."""
-    return session.exec(
-        select(RecurringTask).where(
-            and_(
-                RecurringTask.tenant_id == tenant_id,
-                RecurringTask.task_id == task_id
-            )
-        )
-    ).first()
+    return await RecurringTask.find_one(
+        RecurringTask.tenant_id == tenant_id,
+        RecurringTask.task_id == task_id
+    )
 
 
-def list_recurring_tasks(
-    session: Session,
-    tenant_id: int,
+async def list_recurring_tasks(
+    tenant_id: str,
     is_active: Optional[bool] = None
 ) -> List[RecurringTask]:
     """List all recurring tasks for a tenant."""
-    query = select(RecurringTask).where(RecurringTask.tenant_id == tenant_id)
+    conditions = [RecurringTask.tenant_id == tenant_id]
     
     if is_active is not None:
-        query = query.where(RecurringTask.is_active == is_active)
+        conditions.append(RecurringTask.is_active == is_active)
     
-    return list(session.exec(query.order_by(RecurringTask.created_at.desc())).all())
+    return await RecurringTask.find(*conditions).sort(-RecurringTask.created_at).to_list()
 
 
-def update_recurring_task(
-    session: Session,
-    tenant_id: int,
-    task_id: int,
+async def update_recurring_task(
+    tenant_id: str,
+    task_id: str,
     updates: Dict[str, Any]
 ) -> RecurringTask:
     """Update a recurring task configuration."""
-    recurring = get_recurring_task(session, tenant_id, task_id)
+    recurring = await get_recurring_task(tenant_id, task_id)
     if not recurring:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -137,23 +127,20 @@ def update_recurring_task(
         recurring.is_active = updates["is_active"]
     
     recurring.updated_at = datetime.utcnow()
-    session.add(recurring)
-    session.commit()
-    session.refresh(recurring)
+    await recurring.save()
     return recurring
 
 
-def delete_recurring_task(session: Session, tenant_id: int, task_id: int) -> None:
+async def delete_recurring_task(tenant_id: str, task_id: str) -> None:
     """Delete a recurring task configuration."""
-    recurring = get_recurring_task(session, tenant_id, task_id)
+    recurring = await get_recurring_task(tenant_id, task_id)
     if not recurring:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recurring task not found"
         )
     
-    session.delete(recurring)
-    session.commit()
+    await recurring.delete()
 
 
 def generate_next_occurrence_date(recurring: RecurringTask, base_date: Optional[date] = None) -> Optional[date]:
@@ -194,7 +181,6 @@ def generate_next_occurrence_date(recurring: RecurringTask, base_date: Optional[
         elif recurring.week_of_month and recurring.weekday_of_month is not None:
             # Nth weekday of month
             next_date = base_date + relativedelta(months=recurring.recurrence_interval)
-            # Calculate nth weekday logic here
             return next_date
         return base_date + relativedelta(months=recurring.recurrence_interval)
     
@@ -206,7 +192,6 @@ def generate_next_occurrence_date(recurring: RecurringTask, base_date: Optional[
     
     elif recurring.recurrence_type == "custom" and recurring.custom_rule:
         # Parse RRULE format (simplified)
-        # In production, use a proper RRULE parser
         try:
             rule = rrule.rrulestr(recurring.custom_rule, dtstart=base_date)
             next_date = rule.after(base_date)
@@ -219,16 +204,15 @@ def generate_next_occurrence_date(recurring: RecurringTask, base_date: Optional[
 
 
 async def create_next_occurrence(
-    session: Session,
-    tenant_id: int,
+    tenant_id: str,
     recurring: RecurringTask,
-    user_id: int
+    user_id: str
 ) -> Optional[Task]:
     """Create the next occurrence of a recurring task."""
-    from app.services.tasks import get_task, create_task
+    from app.services.tasks import get_task, create_task, update_task
     
     # Get template task
-    template_task = get_task(session, tenant_id, recurring.task_id)
+    template_task = await get_task(tenant_id, recurring.task_id)
     if not template_task:
         return None
     
@@ -253,60 +237,46 @@ async def create_next_occurrence(
         "priority_id": template_task.priority_id,
         "task_list_id": template_task.task_list_id,
         "start_date": next_date,
-        "due_date": next_date,  # Or calculate based on template
+        "due_date": next_date,
         "completion_percentage": 0,
     }
     
-    new_task = create_task(session, tenant_id, user_id, task_data)
+    new_task = await create_task(tenant_id, user_id, task_data)
     
     # Copy assignees if any
-    if template_task.assignees:
-        assignee_ids = [a.id for a in template_task.assignees]
-        from app.services.tasks import update_task
-        update_task(session, tenant_id, new_task.id, {"assignee_ids": assignee_ids})
+    if template_task.assignee_ids:
+        await update_task(tenant_id, str(new_task.id), {"assignee_ids": template_task.assignee_ids})
     
     # Update recurring task
     recurring.occurrence_count += 1
     recurring.last_created_at = datetime.utcnow()
-    session.add(recurring)
-    session.commit()
+    await recurring.save()
     
     return new_task
 
 
-async def process_recurring_tasks(session: Session, tenant_id: Optional[int] = None) -> List[Task]:
+async def process_recurring_tasks(tenant_id: Optional[str] = None) -> List[Task]:
     """Process all active recurring tasks and create next occurrences."""
-    from app.models import User
-    
     if tenant_id:
-        recurring_tasks = list_recurring_tasks(session, tenant_id, is_active=True)
+        recurring_tasks = await list_recurring_tasks(tenant_id, is_active=True)
     else:
         # Process all tenants
-        recurring_tasks = session.exec(
-            select(RecurringTask).where(RecurringTask.is_active == True)  # noqa: E712
-        ).all()
+        recurring_tasks = await RecurringTask.find(RecurringTask.is_active == True).to_list()
     
     created_tasks = []
     
     for recurring in recurring_tasks:
         # Get a user for the tenant
-        user = session.exec(
-            select(User).where(User.tenant_id == recurring.tenant_id).limit(1)
-        ).first()
+        user = await User.find_one(User.tenant_id == recurring.tenant_id)
         
         if not user:
             continue
         
         try:
-            new_task = await create_next_occurrence(session, recurring.tenant_id, recurring, user.id)
+            new_task = await create_next_occurrence(recurring.tenant_id, recurring, str(user.id))
             if new_task:
                 created_tasks.append(new_task)
         except Exception as e:
             logger.error(f"Failed to create occurrence for recurring task {recurring.id}: {e}")
     
     return created_tasks
-
-
-
-
-

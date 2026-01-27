@@ -2,42 +2,42 @@
 
 Escalation rules for overdue required tasks.
 """
+import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
-from sqlmodel import Session, select
+
+from beanie import PydanticObjectId
 
 from app.models.workflows import EscalationRule, EscalationEvent
 from app.models.tasks import Task
 from app.models.user import User
 from app.models.role import Role, UserRole
-# Note: get_owner_for_tenant is defined below to avoid circular import
 
 
-def check_and_escalate_overdue_tasks(session: Session, tenant_id: int) -> List[EscalationEvent]:
+logger = logging.getLogger(__name__)
+
+
+async def check_and_escalate_overdue_tasks(tenant_id: str) -> List[EscalationEvent]:
     """Check for overdue required tasks and escalate if needed."""
     escalation_events = []
     
     # Get active escalation rules
-    rules = session.exec(
-        select(EscalationRule).where(
-            EscalationRule.tenant_id == tenant_id,
-            EscalationRule.is_active == True
-        )
-    ).all()
+    rules = await EscalationRule.find(
+        EscalationRule.tenant_id == tenant_id,
+        EscalationRule.is_active == True
+    ).to_list()
     
     if not rules:
         return escalation_events
     
     # Get overdue required tasks
     now = datetime.utcnow()
-    overdue_tasks = session.exec(
-        select(Task).where(
-            Task.tenant_id == tenant_id,
-            Task.is_required == True,
-            Task.due_date.isnot(None),
-            Task.completion_percentage < 100
-        )
-    ).all()
+    overdue_tasks = await Task.find(
+        Task.tenant_id == tenant_id,
+        Task.is_required == True,
+        Task.due_date != None,
+        Task.completion_percentage < 100
+    ).to_list()
     
     for task in overdue_tasks:
         if not task.due_date:
@@ -50,55 +50,48 @@ def check_and_escalate_overdue_tasks(session: Session, tenant_id: int) -> List[E
                 
                 if now >= escalation_time:
                     # Check if already escalated
-                    existing = session.exec(
-                        select(EscalationEvent).where(
-                            EscalationEvent.task_id == task.id,
-                            EscalationEvent.rule_id == rule.id,
-                            EscalationEvent.resolved_at.is_(None)
-                        )
-                    ).first()
+                    existing = await EscalationEvent.find_one(
+                        EscalationEvent.task_id == str(task.id),
+                        EscalationEvent.rule_id == str(rule.id),
+                        EscalationEvent.resolved_at == None
+                    )
                     
                     if existing:
                         continue  # Already escalated
                     
                     # Get users to notify
-                    notified_users = _get_users_to_notify(session, tenant_id, rule, task)
+                    notified_users = await _get_users_to_notify(tenant_id, rule, task)
                     
                     if notified_users:
                         # Create escalation event
                         event = EscalationEvent(
                             tenant_id=tenant_id,
-                            task_id=task.id,
-                            rule_id=rule.id,
-                            notified_user_ids=[u.id for u in notified_users]
+                            task_id=str(task.id),
+                            rule_id=str(rule.id),
+                            notified_user_ids=[str(u.id) for u in notified_users]
                         )
-                        session.add(event)
+                        await event.insert()
                         escalation_events.append(event)
                         
                         # Send notifications
-                        _send_escalation_notifications(session, task, notified_users, rule)
-    
-    session.commit()
-    for event in escalation_events:
-        session.refresh(event)
+                        await _send_escalation_notifications(task, notified_users, rule)
     
     return escalation_events
 
 
-def get_owner_for_tenant(session: Session, tenant_id: int) -> Optional[User]:
+async def get_owner_for_tenant(tenant_id: str) -> Optional[User]:
     """Get owner user for tenant."""
     from app.models.onboarding import OwnerConfirmation
-    owner_confirmation = session.exec(
-        select(OwnerConfirmation).where(OwnerConfirmation.tenant_id == tenant_id)
-    ).first()
+    owner_confirmation = await OwnerConfirmation.find_one(
+        OwnerConfirmation.tenant_id == tenant_id
+    )
     if owner_confirmation:
-        return session.get(User, owner_confirmation.owner_user_id)
+        return await User.get(owner_confirmation.owner_user_id)
     return None
 
 
-def _get_users_to_notify(
-    session: Session,
-    tenant_id: int,
+async def _get_users_to_notify(
+    tenant_id: str,
     rule: EscalationRule,
     task: Task
 ) -> List[User]:
@@ -110,85 +103,62 @@ def _get_users_to_notify(
     
     # Get Owner
     if "owner" in notify_roles:
-        owner = get_owner_for_tenant(session, tenant_id)
+        owner = await get_owner_for_tenant(tenant_id)
         if owner:
             users_to_notify.append(owner)
     
     # Get Managers
     if "manager" in notify_roles:
-        manager_role = session.exec(
-            select(Role).where(
-                Role.tenant_id == tenant_id,
-                Role.name == "manager"
-            )
-        ).first()
+        manager_role = await Role.find_one(
+            Role.tenant_id == tenant_id,
+            Role.name == "manager"
+        )
         
         if manager_role:
-            manager_users = session.exec(
-                select(User).join(UserRole).where(
-                    UserRole.role_id == manager_role.id,
-                    User.tenant_id == tenant_id,
-                    User.is_active == True
-                )
-            ).all()
-            users_to_notify.extend(manager_users)
+            user_roles = await UserRole.find(UserRole.role_id == str(manager_role.id)).to_list()
+            for ur in user_roles:
+                user = await User.get(ur.user_id)
+                if user and user.tenant_id == tenant_id and user.is_active:
+                    users_to_notify.append(user)
     
     # Get task assignees
     from app.models.tasks import TaskAssignment
-    assignees = session.exec(
-        select(User).join(TaskAssignment).where(
-            TaskAssignment.task_id == task.id,
-            User.tenant_id == tenant_id,
-            User.is_active == True
-        )
-    ).all()
-    users_to_notify.extend(assignees)
-    
-    # Get project creator/owner
-    project = session.get(task.project_id, type_=task.__class__.__bases__[0])
-    if project:
-        project_creator = session.get(User, project.created_by)
-        if project_creator and project_creator not in users_to_notify:
-            users_to_notify.append(project_creator)
+    assignees = await TaskAssignment.find(TaskAssignment.task_id == str(task.id)).to_list()
+    for assignment in assignees:
+        user = await User.get(assignment.user_id)
+        if user and user.tenant_id == tenant_id and user.is_active:
+            users_to_notify.append(user)
     
     # Remove duplicates
     seen = set()
     unique_users = []
     for user in users_to_notify:
-        if user.id not in seen:
-            seen.add(user.id)
+        if str(user.id) not in seen:
+            seen.add(str(user.id))
             unique_users.append(user)
     
     return unique_users
 
 
-def _send_escalation_notifications(
-    session: Session,
+async def _send_escalation_notifications(
     task: Task,
     users: List[User],
     rule: EscalationRule
 ) -> None:
     """Send escalation notifications to users."""
-    # For now, we'll just log. Email notifications can be added later.
-    import logging
-    logger = logging.getLogger(__name__)
-    
     for user in users:
         logger.warning(
             f"Escalation: Task '{task.title}' (ID: {task.id}) is overdue. "
             f"Notifying user {user.email} (ID: {user.id})"
         )
-        # TODO: Send email notification via email_service
 
 
-def create_default_escalation_rule(session: Session, tenant_id: int) -> EscalationRule:
+async def create_default_escalation_rule(tenant_id: str) -> EscalationRule:
     """Create default escalation rule for tenant."""
-    existing = session.exec(
-        select(EscalationRule).where(
-            EscalationRule.tenant_id == tenant_id,
-            EscalationRule.trigger_condition == "overdue_required_task"
-        )
-    ).first()
+    existing = await EscalationRule.find_one(
+        EscalationRule.tenant_id == tenant_id,
+        EscalationRule.trigger_condition == "overdue_required_task"
+    )
     
     if existing:
         return existing
@@ -201,8 +171,5 @@ def create_default_escalation_rule(session: Session, tenant_id: int) -> Escalati
         notify_roles=["owner", "manager"],
         is_active=True
     )
-    session.add(rule)
-    session.commit()
-    session.refresh(rule)
+    await rule.insert()
     return rule
-

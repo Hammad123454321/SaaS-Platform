@@ -2,7 +2,6 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi import Request as FastAPIRequest
-from sqlmodel import Session, select
 from typing import List
 
 from app.api.deps import get_current_user
@@ -59,15 +58,16 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding-stages"])
 # ========== Stage 1: Business Profile ==========
 
 @router.post("/business-profile", response_model=BusinessProfileResponse, status_code=status.HTTP_201_CREATED)
-def create_business_profile(
+async def create_business_profile(
     payload: BusinessProfileCreate,
     current_user: User = Depends(get_current_user),
 ) -> BusinessProfileResponse:
     """Stage 1: Create business profile with jurisdiction mapping."""
-    # Check if profile already exists
-    existing = session.exec(
-        select(BusinessProfile).where(BusinessProfile.tenant_id == current_user.tenant_id)
-    ).first()
+    tenant_id = str(current_user.tenant_id)
+    
+    existing = await BusinessProfile.find_one(
+        BusinessProfile.tenant_id == tenant_id
+    )
     
     if existing:
         raise HTTPException(
@@ -75,9 +75,8 @@ def create_business_profile(
             detail="Business profile already exists for this tenant."
         )
     
-    # Create business profile
     business_profile = BusinessProfile(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         legal_business_name=payload.legal_business_name,
         operating_name=payload.operating_name,
         province=payload.province,
@@ -87,21 +86,15 @@ def create_business_profile(
         business_email=payload.business_email,
         business_phone=payload.business_phone,
         preferred_notification_channels=payload.preferred_notification_channels,
-        is_confirmed=False,  # "Unconfirmed" state
+        is_confirmed=False,
     )
-    session.add(business_profile)
-    session.commit()
-    session.refresh(business_profile)
+    await business_profile.insert()
     
-    # Activate compliance rules based on jurisdiction
-    activated_rules = activate_compliance_rules_for_business_profile(session, business_profile)
-    
-    # Get rule codes for response
+    activated_rules = await activate_compliance_rules_for_business_profile(business_profile)
     rule_codes = [rule.rule_code.value for rule in activated_rules]
     
-    # Construct response from business_profile model
     return BusinessProfileResponse(
-        id=business_profile.id,  # type: ignore[arg-type]
+        id=str(business_profile.id),
         tenant_id=business_profile.tenant_id,
         legal_business_name=business_profile.legal_business_name,
         operating_name=business_profile.operating_name,
@@ -120,13 +113,15 @@ def create_business_profile(
 
 
 @router.get("/business-profile", response_model=BusinessProfileResponse)
-def get_business_profile(
+async def get_business_profile(
     current_user: User = Depends(get_current_user),
 ) -> BusinessProfileResponse:
     """Get business profile for current tenant."""
-    business_profile = session.exec(
-        select(BusinessProfile).where(BusinessProfile.tenant_id == current_user.tenant_id)
-    ).first()
+    tenant_id = str(current_user.tenant_id)
+    
+    business_profile = await BusinessProfile.find_one(
+        BusinessProfile.tenant_id == tenant_id
+    )
     
     if not business_profile:
         raise HTTPException(
@@ -134,13 +129,11 @@ def get_business_profile(
             detail="Business profile not found."
         )
     
-    # Get activated compliance rules
-    rules = get_activated_rules_for_tenant(session, current_user.tenant_id)
+    rules = await get_activated_rules_for_tenant(tenant_id)
     rule_codes = [rule.rule_code.value for rule in rules]
     
-    # Construct response from business_profile model
     return BusinessProfileResponse(
-        id=business_profile.id,  # type: ignore[arg-type]
+        id=str(business_profile.id),
         tenant_id=business_profile.tenant_id,
         legal_business_name=business_profile.legal_business_name,
         operating_name=business_profile.operating_name,
@@ -159,14 +152,16 @@ def get_business_profile(
 
 
 @router.put("/business-profile", response_model=BusinessProfileResponse)
-def update_business_profile(
+async def update_business_profile(
     payload: BusinessProfileCreate,
     current_user: User = Depends(get_current_user),
 ) -> BusinessProfileResponse:
     """Update business profile."""
-    business_profile = session.exec(
-        select(BusinessProfile).where(BusinessProfile.tenant_id == current_user.tenant_id)
-    ).first()
+    tenant_id = str(current_user.tenant_id)
+    
+    business_profile = await BusinessProfile.find_one(
+        BusinessProfile.tenant_id == tenant_id
+    )
     
     if not business_profile:
         raise HTTPException(
@@ -174,7 +169,6 @@ def update_business_profile(
             detail="Business profile not found."
         )
     
-    # Update fields
     business_profile.legal_business_name = payload.legal_business_name
     business_profile.operating_name = payload.operating_name
     business_profile.province = payload.province
@@ -185,20 +179,15 @@ def update_business_profile(
     business_profile.business_phone = payload.business_phone
     business_profile.preferred_notification_channels = payload.preferred_notification_channels
     
-    session.add(business_profile)
-    session.commit()
-    session.refresh(business_profile)
+    await business_profile.save()
     
-    # Re-activate compliance rules if jurisdiction changed
-    # (For simplicity, we'll just ensure rules are activated)
-    activate_compliance_rules_for_business_profile(session, business_profile)
+    await activate_compliance_rules_for_business_profile(business_profile)
     
-    rules = get_activated_rules_for_tenant(session, current_user.tenant_id)
+    rules = await get_activated_rules_for_tenant(tenant_id)
     rule_codes = [rule.rule_code.value for rule in rules]
     
-    # Construct response from business_profile model
     return BusinessProfileResponse(
-        id=business_profile.id,  # type: ignore[arg-type]
+        id=str(business_profile.id),
         tenant_id=business_profile.tenant_id,
         legal_business_name=business_profile.legal_business_name,
         operating_name=business_profile.operating_name,
@@ -219,21 +208,22 @@ def update_business_profile(
 # ========== Stage 2: Owner Confirmation ==========
 
 @router.post("/owner/confirm", response_model=OwnerConfirmationResponse, status_code=status.HTTP_201_CREATED)
-def confirm_owner_role(
+async def confirm_owner_role(
     payload: OwnerConfirmationRequest,
     request: FastAPIRequest,
     current_user: User = Depends(get_current_user),
 ) -> OwnerConfirmationResponse:
     """Stage 2: Confirm Owner role with responsibility disclaimer."""
+    tenant_id = str(current_user.tenant_id)
+    
     if not payload.responsibility_disclaimer_accepted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You must accept the responsibility disclaimer to confirm Owner role."
         )
     
-    # Check if owner already exists
-    existing_owner = get_owner_for_tenant(session, current_user.tenant_id)
-    if existing_owner and existing_owner.id != current_user.id:
+    existing_owner = await get_owner_for_tenant(tenant_id)
+    if existing_owner and str(existing_owner.id) != str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An owner already exists for this tenant."
@@ -242,10 +232,9 @@ def confirm_owner_role(
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     
-    confirmation = confirm_owner(
-        session=session,
-        user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
+    confirmation = await confirm_owner(
+        user_id=str(current_user.id),
+        tenant_id=tenant_id,
         ip_address=ip_address,
         user_agent=user_agent
     )
@@ -254,12 +243,13 @@ def confirm_owner_role(
 
 
 @router.get("/owner/status")
-def get_owner_status(
+async def get_owner_status(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Check if current user is owner."""
-    is_owner = is_user_owner(session, current_user.id, current_user.tenant_id)
-    owner = get_owner_for_tenant(session, current_user.tenant_id)
+    tenant_id = str(current_user.tenant_id)
+    is_owner = await is_user_owner(str(current_user.id), tenant_id)
+    owner = await get_owner_for_tenant(tenant_id)
     
     return {
         "is_owner": is_owner,
@@ -271,50 +261,50 @@ def get_owner_status(
 # ========== Stage 2: Role Templates ==========
 
 @router.post("/roles/seed-templates", response_model=List[RoleTemplateResponse])
-def seed_role_templates_endpoint(
+async def seed_role_templates_endpoint(
     current_user: User = Depends(get_current_user),
 ) -> List[RoleTemplateResponse]:
     """Seed default role templates (Manager, Staff, Accountant) for tenant."""
-    # Only owner can seed templates
-    if not is_user_owner(session, current_user.id, current_user.tenant_id):
+    tenant_id = str(current_user.tenant_id)
+    
+    if not await is_user_owner(str(current_user.id), tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can seed role templates."
         )
     
-    roles = seed_role_templates(session, current_user.tenant_id)
+    roles = await seed_role_templates(tenant_id)
     return [RoleTemplateResponse(**role.model_dump()) for role in roles]
 
 
 @router.get("/roles/templates", response_model=List[RoleTemplateResponse])
-def get_role_templates_endpoint(
+async def get_role_templates_endpoint(
     current_user: User = Depends(get_current_user),
 ) -> List[RoleTemplateResponse]:
     """Get role templates for tenant."""
-    roles = get_role_templates(session, current_user.tenant_id)
+    tenant_id = str(current_user.tenant_id)
+    roles = await get_role_templates(tenant_id)
     return [RoleTemplateResponse(**role.model_dump()) for role in roles]
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
-def create_role(
+async def create_role(
     payload: RoleCreate,
     current_user: User = Depends(get_current_user),
 ) -> RoleResponse:
     """Create a custom role."""
-    # Only owner can create roles
-    if not is_user_owner(session, current_user.id, current_user.tenant_id):
+    tenant_id = str(current_user.tenant_id)
+    
+    if not await is_user_owner(str(current_user.id), tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can create roles."
         )
     
-    # Check if role name already exists
-    existing = session.exec(
-        select(Role).where(
-            Role.tenant_id == current_user.tenant_id,
-            Role.name == payload.name
-        )
-    ).first()
+    existing = await Role.find_one(
+        Role.tenant_id == tenant_id,
+        Role.name == payload.name
+    )
     
     if existing:
         raise HTTPException(
@@ -323,79 +313,67 @@ def create_role(
         )
     
     role = Role(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         name=payload.name
     )
-    session.add(role)
-    session.commit()
-    session.refresh(role)
-    
-    # TODO: Assign permissions if provided
-    # For now, permissions are managed separately
+    await role.insert()
     
     return RoleResponse(**role.model_dump())
 
 
 @router.get("/roles", response_model=List[RoleResponse])
-def list_roles(
+async def list_roles(
     current_user: User = Depends(get_current_user),
 ) -> List[RoleResponse]:
     """List all roles for tenant."""
-    roles = session.exec(
-        select(Role).where(Role.tenant_id == current_user.tenant_id)
-    ).all()
+    tenant_id = str(current_user.tenant_id)
+    roles = await Role.find(Role.tenant_id == tenant_id).to_list()
     return [RoleResponse(**role.model_dump()) for role in roles]
 
 
 # ========== Stage 2: Team Invitations ==========
 
 @router.post("/invitations", response_model=TeamInvitationResponse, status_code=status.HTTP_201_CREATED)
-def create_team_invitation(
+async def create_team_invitation(
     payload: TeamInvitationCreate,
     current_user: User = Depends(get_current_user),
 ) -> TeamInvitationResponse:
     """Create a team member account with auto-generated credentials."""
-    # Only owner can invite team members
-    if not is_user_owner(session, current_user.id, current_user.tenant_id):
+    tenant_id = str(current_user.tenant_id)
+    
+    if not await is_user_owner(str(current_user.id), tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can invite team members."
         )
     
     try:
-        # Create user account with auto-generated password
-        user, plain_password = create_team_member(
-            session=session,
-            tenant_id=current_user.tenant_id,
-            invited_by_user_id=current_user.id,
+        user, plain_password = await create_team_member(
+            tenant_id=tenant_id,
+            invited_by_user_id=str(current_user.id),
             email=payload.email,
             role_id=payload.role_id
         )
         
-        # Send credentials email
         try:
-            send_team_member_credentials_email(
-                session=session,
+            await send_team_member_credentials_email(
                 user=user,
                 plain_password=plain_password,
-                invited_by_user_id=current_user.id
+                invited_by_user_id=str(current_user.id)
             )
         except Exception as e:
-            # Log but don't fail user creation
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to send credentials email: {e}")
         
-        # Return response in TeamInvitationResponse format for backward compatibility
-        # Note: We're still using TeamInvitationResponse but the user is already created
         return TeamInvitationResponse(
-            id=user.id,  # Using user ID instead of invitation ID
+            id=str(user.id),
             tenant_id=user.tenant_id,
-            invited_by_user_id=current_user.id,
+            invited_by_user_id=str(current_user.id),
             email=user.email,
             role_id=payload.role_id,
-            expires_at=datetime.utcnow(),  # Not applicable anymore
-            accepted_at=datetime.utcnow(),  # Already "accepted" since user is created
+            expires_at=datetime.utcnow(),
+            accepted_at=datetime.utcnow(),
             created_at=user.created_at
         )
     except ValueError as e:
@@ -406,39 +384,30 @@ def create_team_invitation(
 
 
 @router.get("/invitations", response_model=List[TeamInvitationResponse])
-def list_invitations(
+async def list_invitations(
     current_user: User = Depends(get_current_user),
 ) -> List[TeamInvitationResponse]:
     """List all team members (users) for tenant."""
-    # List all users in the tenant (excluding super admins)
-    users = session.exec(
-        select(User).where(
-            User.tenant_id == current_user.tenant_id,
-            User.is_super_admin == False
-        )
-    ).all()
+    tenant_id = str(current_user.tenant_id)
     
-    # Convert users to TeamInvitationResponse format for backward compatibility
+    users = await User.find(
+        User.tenant_id == tenant_id,
+        User.is_super_admin == False
+    ).to_list()
+    
     result = []
     for user in users:
-        # Get role_id if user has roles
-        role_id = None
-        if user.roles:
-            role_id = user.roles[0].id if user.roles else None
+        user_roles = await UserRole.find(UserRole.user_id == str(user.id)).to_list()
+        role_id = user_roles[0].role_id if user_roles else None
         
         result.append(TeamInvitationResponse(
-            id=user.id,
+            id=str(user.id),
             tenant_id=user.tenant_id,
-            invited_by_user_id=user.id,  # Not tracked anymore, use user.id as placeholder
+            invited_by_user_id=str(user.id),
             email=user.email,
             role_id=role_id,
-            expires_at=datetime.utcnow(),  # Not applicable
-            accepted_at=user.created_at if not user.password_change_required else None,  # Consider "accepted" if password changed
+            expires_at=datetime.utcnow(),
+            accepted_at=user.created_at if not user.password_change_required else None,
             created_at=user.created_at
         ))
     return result
-
-
-# Note: /invitations/accept endpoint removed - users are now created directly
-# Policy acceptance and password change happen on first login via /auth/first-login/change-password
-

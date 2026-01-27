@@ -7,25 +7,25 @@ import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from sqlmodel import Session, select, and_
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
-from app.models import Task, TaskStatus, TaskStatusCategory
+from app.models import Task, TaskStatus
+from app.models.tasks import TaskStatusCategory
 from app.services.tasks import get_task, update_task
 
 logger = logging.getLogger(__name__)
 
 
-def create_subtask(
-    session: Session,
-    tenant_id: int,
-    parent_task_id: int,
+async def create_subtask(
+    tenant_id: str,
+    parent_task_id: str,
     subtask_data: Dict[str, Any],
-    created_by: int
+    created_by: str
 ) -> Task:
     """Create a new subtask."""
     # Verify parent task exists
-    parent = get_task(session, tenant_id, parent_task_id)
+    parent = await get_task(tenant_id, parent_task_id)
     if not parent:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -33,7 +33,6 @@ def create_subtask(
         )
     
     # Ensure subtask has required fields
-    # Check if status_id is None or not provided
     if "status_id" not in subtask_data or subtask_data.get("status_id") is None:
         # Use parent's status if available, otherwise get default "To Do" status
         if parent.status_id:
@@ -41,24 +40,18 @@ def create_subtask(
         else:
             # Get default "To Do" status
             from app.services.tasks import ensure_default_statuses
-            ensure_default_statuses(session, tenant_id)
-            default_status = session.exec(
-                select(TaskStatus).where(
-                    and_(
-                        TaskStatus.tenant_id == tenant_id,
-                        TaskStatus.name == "To Do"
-                    )
-                )
-            ).first()
+            await ensure_default_statuses(tenant_id)
+            default_status = await TaskStatus.find_one(
+                TaskStatus.tenant_id == tenant_id,
+                TaskStatus.name == "To Do"
+            )
             if not default_status:
                 # Fallback: get any status for this tenant
-                default_status = session.exec(
-                    select(TaskStatus).where(
-                        TaskStatus.tenant_id == tenant_id
-                    )
-                ).first()
+                default_status = await TaskStatus.find_one(
+                    TaskStatus.tenant_id == tenant_id
+                )
             if default_status:
-                subtask_data["status_id"] = default_status.id
+                subtask_data["status_id"] = str(default_status.id)
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -75,51 +68,38 @@ def create_subtask(
         created_by=created_by,
         **subtask_data
     )
-    session.add(subtask)
-    session.commit()
-    session.refresh(subtask)
+    await subtask.insert()
     
     # Update parent task completion if needed
-    _update_parent_completion(session, tenant_id, parent_task_id)
+    await _update_parent_completion(tenant_id, parent_task_id)
     
     return subtask
 
 
-def get_subtask(session: Session, tenant_id: int, subtask_id: int) -> Optional[Task]:
+async def get_subtask(tenant_id: str, subtask_id: str) -> Optional[Task]:
     """Get a subtask by ID."""
-    return session.exec(
-        select(Task).where(
-            and_(
-                Task.id == subtask_id,
-                Task.tenant_id == tenant_id,
-                Task.parent_id.isnot(None)  # Must be a subtask
-            )
-        )
-    ).first()
-
-
-def list_subtasks(session: Session, tenant_id: int, parent_task_id: int) -> List[Task]:
-    """List all subtasks for a parent task."""
-    return list(
-        session.exec(
-            select(Task).where(
-                and_(
-                    Task.tenant_id == tenant_id,
-                    Task.parent_id == parent_task_id
-                )
-            ).order_by(Task.created_at.asc())
-        ).all()
+    return await Task.find_one(
+        Task.id == PydanticObjectId(subtask_id),
+        Task.tenant_id == tenant_id,
+        Task.parent_id != None
     )
 
 
-def update_subtask(
-    session: Session,
-    tenant_id: int,
-    subtask_id: int,
+async def list_subtasks(tenant_id: str, parent_task_id: str) -> List[Task]:
+    """List all subtasks for a parent task."""
+    return await Task.find(
+        Task.tenant_id == tenant_id,
+        Task.parent_id == parent_task_id
+    ).sort(+Task.created_at).to_list()
+
+
+async def update_subtask(
+    tenant_id: str,
+    subtask_id: str,
     updates: Dict[str, Any]
 ) -> Task:
     """Update a subtask."""
-    subtask = get_subtask(session, tenant_id, subtask_id)
+    subtask = await get_subtask(tenant_id, subtask_id)
     if not subtask:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -132,24 +112,22 @@ def update_subtask(
             setattr(subtask, key, value)
     
     subtask.updated_at = datetime.utcnow()
-    session.add(subtask)
-    session.commit()
-    session.refresh(subtask)
+    await subtask.save()
     
     # Update parent task completion
     if subtask.parent_id:
-        _update_parent_completion(session, tenant_id, subtask.parent_id)
+        await _update_parent_completion(tenant_id, subtask.parent_id)
     
     # Handle status inheritance if status changed
     if "status_id" in updates:
-        _apply_status_inheritance(session, tenant_id, subtask_id, updates["status_id"])
+        await _apply_status_inheritance(tenant_id, subtask_id, updates["status_id"])
     
     return subtask
 
 
-def delete_subtask(session: Session, tenant_id: int, subtask_id: int) -> None:
+async def delete_subtask(tenant_id: str, subtask_id: str) -> None:
     """Delete a subtask."""
-    subtask = get_subtask(session, tenant_id, subtask_id)
+    subtask = await get_subtask(tenant_id, subtask_id)
     if not subtask:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -157,77 +135,71 @@ def delete_subtask(session: Session, tenant_id: int, subtask_id: int) -> None:
         )
     
     parent_id = subtask.parent_id
-    session.delete(subtask)
-    session.commit()
+    await subtask.delete()
     
     # Update parent task completion
     if parent_id:
-        _update_parent_completion(session, tenant_id, parent_id)
+        await _update_parent_completion(tenant_id, parent_id)
 
 
-def _apply_status_inheritance(
-    session: Session,
-    tenant_id: int,
-    subtask_id: int,
-    new_status_id: int
+async def _apply_status_inheritance(
+    tenant_id: str,
+    subtask_id: str,
+    new_status_id: str
 ) -> None:
     """
     Apply status inheritance: if subtask status is 'done', 
     parent task status may be updated based on all subtasks.
     """
-    subtask = get_subtask(session, tenant_id, subtask_id)
+    subtask = await get_subtask(tenant_id, subtask_id)
     if not subtask or not subtask.parent_id:
         return
     
     # Get new status
-    new_status = session.get(TaskStatus, new_status_id)
+    new_status = await TaskStatus.get(new_status_id)
     if not new_status:
         return
     
     # If subtask is marked as done, check if all subtasks are done
     if new_status.category == TaskStatusCategory.DONE:
-        parent = get_task(session, tenant_id, subtask.parent_id)
+        parent = await get_task(tenant_id, subtask.parent_id)
         if not parent:
             return
         
         # Get all subtasks
-        subtasks = list_subtasks(session, tenant_id, parent.id)
+        subtasks = await list_subtasks(tenant_id, str(parent.id))
         
         # Check if all subtasks are done
         all_done = True
         for st in subtasks:
             if st.status_id != new_status_id:
-                status_obj = session.get(TaskStatus, st.status_id)
+                status_obj = await TaskStatus.get(st.status_id)
                 if status_obj and status_obj.category != TaskStatusCategory.DONE:
                     all_done = False
                     break
         
         # If all subtasks are done, update parent status to done
         if all_done and subtasks:
-            done_status = session.exec(
-                select(TaskStatus).where(
-                    and_(
-                        TaskStatus.tenant_id == tenant_id,
-                        TaskStatus.category == TaskStatusCategory.DONE
-                    )
-                )
-            ).first()
+            done_status = await TaskStatus.find_one(
+                TaskStatus.tenant_id == tenant_id,
+                TaskStatus.category == TaskStatusCategory.DONE
+            )
             
             if done_status:
-                update_task(session, tenant_id, parent.id, {"status_id": done_status.id})
+                await update_task(tenant_id, str(parent.id), {"status_id": str(done_status.id)})
 
 
-def _update_parent_completion(session: Session, tenant_id: int, parent_task_id: int) -> None:
+async def _update_parent_completion(tenant_id: str, parent_task_id: str) -> None:
     """Update parent task completion percentage based on subtasks."""
-    parent = get_task(session, tenant_id, parent_task_id)
+    parent = await get_task(tenant_id, parent_task_id)
     if not parent:
         return
     
-    subtasks = list_subtasks(session, tenant_id, parent_task_id)
+    subtasks = await list_subtasks(tenant_id, parent_task_id)
     
     if not subtasks:
         # No subtasks, reset completion
-        update_task(session, tenant_id, parent_task_id, {"completion_percentage": 0})
+        await update_task(tenant_id, parent_task_id, {"completion_percentage": 0})
         return
     
     # Calculate completion based on subtask completion percentages
@@ -237,7 +209,7 @@ def _update_parent_completion(session: Session, tenant_id: int, parent_task_id: 
     # Also check status-based completion
     done_count = 0
     for st in subtasks:
-        status_obj = session.get(TaskStatus, st.status_id)
+        status_obj = await TaskStatus.get(st.status_id)
         if status_obj and status_obj.category == TaskStatusCategory.DONE:
             done_count += 1
     
@@ -247,34 +219,14 @@ def _update_parent_completion(session: Session, tenant_id: int, parent_task_id: 
     
     # Update parent
     if parent.completion_percentage != final_completion:
-        update_task(session, tenant_id, parent_task_id, {"completion_percentage": final_completion})
+        await update_task(tenant_id, parent_task_id, {"completion_percentage": final_completion})
         
         # If all subtasks are done, mark parent as done
         if final_completion == 100:
-            done_status = session.exec(
-                select(TaskStatus).where(
-                    and_(
-                        TaskStatus.tenant_id == tenant_id,
-                        TaskStatus.category == TaskStatusCategory.DONE
-                    )
-                )
-            ).first()
+            done_status = await TaskStatus.find_one(
+                TaskStatus.tenant_id == tenant_id,
+                TaskStatus.category == TaskStatusCategory.DONE
+            )
             
-            if done_status and parent.status_id != done_status.id:
-                update_task(session, tenant_id, parent_task_id, {"status_id": done_status.id})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            if done_status and parent.status_id != str(done_status.id):
+                await update_task(tenant_id, parent_task_id, {"status_id": str(done_status.id)})

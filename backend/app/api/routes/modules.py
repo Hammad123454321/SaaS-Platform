@@ -1,7 +1,6 @@
 import asyncio
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlmodel import Session, select
 
 from app.api.authz import require_permission
 from app.models import User, ModuleCode, ModuleEntitlement
@@ -13,7 +12,7 @@ from app.services.audit import log_audit
 router = APIRouter(prefix="/modules", tags=["modules"])
 
 
-async def _get_client_for(module: ModuleCode, tenant_id: int, session: Session):
+async def _get_client_for(module: ModuleCode, tenant_id: str, user_id: str = None):
     """
     Get vendor client for module. Falls back to stub if no real client available.
     
@@ -22,27 +21,25 @@ async def _get_client_for(module: ModuleCode, tenant_id: int, session: Session):
     Returns:
         Real vendor client or VendorStubClient as fallback
     """
-    # Tasks module has dedicated routes, skip it here
     if module == ModuleCode.TASKS:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tasks module uses dedicated routes at /modules/tasks"
         )
     
-    real_client = await create_vendor_client(module, tenant_id, session)
+    real_client = await create_vendor_client(module, tenant_id)
     if real_client:
         return real_client
-    # Fallback to stub for development/testing
     return VendorStubClient(vendor=module.value, credentials={"tenant_id": tenant_id})
 
 
-def _require_entitlement(
-    session: Session, tenant_id: int, module_code: ModuleCode
+async def _require_entitlement(
+    tenant_id: str, module_code: ModuleCode
 ) -> ModuleEntitlement:
-    stmt = select(ModuleEntitlement).where(
-        ModuleEntitlement.tenant_id == tenant_id, ModuleEntitlement.module_code == module_code
+    ent = await ModuleEntitlement.find_one(
+        ModuleEntitlement.tenant_id == tenant_id,
+        ModuleEntitlement.module_code == module_code
     )
-    ent = session.exec(stmt).first()
     if not ent or not ent.enabled:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Module not enabled.")
     return ent
@@ -53,8 +50,9 @@ async def module_health(
     module_code: ModuleCode,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         if hasattr(client, "health"):
             if asyncio.iscoroutinefunction(client.health):
@@ -78,8 +76,9 @@ async def list_records(
     request: Request,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         filters = {k: v for k, v in request.query_params.items() if k != "resource"}
         if hasattr(client, "list_records") and callable(getattr(client, "list_records")):
@@ -104,8 +103,9 @@ async def create_record(
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         if hasattr(client, "create_record") and callable(getattr(client, "create_record")):
             if asyncio.iscoroutinefunction(client.create_record):
@@ -114,10 +114,9 @@ async def create_record(
                 result = client.create_record(resource, payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support create_record")
-        log_audit(
-            session,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=current_user.id,  # type: ignore[arg-type]
+        await log_audit(
+            tenant_id=tenant_id,
+            actor_user_id=str(current_user.id),
             action="module.create_record",
             target=f"{module_code}:{resource}",
             details={"payload_keys": list(payload.keys())},
@@ -141,8 +140,9 @@ async def update_record(
     payload: dict,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         if resource == "tasks" and hasattr(client, "update_task"):
             try:
@@ -164,10 +164,9 @@ async def update_record(
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support update_record")
 
-        log_audit(
-            session,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=current_user.id,  # type: ignore[arg-type]
+        await log_audit(
+            tenant_id=tenant_id,
+            actor_user_id=str(current_user.id),
             action="module.update_record",
             target=f"{module_code}:{resource}:{record_id}",
             details={"payload_keys": list(payload.keys())},
@@ -190,8 +189,9 @@ async def add_note(
     note: str,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         if hasattr(client, "add_note") and callable(getattr(client, "add_note")):
             if asyncio.iscoroutinefunction(client.add_note):
@@ -199,12 +199,10 @@ async def add_note(
             else:
                 result = client.add_note(record_id, note)
         else:
-            # Fallback: use create_record to add a note as a comment
             result = {"record_id": record_id, "note": note, "vendor": module_code.value}
-        log_audit(
-            session,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=current_user.id,  # type: ignore[arg-type]
+        await log_audit(
+            tenant_id=tenant_id,
+            actor_user_id=str(current_user.id),
             action="module.add_note",
             target=f"{module_code}:{record_id}",
         )
@@ -227,8 +225,9 @@ async def delete_record(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Delete a record from the module (pure wrapper - forwards to Taskify)."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         if hasattr(client, "delete_record") and callable(getattr(client, "delete_record")):
             if asyncio.iscoroutinefunction(client.delete_record):
@@ -238,10 +237,9 @@ async def delete_record(
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support delete_record")
         
-        log_audit(
-            session,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=current_user.id,  # type: ignore[arg-type]
+        await log_audit(
+            tenant_id=tenant_id,
+            actor_user_id=str(current_user.id),
             action="module.delete_record",
             target=f"{module_code}:{resource}:{record_id}",
         )
@@ -265,11 +263,11 @@ async def add_comment(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Add a comment to a record (pure wrapper - forwards to Taskify)."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         comment_text = payload.get("comment", "")
-        # For tasks, use task-specific comment endpoint
         if resource == "tasks" and hasattr(client, "add_task_comment"):
             task_id = int(record_id)
             if asyncio.iscoroutinefunction(client.add_task_comment):
@@ -284,10 +282,9 @@ async def add_comment(
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support comments")
         
-        log_audit(
-            session,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=current_user.id,  # type: ignore[arg-type]
+        await log_audit(
+            tenant_id=tenant_id,
+            actor_user_id=str(current_user.id),
             action="module.add_comment",
             target=f"{module_code}:{resource}:{record_id}",
         )
@@ -310,8 +307,9 @@ async def get_comments(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Get comments for a record (pure wrapper - forwards to Taskify)."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         if resource == "tasks" and hasattr(client, "get_task_comments"):
             task_id = int(record_id)
@@ -341,8 +339,9 @@ async def draft_email(
     body: str,
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id)
     try:
         if hasattr(client, "draft_email") and callable(getattr(client, "draft_email")):
             if asyncio.iscoroutinefunction(client.draft_email):
@@ -351,10 +350,9 @@ async def draft_email(
                 result = client.draft_email(to, subject, body)
         else:
             result = {"to": to, "subject": subject, "body": body, "vendor": module_code.value}
-        log_audit(
-            session,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=current_user.id,  # type: ignore[arg-type]
+        await log_audit(
+            tenant_id=tenant_id,
+            actor_user_id=str(current_user.id),
             action="module.draft_email",
             target=f"{module_code}:{to}",
         )
@@ -377,8 +375,9 @@ async def list_milestones(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """List milestones, optionally filtered by project."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "list_milestones"):
             if asyncio.iscoroutinefunction(client.list_milestones):
@@ -402,8 +401,9 @@ async def create_milestone(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Create a new milestone."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "create_milestone"):
             if asyncio.iscoroutinefunction(client.create_milestone):
@@ -412,7 +412,7 @@ async def create_milestone(
                 result = client.create_milestone(payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support milestones")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.create_milestone", f"{module_code}", {"milestone": payload.get("title")})
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.create_milestone", target=f"{module_code}", details={"milestone": payload.get("title")})
         return {"data": result, "meta": {"module": module_code}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -429,8 +429,9 @@ async def update_milestone(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Update a milestone."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "update_milestone"):
             if asyncio.iscoroutinefunction(client.update_milestone):
@@ -439,7 +440,7 @@ async def update_milestone(
                 result = client.update_milestone(milestone_id, payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support milestones")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.update_milestone", f"{module_code}:{milestone_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.update_milestone", target=f"{module_code}:{milestone_id}")
         return {"data": result, "meta": {"module": module_code, "milestone_id": milestone_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -455,8 +456,9 @@ async def delete_milestone(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Delete a milestone."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "delete_milestone"):
             if asyncio.iscoroutinefunction(client.delete_milestone):
@@ -465,7 +467,7 @@ async def delete_milestone(
                 result = client.delete_milestone(milestone_id)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support milestones")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_milestone", f"{module_code}:{milestone_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.delete_milestone", target=f"{module_code}:{milestone_id}")
         return {"data": result, "meta": {"module": module_code, "milestone_id": milestone_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -481,8 +483,9 @@ async def list_task_lists(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """List all task lists."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "list_task_lists"):
             if asyncio.iscoroutinefunction(client.list_task_lists):
@@ -506,8 +509,9 @@ async def create_task_list(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Create a new task list."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "create_task_list"):
             if asyncio.iscoroutinefunction(client.create_task_list):
@@ -516,7 +520,7 @@ async def create_task_list(
                 result = client.create_task_list(payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task lists")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.create_task_list", f"{module_code}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.create_task_list", target=f"{module_code}")
         return {"data": result, "meta": {"module": module_code}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -533,8 +537,9 @@ async def update_task_list(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Update a task list."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "update_task_list"):
             if asyncio.iscoroutinefunction(client.update_task_list):
@@ -543,7 +548,7 @@ async def update_task_list(
                 result = client.update_task_list(task_list_id, payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task lists")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.update_task_list", f"{module_code}:{task_list_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.update_task_list", target=f"{module_code}:{task_list_id}")
         return {"data": result, "meta": {"module": module_code, "task_list_id": task_list_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -559,8 +564,9 @@ async def delete_task_list(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Delete a task list."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "delete_task_list"):
             if asyncio.iscoroutinefunction(client.delete_task_list):
@@ -569,7 +575,7 @@ async def delete_task_list(
                 result = client.delete_task_list(task_list_id)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task lists")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_task_list", f"{module_code}:{task_list_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.delete_task_list", target=f"{module_code}:{task_list_id}")
         return {"data": result, "meta": {"module": module_code, "task_list_id": task_list_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -586,8 +592,9 @@ async def list_time_trackers(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """List time tracker entries."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "list_time_trackers"):
             if asyncio.iscoroutinefunction(client.list_time_trackers):
@@ -611,8 +618,9 @@ async def create_time_tracker(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Create a new time tracker entry."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "create_time_tracker"):
             if asyncio.iscoroutinefunction(client.create_time_tracker):
@@ -621,7 +629,7 @@ async def create_time_tracker(
                 result = client.create_time_tracker(payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support time tracker")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.create_time_tracker", f"{module_code}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.create_time_tracker", target=f"{module_code}")
         return {"data": result, "meta": {"module": module_code}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -638,8 +646,9 @@ async def update_time_tracker(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Update a time tracker entry."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "update_time_tracker"):
             if asyncio.iscoroutinefunction(client.update_time_tracker):
@@ -648,7 +657,7 @@ async def update_time_tracker(
                 result = client.update_time_tracker(time_id, payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support time tracker")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.update_time_tracker", f"{module_code}:{time_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.update_time_tracker", target=f"{module_code}:{time_id}")
         return {"data": result, "meta": {"module": module_code, "time_id": time_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -664,8 +673,9 @@ async def delete_time_tracker(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Delete a time tracker entry."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "delete_time_tracker"):
             if asyncio.iscoroutinefunction(client.delete_time_tracker):
@@ -674,7 +684,7 @@ async def delete_time_tracker(
                 result = client.delete_time_tracker(time_id)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support time tracker")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_time_tracker", f"{module_code}:{time_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.delete_time_tracker", target=f"{module_code}:{time_id}")
         return {"data": result, "meta": {"module": module_code, "time_id": time_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -690,8 +700,9 @@ async def list_task_time_entries(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """List time entries for a specific task."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "list_task_time_entries"):
             if asyncio.iscoroutinefunction(client.list_task_time_entries):
@@ -715,8 +726,9 @@ async def list_tags(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """List all tags."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "list_tags"):
             if asyncio.iscoroutinefunction(client.list_tags):
@@ -740,8 +752,9 @@ async def create_tag(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Create a new tag."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "create_tag"):
             if asyncio.iscoroutinefunction(client.create_tag):
@@ -750,7 +763,7 @@ async def create_tag(
                 result = client.create_tag(payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support tags")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.create_tag", f"{module_code}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.create_tag", target=f"{module_code}")
         return {"data": result, "meta": {"module": module_code}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -767,8 +780,9 @@ async def update_tag(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Update a tag."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "update_tag"):
             if asyncio.iscoroutinefunction(client.update_tag):
@@ -777,7 +791,7 @@ async def update_tag(
                 result = client.update_tag(tag_id, payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support tags")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.update_tag", f"{module_code}:{tag_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.update_tag", target=f"{module_code}:{tag_id}")
         return {"data": result, "meta": {"module": module_code, "tag_id": tag_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -793,8 +807,9 @@ async def delete_tag(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Delete a tag."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "delete_tag"):
             if asyncio.iscoroutinefunction(client.delete_tag):
@@ -803,7 +818,7 @@ async def delete_tag(
                 result = client.delete_tag(tag_id)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support tags")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_tag", f"{module_code}:{tag_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.delete_tag", target=f"{module_code}:{tag_id}")
         return {"data": result, "meta": {"module": module_code, "tag_id": tag_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -820,8 +835,9 @@ async def get_status_timelines(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Get status change timeline for a task."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "get_status_timelines"):
             if asyncio.iscoroutinefunction(client.get_status_timelines):
@@ -846,8 +862,9 @@ async def update_task_favorite(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Update task favorite status."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "update_task_favorite"):
             if asyncio.iscoroutinefunction(client.update_task_favorite):
@@ -856,7 +873,7 @@ async def update_task_favorite(
                 result = client.update_task_favorite(task_id, is_favorite)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support favorites")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.update_task_favorite", f"{module_code}:{task_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.update_task_favorite", target=f"{module_code}:{task_id}")
         return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -873,8 +890,9 @@ async def update_task_pinned(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Update task pinned status."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "update_task_pinned"):
             if asyncio.iscoroutinefunction(client.update_task_pinned):
@@ -883,7 +901,7 @@ async def update_task_pinned(
                 result = client.update_task_pinned(task_id, is_pinned)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support pinned")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.update_task_pinned", f"{module_code}:{task_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.update_task_pinned", target=f"{module_code}:{task_id}")
         return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -900,8 +918,9 @@ async def upload_task_media(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Upload media/file to a task."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         form = await request.form()
         file = form.get("file")
@@ -918,7 +937,7 @@ async def upload_task_media(
                 result = client.upload_task_media(task_id, "", file_content, filename)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support media upload")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.upload_task_media", f"{module_code}:{task_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.upload_task_media", target=f"{module_code}:{task_id}")
         return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -934,8 +953,9 @@ async def delete_task_media(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Delete media from a task."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "delete_task_media"):
             if asyncio.iscoroutinefunction(client.delete_task_media):
@@ -944,7 +964,7 @@ async def delete_task_media(
                 result = client.delete_task_media(media_id)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support media deletion")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_task_media", f"{module_code}:{media_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.delete_task_media", target=f"{module_code}:{media_id}")
         return {"data": result, "meta": {"module": module_code, "media_id": media_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -960,8 +980,9 @@ async def get_task_subtasks(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Get subtasks/dependencies for a task."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "get_task_subtasks"):
             if asyncio.iscoroutinefunction(client.get_task_subtasks):
@@ -985,8 +1006,9 @@ async def get_recurring_task(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Get recurring task configuration for a task."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "get_recurring_task"):
             if asyncio.iscoroutinefunction(client.get_recurring_task):
@@ -1011,8 +1033,9 @@ async def bulk_delete_tasks(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Bulk delete tasks."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         task_ids = payload.get("task_ids", [])
         if not task_ids:
@@ -1025,7 +1048,7 @@ async def bulk_delete_tasks(
                 result = client.bulk_delete_tasks(task_ids)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support bulk delete")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.bulk_delete_tasks", f"{module_code}", {"count": len(task_ids)})
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.bulk_delete_tasks", target=f"{module_code}", details={"count": len(task_ids)})
         return {"data": result, "meta": {"module": module_code, "deleted_count": len(task_ids)}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -1041,8 +1064,9 @@ async def duplicate_task(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Duplicate a task."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "duplicate_task"):
             if asyncio.iscoroutinefunction(client.duplicate_task):
@@ -1051,7 +1075,7 @@ async def duplicate_task(
                 result = client.duplicate_task(task_id)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support task duplication")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.duplicate_task", f"{module_code}:{task_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.duplicate_task", target=f"{module_code}:{task_id}")
         return {"data": result, "meta": {"module": module_code, "task_id": task_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -1069,8 +1093,9 @@ async def get_activity_log(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Get activity log."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "get_activity_log"):
             if asyncio.iscoroutinefunction(client.get_activity_log):
@@ -1095,8 +1120,9 @@ async def list_custom_fields(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """List custom fields for a module."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "list_custom_fields"):
             if asyncio.iscoroutinefunction(client.list_custom_fields):
@@ -1120,8 +1146,9 @@ async def create_custom_field(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Create a custom field."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "create_custom_field"):
             if asyncio.iscoroutinefunction(client.create_custom_field):
@@ -1130,7 +1157,7 @@ async def create_custom_field(
                 result = client.create_custom_field(payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support custom fields")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.create_custom_field", f"{module_code}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.create_custom_field", target=f"{module_code}")
         return {"data": result, "meta": {"module": module_code}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -1147,8 +1174,9 @@ async def update_custom_field(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Update a custom field."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "update_custom_field"):
             if asyncio.iscoroutinefunction(client.update_custom_field):
@@ -1157,7 +1185,7 @@ async def update_custom_field(
                 result = client.update_custom_field(field_id, payload)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support custom fields")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.update_custom_field", f"{module_code}:{field_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.update_custom_field", target=f"{module_code}:{field_id}")
         return {"data": result, "meta": {"module": module_code, "field_id": field_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
@@ -1173,8 +1201,9 @@ async def delete_custom_field(
     current_user: User = Depends(require_permission(PermissionCode.ACCESS_MODULES)),
 ) -> dict:
     """Delete a custom field."""
-    _require_entitlement(session, current_user.tenant_id, module_code)
-    client = await _get_client_for(module_code, current_user.tenant_id, session, user_id=current_user.id)
+    tenant_id = str(current_user.tenant_id)
+    await _require_entitlement(tenant_id, module_code)
+    client = await _get_client_for(module_code, tenant_id, str(current_user.id))
     try:
         if hasattr(client, "delete_custom_field"):
             if asyncio.iscoroutinefunction(client.delete_custom_field):
@@ -1183,11 +1212,10 @@ async def delete_custom_field(
                 result = client.delete_custom_field(field_id)
         else:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Module does not support custom fields")
-        log_audit(session, current_user.tenant_id, current_user.id, "module.delete_custom_field", f"{module_code}:{field_id}")
+        await log_audit(tenant_id=tenant_id, actor_user_id=str(current_user.id), action="module.delete_custom_field", target=f"{module_code}:{field_id}")
         return {"data": result, "meta": {"module": module_code, "field_id": field_id}}
     finally:
         if hasattr(client, "close") and asyncio.iscoroutinefunction(client.close):
             await client.close()
         elif hasattr(client, "close"):
             client.close()
-

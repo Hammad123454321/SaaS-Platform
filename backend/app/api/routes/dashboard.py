@@ -4,8 +4,8 @@ Dashboard API Routes - Provides data for Company Admin, Staff, and Super Admin d
 from datetime import datetime, timedelta, date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select, func, and_, or_
 from pydantic import BaseModel
+from beanie import PydanticObjectId
 
 from app.api.deps import get_current_user
 from app.models import (
@@ -39,7 +39,7 @@ class TaskTrendItem(BaseModel):
 
 
 class TeamMemberItem(BaseModel):
-    id: int
+    id: str
     name: str
     email: str
     role: str
@@ -48,7 +48,7 @@ class TeamMemberItem(BaseModel):
 
 
 class RecentTaskItem(BaseModel):
-    id: int
+    id: str
     title: str
     status: str
     status_color: str
@@ -58,7 +58,7 @@ class RecentTaskItem(BaseModel):
 
 
 class DeadlineItem(BaseModel):
-    id: int
+    id: str
     title: str
     due_date: str
     days_left: int
@@ -66,7 +66,7 @@ class DeadlineItem(BaseModel):
 
 
 class ActivityItem(BaseModel):
-    id: int
+    id: str
     type: str
     title: str
     description: str
@@ -75,7 +75,7 @@ class ActivityItem(BaseModel):
 
 
 class TenantItem(BaseModel):
-    id: int
+    id: str
     name: str
     slug: str
     created_at: str
@@ -169,38 +169,26 @@ async def get_company_dashboard_stats(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Get company-level dashboard statistics."""
-    tenant_id = current_user.tenant_id
-    tenant = session.get(Tenant, tenant_id)
+    tenant_id = str(current_user.tenant_id)
+    tenant = await Tenant.get(current_user.tenant_id)
     
-    # Count users
-    total_users = session.exec(
-        select(func.count(User.id)).where(
-            User.tenant_id == tenant_id,
-            User.is_active == True  # noqa: E712
-        )
-    ).one() or 0
+    total_users = await User.find(
+        User.tenant_id == tenant_id,
+        User.is_active == True
+    ).count()
     
-    # Count enabled modules
-    enabled_modules = session.exec(
-        select(func.count(ModuleEntitlement.id)).where(
-            ModuleEntitlement.tenant_id == tenant_id,
-            ModuleEntitlement.enabled == True  # noqa: E712
-        )
-    ).one() or 0
+    enabled_modules = await ModuleEntitlement.find(
+        ModuleEntitlement.tenant_id == tenant_id,
+        ModuleEntitlement.enabled == True
+    ).count()
     
-    # Count tasks created this week
     week_ago = datetime.utcnow() - timedelta(days=7)
-    tasks_this_week = session.exec(
-        select(func.count(Task.id)).where(
-            Task.tenant_id == tenant_id,
-            Task.created_at >= week_ago
-        )
-    ).one() or 0
+    tasks_this_week = await Task.find(
+        Task.tenant_id == tenant_id,
+        Task.created_at >= week_ago
+    ).count()
     
-    # Get subscription status
-    subscription = session.exec(
-        select(Subscription).where(Subscription.tenant_id == tenant_id)
-    ).first()
+    subscription = await Subscription.find_one(Subscription.tenant_id == tenant_id)
     subscription_status = subscription.status if subscription else "inactive"
     
     return {
@@ -217,38 +205,29 @@ async def get_company_module_usage(
     current_user: User = Depends(get_current_user),
 ) -> list[ModuleUsageItem]:
     """Get module usage statistics for the company."""
-    tenant_id = current_user.tenant_id
+    tenant_id = str(current_user.tenant_id)
     
-    # Get enabled modules
-    entitlements = session.exec(
-        select(ModuleEntitlement).where(
-            ModuleEntitlement.tenant_id == tenant_id,
-            ModuleEntitlement.enabled == True  # noqa: E712
-        )
-    ).all()
+    entitlements = await ModuleEntitlement.find(
+        ModuleEntitlement.tenant_id == tenant_id,
+        ModuleEntitlement.enabled == True
+    ).to_list()
     
     usage_data = []
     week_ago = datetime.utcnow() - timedelta(days=7)
     
     for ent in entitlements:
-        # Count activities related to this module
-        usage_count = session.exec(
-            select(func.count(ActivityLog.id)).where(
-                ActivityLog.tenant_id == tenant_id,
-                ActivityLog.entity_type.in_([ent.module_code, f"{ent.module_code}_task"]),
-                ActivityLog.created_at >= week_ago
-            )
-        ).one() or 0
+        usage_count = await ActivityLog.find(
+            ActivityLog.tenant_id == tenant_id,
+            ActivityLog.entity_type.in_([ent.module_code, f"{ent.module_code}_task"]),
+            ActivityLog.created_at >= week_ago
+        ).count()
         
-        # For tasks module, also count task-related activities
         if ent.module_code == "tasks":
-            task_count = session.exec(
-                select(func.count(ActivityLog.id)).where(
-                    ActivityLog.tenant_id == tenant_id,
-                    ActivityLog.entity_type == "task",
-                    ActivityLog.created_at >= week_ago
-                )
-            ).one() or 0
+            task_count = await ActivityLog.find(
+                ActivityLog.tenant_id == tenant_id,
+                ActivityLog.entity_type == "task",
+                ActivityLog.created_at >= week_ago
+            ).count()
             usage_count += task_count
         
         usage_data.append(ModuleUsageItem(
@@ -257,7 +236,6 @@ async def get_company_module_usage(
             color=get_module_color(ent.module_code)
         ))
     
-    # Sort by usage descending
     usage_data.sort(key=lambda x: x.usage, reverse=True)
     return usage_data
 
@@ -267,42 +245,34 @@ async def get_company_task_trends(
     current_user: User = Depends(get_current_user),
 ) -> list[TaskTrendItem]:
     """Get task creation and completion trends for the past 7 days."""
-    tenant_id = current_user.tenant_id
+    tenant_id = str(current_user.tenant_id)
     trends = []
     
-    # Get done status IDs
-    done_statuses = session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.DONE
-        )
-    ).all()
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
+    done_status_ids = [str(s.id) for s in done_statuses]
     
     for i in range(6, -1, -1):
         day = datetime.utcnow().date() - timedelta(days=i)
         day_start = datetime.combine(day, datetime.min.time())
         day_end = datetime.combine(day, datetime.max.time())
         
-        # Count created tasks
-        created = session.exec(
-            select(func.count(Task.id)).where(
-                Task.tenant_id == tenant_id,
-                Task.created_at >= day_start,
-                Task.created_at <= day_end
-            )
-        ).one() or 0
+        created = await Task.find(
+            Task.tenant_id == tenant_id,
+            Task.created_at >= day_start,
+            Task.created_at <= day_end
+        ).count()
         
-        # Count completed tasks (tasks moved to done status on this day)
-        completed = session.exec(
-            select(func.count(ActivityLog.id)).where(
-                ActivityLog.tenant_id == tenant_id,
-                ActivityLog.entity_type == "task",
-                ActivityLog.action == "status_changed",
-                ActivityLog.created_at >= day_start,
-                ActivityLog.created_at <= day_end,
-                ActivityLog.description.contains("Done")
-            )
-        ).one() or 0
+        completed = await ActivityLog.find(
+            ActivityLog.tenant_id == tenant_id,
+            ActivityLog.entity_type == "task",
+            ActivityLog.action == "status_changed",
+            ActivityLog.created_at >= day_start,
+            ActivityLog.created_at <= day_end,
+            {"description": {"$regex": "Done"}}
+        ).count()
         
         trends.append(TaskTrendItem(
             date=day.strftime("%a"),
@@ -319,60 +289,55 @@ async def get_company_team_overview(
     limit: int = 10,
 ) -> list[TeamMemberItem]:
     """Get team members with their task completion stats."""
-    tenant_id = current_user.tenant_id
+    tenant_id = str(current_user.tenant_id)
     
-    # Get team members
-    users = session.exec(
-        select(User).where(
-            User.tenant_id == tenant_id,
-            User.is_active == True  # noqa: E712
-        ).limit(limit)
-    ).all()
+    users = await User.find(
+        User.tenant_id == tenant_id,
+        User.is_active == True
+    ).limit(limit).to_list()
     
     team_data = []
     week_ago = datetime.utcnow() - timedelta(days=7)
     
-    # Get done status IDs for this tenant
-    done_status_ids = list(session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.DONE
-        )
-    ).all())
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
+    done_status_ids = [str(s.id) for s in done_statuses]
     
     for user in users:
-        # Count completed tasks this week
+        user_id = str(user.id)
         tasks_completed = 0
+        
         if done_status_ids:
-            tasks_completed = session.exec(
-                select(func.count(Task.id)).where(
+            my_task_ids = await TaskAssignment.find(
+                TaskAssignment.user_id == user_id
+            ).to_list()
+            my_task_id_list = [a.task_id for a in my_task_ids]
+            
+            if my_task_id_list:
+                tasks_completed = await Task.find(
                     Task.tenant_id == tenant_id,
-                    Task.status_id.in_(done_status_ids),
+                    {"status_id": {"$in": done_status_ids}},
                     Task.updated_at >= week_ago,
-                    Task.id.in_(
-                        select(TaskAssignment.task_id).where(TaskAssignment.user_id == user.id)
-                    )
-                )
-            ).one() or 0
+                    {"_id": {"$in": [PydanticObjectId(tid) if not isinstance(tid, PydanticObjectId) else tid for tid in my_task_id_list]}}
+                ).count()
         
-        # Get user role
-        user_role = session.exec(
-            select(Role).join(UserRole).where(UserRole.user_id == user.id).limit(1)
-        ).first()
-        role_name = user_role.name if user_role else "Staff"
+        user_role = await UserRole.find_one(UserRole.user_id == user_id)
+        role_name = "Staff"
+        if user_role:
+            role = await Role.get(user_role.role_id)
+            role_name = role.name if role else "Staff"
         
-        # Get last activity
-        last_activity = session.exec(
-            select(ActivityLog).where(
-                ActivityLog.tenant_id == tenant_id,
-                ActivityLog.user_id == user.id
-            ).order_by(ActivityLog.created_at.desc()).limit(1)
-        ).first()
+        last_activity = await ActivityLog.find(
+            ActivityLog.tenant_id == tenant_id,
+            ActivityLog.user_id == user_id
+        ).sort(-ActivityLog.created_at).limit(1).first_or_none()
         
         last_active = get_time_ago(last_activity.created_at) if last_activity else None
         
         team_data.append(TeamMemberItem(
-            id=user.id,
+            id=user_id,
             name=user.email.split("@")[0],
             email=user.email,
             role=role_name,
@@ -380,7 +345,6 @@ async def get_company_team_overview(
             last_active=last_active
         ))
     
-    # Sort by tasks completed
     team_data.sort(key=lambda x: x.tasks_completed, reverse=True)
     return team_data
 
@@ -391,27 +355,22 @@ async def get_company_recent_tasks(
     limit: int = 5,
 ) -> list[RecentTaskItem]:
     """Get recent tasks for the company."""
-    tenant_id = current_user.tenant_id
+    tenant_id = str(current_user.tenant_id)
     today = datetime.utcnow().date()
     
-    tasks = session.exec(
-        select(Task).where(Task.tenant_id == tenant_id)
-        .order_by(Task.updated_at.desc())
-        .limit(limit)
-    ).all()
+    tasks = await Task.find(
+        Task.tenant_id == tenant_id
+    ).sort(-Task.updated_at).limit(limit).to_list()
     
     result = []
     for task in tasks:
-        # Get status info
-        status = session.get(TaskStatus, task.status_id)
+        status = await TaskStatus.get(task.status_id) if task.status_id else None
         status_name = status.name if status else "Unknown"
         status_color = status.color if status else "#6b7280"
         
-        # Get project info
-        project = session.get(Project, task.project_id)
+        project = await Project.get(task.project_id) if task.project_id else None
         project_name = project.name if project else None
         
-        # Check if overdue
         is_overdue = False
         due_date_str = None
         if task.due_date:
@@ -424,7 +383,7 @@ async def get_company_recent_tasks(
                 due_date_str = task.due_date.strftime("%b %d")
         
         result.append(RecentTaskItem(
-            id=task.id,
+            id=str(task.id),
             title=task.title,
             status=status_name,
             status_color=status_color,
@@ -442,38 +401,31 @@ async def get_company_upcoming_deadlines(
     limit: int = 5,
 ) -> list[DeadlineItem]:
     """Get upcoming task deadlines for the company."""
-    tenant_id = current_user.tenant_id
+    tenant_id = str(current_user.tenant_id)
     today = datetime.utcnow().date()
     
-    # Get non-done status IDs
-    done_status_ids = list(session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.DONE
-        )
-    ).all())
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
+    done_status_ids = [str(s.id) for s in done_statuses]
     
-    # Get tasks with upcoming deadlines
-    query = select(Task).where(
-        Task.tenant_id == tenant_id,
-        Task.due_date != None,  # noqa: E711
-        Task.due_date >= today - timedelta(days=7),  # Include overdue up to a week
-    )
-    
+    query_filter = {
+        "tenant_id": tenant_id,
+        "due_date": {"$ne": None, "$gte": today - timedelta(days=7)},
+    }
     if done_status_ids:
-        query = query.where(~Task.status_id.in_(done_status_ids))
+        query_filter["status_id"] = {"$nin": done_status_ids}
     
-    tasks = session.exec(
-        query.order_by(Task.due_date.asc()).limit(limit)
-    ).all()
+    tasks = await Task.find(query_filter).sort(+Task.due_date).limit(limit).to_list()
     
     result = []
     for task in tasks:
-        project = session.get(Project, task.project_id)
+        project = await Project.get(task.project_id) if task.project_id else None
         days_left = (task.due_date - today).days
         
         result.append(DeadlineItem(
-            id=task.id,
+            id=str(task.id),
             title=task.title,
             due_date=task.due_date.strftime("%b %d, %Y"),
             days_left=days_left,
@@ -489,21 +441,17 @@ async def get_company_activity(
     limit: int = 10,
 ) -> list[ActivityItem]:
     """Get recent activity feed for the company."""
-    tenant_id = current_user.tenant_id
+    tenant_id = str(current_user.tenant_id)
     
-    activities = session.exec(
-        select(ActivityLog).where(ActivityLog.tenant_id == tenant_id)
-        .order_by(ActivityLog.created_at.desc())
-        .limit(limit)
-    ).all()
+    activities = await ActivityLog.find(
+        ActivityLog.tenant_id == tenant_id
+    ).sort(-ActivityLog.created_at).limit(limit).to_list()
     
     result = []
     for activity in activities:
-        # Get user name if available
-        user = session.get(User, activity.user_id) if activity.user_id else None
+        user = await User.get(activity.user_id) if activity.user_id else None
         user_name = user.full_name if user and user.full_name else (user.email.split("@")[0] if user else None)
         
-        # Determine activity type
         activity_type = "task"
         if activity.entity_type in ["project", "client"]:
             activity_type = activity.entity_type
@@ -513,7 +461,7 @@ async def get_company_activity(
             activity_type = "booking"
         
         result.append(ActivityItem(
-            id=activity.id,
+            id=str(activity.id),
             type=activity_type,
             title=f"{activity.entity_type.title()} {activity.action}",
             description=activity.description,
@@ -529,26 +477,25 @@ async def get_company_modules(
     current_user: User = Depends(get_current_user),
 ) -> list[ModuleItem]:
     """Get list of enabled modules for the company."""
-    tenant_id = current_user.tenant_id
+    tenant_id = str(current_user.tenant_id)
     week_ago = datetime.utcnow() - timedelta(days=7)
     
-    entitlements = session.exec(
-        select(ModuleEntitlement).where(
-            ModuleEntitlement.tenant_id == tenant_id,
-            ModuleEntitlement.enabled == True  # noqa: E712
-        )
-    ).all()
+    entitlements = await ModuleEntitlement.find(
+        ModuleEntitlement.tenant_id == tenant_id,
+        ModuleEntitlement.enabled == True
+    ).to_list()
     
     result = []
     for ent in entitlements:
-        # Count recent usage
-        usage_count = session.exec(
-            select(func.count(ActivityLog.id)).where(
-                ActivityLog.tenant_id == tenant_id,
-                ActivityLog.entity_type.in_([ent.module_code, "task"]) if ent.module_code == "tasks" else ActivityLog.entity_type == ent.module_code,
-                ActivityLog.created_at >= week_ago
-            )
-        ).one() or 0
+        entity_types = [ent.module_code]
+        if ent.module_code == "tasks":
+            entity_types.append("task")
+        
+        usage_count = await ActivityLog.find(
+            ActivityLog.tenant_id == tenant_id,
+            {"entity_type": {"$in": entity_types}},
+            ActivityLog.created_at >= week_ago
+        ).count()
         
         result.append(ModuleItem(
             code=ent.module_code,
@@ -568,14 +515,14 @@ async def get_staff_dashboard_stats(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Get personal task statistics for staff member."""
-    tenant_id = current_user.tenant_id
-    user_id = current_user.id
+    tenant_id = str(current_user.tenant_id)
+    user_id = str(current_user.id)
     today = datetime.utcnow().date()
     
-    # Get all tasks assigned to user
-    my_task_ids = session.exec(
-        select(TaskAssignment.task_id).where(TaskAssignment.user_id == user_id)
-    ).all()
+    my_assignments = await TaskAssignment.find(
+        TaskAssignment.user_id == user_id
+    ).to_list()
+    my_task_ids = [a.task_id for a in my_assignments]
     
     if not my_task_ids:
         return {
@@ -586,63 +533,49 @@ async def get_staff_dashboard_stats(
             "overdue": 0,
         }
     
-    # Get status categories
-    todo_ids = list(session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.TODO
-        )
-    ).all())
+    todo_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.TODO
+    ).to_list()
+    todo_ids = [str(s.id) for s in todo_statuses]
     
-    in_progress_ids = list(session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.IN_PROGRESS
-        )
-    ).all())
+    in_progress_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.IN_PROGRESS
+    ).to_list()
+    in_progress_ids = [str(s.id) for s in in_progress_statuses]
     
-    done_ids = list(session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.DONE
-        )
-    ).all())
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
+    done_ids = [str(s.id) for s in done_statuses]
     
-    # Count tasks by category
     total = len(my_task_ids)
     
-    pending = session.exec(
-        select(func.count(Task.id)).where(
-            Task.id.in_(my_task_ids),
-            Task.status_id.in_(todo_ids) if todo_ids else False
-        )
-    ).one() or 0
+    pending = await Task.find(
+        {"_id": {"$in": [PydanticObjectId(tid) if not isinstance(tid, PydanticObjectId) else tid for tid in my_task_ids]}},
+        {"status_id": {"$in": todo_ids}} if todo_ids else {"status_id": None}
+    ).count() if todo_ids else 0
     
-    in_progress = session.exec(
-        select(func.count(Task.id)).where(
-            Task.id.in_(my_task_ids),
-            Task.status_id.in_(in_progress_ids) if in_progress_ids else False
-        )
-    ).one() or 0
+    in_progress = await Task.find(
+        {"_id": {"$in": [PydanticObjectId(tid) if not isinstance(tid, PydanticObjectId) else tid for tid in my_task_ids]}},
+        {"status_id": {"$in": in_progress_ids}} if in_progress_ids else {"status_id": None}
+    ).count() if in_progress_ids else 0
     
-    completed = session.exec(
-        select(func.count(Task.id)).where(
-            Task.id.in_(my_task_ids),
-            Task.status_id.in_(done_ids) if done_ids else False
-        )
-    ).one() or 0
+    completed = await Task.find(
+        {"_id": {"$in": [PydanticObjectId(tid) if not isinstance(tid, PydanticObjectId) else tid for tid in my_task_ids]}},
+        {"status_id": {"$in": done_ids}} if done_ids else {"status_id": None}
+    ).count() if done_ids else 0
     
-    # Count overdue (not done, past due date)
     non_done_ids = todo_ids + in_progress_ids
     overdue = 0
     if non_done_ids:
-        overdue = session.exec(
-            select(func.count(Task.id)).where(
-                Task.id.in_(my_task_ids),
-                Task.status_id.in_(non_done_ids),
-                Task.due_date < today
-            )
-        ).one() or 0
+        overdue = await Task.find(
+            {"_id": {"$in": [PydanticObjectId(tid) if not isinstance(tid, PydanticObjectId) else tid for tid in my_task_ids]}},
+            {"status_id": {"$in": non_done_ids}},
+            Task.due_date < today
+        ).count()
     
     return {
         "total": total,
@@ -659,36 +592,32 @@ async def get_staff_my_tasks(
     limit: int = 10,
 ) -> list[RecentTaskItem]:
     """Get tasks assigned to current user."""
-    tenant_id = current_user.tenant_id
-    user_id = current_user.id
+    tenant_id = str(current_user.tenant_id)
+    user_id = str(current_user.id)
     today = datetime.utcnow().date()
     
-    # Get task IDs assigned to user
-    my_task_ids = list(session.exec(
-        select(TaskAssignment.task_id).where(TaskAssignment.user_id == user_id)
-    ).all())
+    my_assignments = await TaskAssignment.find(
+        TaskAssignment.user_id == user_id
+    ).to_list()
+    my_task_ids = [a.task_id for a in my_assignments]
     
     if not my_task_ids:
         return []
     
-    tasks = session.exec(
-        select(Task).where(Task.id.in_(my_task_ids))
-        .order_by(Task.due_date.asc().nulls_last(), Task.updated_at.desc())
-        .limit(limit)
-    ).all()
+    tasks = await Task.find(
+        {"_id": {"$in": [PydanticObjectId(tid) if not isinstance(tid, PydanticObjectId) else tid for tid in my_task_ids]}}
+    ).sort(+Task.due_date, -Task.updated_at).limit(limit).to_list()
     
-    # Get done status IDs
-    done_ids = list(session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.DONE
-        )
-    ).all())
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
+    done_ids = [str(s.id) for s in done_statuses]
     
     result = []
     for task in tasks:
-        status = session.get(TaskStatus, task.status_id)
-        project = session.get(Project, task.project_id)
+        status = await TaskStatus.get(task.status_id) if task.status_id else None
+        project = await Project.get(task.project_id) if task.project_id else None
         
         is_overdue = False
         due_date_str = None
@@ -702,7 +631,7 @@ async def get_staff_my_tasks(
                 due_date_str = task.due_date.strftime("%b %d")
         
         result.append(RecentTaskItem(
-            id=task.id,
+            id=str(task.id),
             title=task.title,
             status=status.name if status else "Unknown",
             status_color=status.color if status else "#6b7280",
@@ -719,13 +648,8 @@ async def get_staff_task_trends(
     current_user: User = Depends(get_current_user),
 ) -> list[TaskTrendItem]:
     """Get personal task completion trends."""
-    tenant_id = current_user.tenant_id
-    user_id = current_user.id
-    
-    # Get task IDs assigned to user
-    my_task_ids = list(session.exec(
-        select(TaskAssignment.task_id).where(TaskAssignment.user_id == user_id)
-    ).all())
+    tenant_id = str(current_user.tenant_id)
+    user_id = str(current_user.id)
     
     trends = []
     for i in range(6, -1, -1):
@@ -733,29 +657,21 @@ async def get_staff_task_trends(
         day_start = datetime.combine(day, datetime.min.time())
         day_end = datetime.combine(day, datetime.max.time())
         
-        # Count tasks assigned to user on this day
-        created = 0
-        if my_task_ids:
-            created = session.exec(
-                select(func.count(TaskAssignment.task_id)).where(
-                    TaskAssignment.user_id == user_id,
-                    TaskAssignment.assigned_at >= day_start,
-                    TaskAssignment.assigned_at <= day_end
-                )
-            ).one() or 0
+        created = await TaskAssignment.find(
+            TaskAssignment.user_id == user_id,
+            TaskAssignment.assigned_at >= day_start,
+            TaskAssignment.assigned_at <= day_end
+        ).count()
         
-        # Count completed tasks (status changed to done)
-        completed = session.exec(
-            select(func.count(ActivityLog.id)).where(
-                ActivityLog.tenant_id == tenant_id,
-                ActivityLog.user_id == user_id,
-                ActivityLog.entity_type == "task",
-                ActivityLog.action == "status_changed",
-                ActivityLog.created_at >= day_start,
-                ActivityLog.created_at <= day_end,
-                ActivityLog.description.contains("Done")
-            )
-        ).one() or 0
+        completed = await ActivityLog.find(
+            ActivityLog.tenant_id == tenant_id,
+            ActivityLog.user_id == user_id,
+            ActivityLog.entity_type == "task",
+            ActivityLog.action == "status_changed",
+            ActivityLog.created_at >= day_start,
+            ActivityLog.created_at <= day_end,
+            {"description": {"$regex": "Done"}}
+        ).count()
         
         trends.append(TaskTrendItem(
             date=day.strftime("%a"),
@@ -772,46 +688,40 @@ async def get_staff_upcoming_deadlines(
     limit: int = 5,
 ) -> list[DeadlineItem]:
     """Get upcoming deadlines for tasks assigned to user."""
-    tenant_id = current_user.tenant_id
-    user_id = current_user.id
+    tenant_id = str(current_user.tenant_id)
+    user_id = str(current_user.id)
     today = datetime.utcnow().date()
     
-    # Get task IDs assigned to user
-    my_task_ids = list(session.exec(
-        select(TaskAssignment.task_id).where(TaskAssignment.user_id == user_id)
-    ).all())
+    my_assignments = await TaskAssignment.find(
+        TaskAssignment.user_id == user_id
+    ).to_list()
+    my_task_ids = [a.task_id for a in my_assignments]
     
     if not my_task_ids:
         return []
     
-    # Get non-done status IDs
-    done_ids = list(session.exec(
-        select(TaskStatus.id).where(
-            TaskStatus.tenant_id == tenant_id,
-            TaskStatus.category == TaskStatusCategory.DONE
-        )
-    ).all())
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
+    done_ids = [str(s.id) for s in done_statuses]
     
-    query = select(Task).where(
-        Task.id.in_(my_task_ids),
-        Task.due_date != None,  # noqa: E711
-        Task.due_date >= today - timedelta(days=7),
-    )
-    
+    query_filter = {
+        "_id": {"$in": [PydanticObjectId(tid) if not isinstance(tid, PydanticObjectId) else tid for tid in my_task_ids]},
+        "due_date": {"$ne": None, "$gte": today - timedelta(days=7)},
+    }
     if done_ids:
-        query = query.where(~Task.status_id.in_(done_ids))
+        query_filter["status_id"] = {"$nin": done_ids}
     
-    tasks = session.exec(
-        query.order_by(Task.due_date.asc()).limit(limit)
-    ).all()
+    tasks = await Task.find(query_filter).sort(+Task.due_date).limit(limit).to_list()
     
     result = []
     for task in tasks:
-        project = session.get(Project, task.project_id)
+        project = await Project.get(task.project_id) if task.project_id else None
         days_left = (task.due_date - today).days
         
         result.append(DeadlineItem(
-            id=task.id,
+            id=str(task.id),
             title=task.title,
             due_date=task.due_date.strftime("%b %d, %Y"),
             days_left=days_left,
@@ -827,17 +737,13 @@ async def get_staff_activity(
     limit: int = 10,
 ) -> list[ActivityItem]:
     """Get personal activity feed."""
-    tenant_id = current_user.tenant_id
-    user_id = current_user.id
+    tenant_id = str(current_user.tenant_id)
+    user_id = str(current_user.id)
     
-    activities = session.exec(
-        select(ActivityLog).where(
-            ActivityLog.tenant_id == tenant_id,
-            ActivityLog.user_id == user_id
-        )
-        .order_by(ActivityLog.created_at.desc())
-        .limit(limit)
-    ).all()
+    activities = await ActivityLog.find(
+        ActivityLog.tenant_id == tenant_id,
+        ActivityLog.user_id == user_id
+    ).sort(-ActivityLog.created_at).limit(limit).to_list()
     
     result = []
     for activity in activities:
@@ -846,7 +752,7 @@ async def get_staff_activity(
             activity_type = "booking"
         
         result.append(ActivityItem(
-            id=activity.id,
+            id=str(activity.id),
             type=activity_type,
             title=f"{activity.entity_type.title()} {activity.action}",
             description=activity.description,
@@ -867,31 +773,21 @@ async def get_admin_dashboard_stats(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
     
-    # Count tenants
-    total_tenants = session.exec(select(func.count(Tenant.id))).one() or 0
+    total_tenants = await Tenant.find().count()
+    total_users = await User.find(User.is_active == True).count()
+    active_subscriptions = await Subscription.find(Subscription.status == "active").count()
     
-    # Count users
-    total_users = session.exec(
-        select(func.count(User.id)).where(User.is_active == True)  # noqa: E712
-    ).one() or 0
-    
-    # Count active subscriptions
-    active_subscriptions = session.exec(
-        select(func.count(Subscription.id)).where(Subscription.status == "active")
-    ).one() or 0
-    
-    # Calculate total revenue (MRR)
-    total_revenue = session.exec(
-        select(func.sum(BillingHistory.amount)).where(
-            BillingHistory.created_at >= datetime.utcnow() - timedelta(days=30)
-        )
-    ).one() or 0
+    month_ago = datetime.utcnow() - timedelta(days=30)
+    billing_records = await BillingHistory.find(
+        BillingHistory.created_at >= month_ago
+    ).to_list()
+    total_revenue = sum(float(b.amount) for b in billing_records if b.amount)
     
     return {
         "total_tenants": total_tenants,
         "total_users": total_users,
         "active_subscriptions": active_subscriptions,
-        "total_revenue": float(total_revenue) if total_revenue else 0,
+        "total_revenue": total_revenue,
     }
 
 
@@ -908,15 +804,8 @@ async def get_admin_growth_data(
         month_start = (datetime.utcnow().replace(day=1) - timedelta(days=i*30)).replace(day=1)
         month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         
-        # Count tenants created by this month
-        tenants_count = session.exec(
-            select(func.count(Tenant.id)).where(Tenant.created_at <= month_end)
-        ).one() or 0
-        
-        # Count users created by this month
-        users_count = session.exec(
-            select(func.count(User.id)).where(User.created_at <= month_end)
-        ).one() or 0
+        tenants_count = await Tenant.find(Tenant.created_at <= month_end).count()
+        users_count = await User.find(User.created_at <= month_end).count()
         
         result.append(GrowthDataItem(
             month=month_start.strftime("%b"),
@@ -940,17 +829,15 @@ async def get_admin_revenue_data(
         month_start = (datetime.utcnow().replace(day=1) - timedelta(days=i*30)).replace(day=1)
         month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         
-        # Sum revenue for this month
-        revenue = session.exec(
-            select(func.sum(BillingHistory.amount)).where(
-                BillingHistory.created_at >= month_start,
-                BillingHistory.created_at <= month_end
-            )
-        ).one() or 0
+        billing_records = await BillingHistory.find(
+            BillingHistory.created_at >= month_start,
+            BillingHistory.created_at <= month_end
+        ).to_list()
+        revenue = sum(float(b.amount) for b in billing_records if b.amount)
         
         result.append(RevenueDataItem(
             month=month_start.strftime("%b"),
-            revenue=float(revenue) if revenue else 0
+            revenue=revenue
         ))
     
     return result
@@ -964,17 +851,14 @@ async def get_admin_module_popularity(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
     
-    # Count enabled modules by type
     modules = ["tasks", "crm", "booking", "pos", "hrm", "landing", "ai"]
     result = []
     
     for module in modules:
-        count = session.exec(
-            select(func.count(ModuleEntitlement.id)).where(
-                ModuleEntitlement.module_code == module,
-                ModuleEntitlement.enabled == True  # noqa: E712
-            )
-        ).one() or 0
+        count = await ModuleEntitlement.find(
+            ModuleEntitlement.module_code == module,
+            ModuleEntitlement.enabled == True
+        ).count()
         
         if count > 0:
             result.append(ModulePopularityItem(
@@ -983,7 +867,6 @@ async def get_admin_module_popularity(
                 color=get_module_color(module)
             ))
     
-    # Sort by popularity
     result.sort(key=lambda x: x.value, reverse=True)
     return result
 
@@ -997,28 +880,21 @@ async def get_admin_recent_tenants(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
     
-    tenants = session.exec(
-        select(Tenant).order_by(Tenant.created_at.desc()).limit(limit)
-    ).all()
+    tenants = await Tenant.find().sort(-Tenant.created_at).limit(limit).to_list()
     
     result = []
     for tenant in tenants:
-        # Count users
-        user_count = session.exec(
-            select(func.count(User.id)).where(User.tenant_id == tenant.id)
-        ).one() or 0
+        tenant_id = str(tenant.id)
+        user_count = await User.find(User.tenant_id == tenant_id).count()
         
-        # Get subscription status
-        subscription = session.exec(
-            select(Subscription).where(Subscription.tenant_id == tenant.id)
-        ).first()
+        subscription = await Subscription.find_one(Subscription.tenant_id == tenant_id)
         status_str = subscription.status if subscription else "inactive"
         if subscription and subscription.status == "active" and subscription.trial_ends_at:
             if subscription.trial_ends_at > datetime.utcnow():
                 status_str = "trial"
         
         result.append(TenantItem(
-            id=tenant.id,
+            id=tenant_id,
             name=tenant.name,
             slug=tenant.slug,
             created_at=tenant.created_at.strftime("%b %d, %Y"),
@@ -1037,13 +913,12 @@ async def get_admin_system_health(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
     
-    # Check database
     db_status = "online"
     db_latency = 5
     try:
         import time
         start = time.time()
-        session.exec(select(func.count(User.id))).one()
+        await User.find().limit(1).to_list()
         db_latency = int((time.time() - start) * 1000)
     except Exception:
         db_status = "offline"
@@ -1066,21 +941,14 @@ async def get_admin_activity(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
     
-    # Get recent tenant creations
-    recent_tenants = session.exec(
-        select(Tenant).order_by(Tenant.created_at.desc()).limit(limit // 2)
-    ).all()
-    
-    # Get recent subscriptions
-    recent_subscriptions = session.exec(
-        select(Subscription).order_by(Subscription.created_at.desc()).limit(limit // 2)
-    ).all()
+    recent_tenants = await Tenant.find().sort(-Tenant.created_at).limit(limit // 2).to_list()
+    recent_subscriptions = await Subscription.find().sort(-Subscription.created_at).limit(limit // 2).to_list()
     
     result = []
     
     for tenant in recent_tenants:
         result.append(ActivityItem(
-            id=tenant.id,
+            id=str(tenant.id),
             type="user",
             title="New tenant registered",
             description=f"{tenant.name} joined the platform",
@@ -1089,10 +957,10 @@ async def get_admin_activity(
         ))
     
     for sub in recent_subscriptions:
-        tenant = session.get(Tenant, sub.tenant_id)
+        tenant = await Tenant.get(sub.tenant_id)
         tenant_name = tenant.name if tenant else "Unknown"
         result.append(ActivityItem(
-            id=sub.id,
+            id=str(sub.id),
             type="task",
             title="Subscription updated",
             description=f"{tenant_name} subscription: {sub.status}",
@@ -1100,7 +968,5 @@ async def get_admin_activity(
             user=None
         ))
     
-    # Sort by most recent
-    result.sort(key=lambda x: x.timestamp, reverse=False)  # "Just now" should be first
+    result.sort(key=lambda x: x.timestamp, reverse=False)
     return result[:limit]
-

@@ -1,9 +1,8 @@
-"""Service for email verification and token management."""
+"""Service for email verification and token management (Mongo/Beanie)."""
 import secrets
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
-from sqlmodel import Session, select
 
 from app.models.onboarding import EmailVerificationToken
 from app.models.user import User
@@ -19,95 +18,92 @@ def generate_verification_token() -> tuple[str, str]:
     return token, token_hash
 
 
-def create_verification_token(session: Session, user_id: int) -> tuple[str, str]:
-    """Create a new email verification token for a user."""
+async def create_verification_token(user_id: str) -> tuple[str, str]:
+    """Create a new email verification token for a user in MongoDB."""
     # Delete any existing token for this user
-    existing = session.exec(
-        select(EmailVerificationToken).where(EmailVerificationToken.user_id == user_id)
-    ).first()
+    existing = await EmailVerificationToken.find_one(
+        EmailVerificationToken.user_id == user_id
+    )
     if existing:
-        session.delete(existing)
-        session.flush()
-    
+        await existing.delete()
+
     token, token_hash = generate_verification_token()
     expires_at = datetime.utcnow() + timedelta(hours=24)
-    
+
     verification_token = EmailVerificationToken(
         user_id=user_id,
         token=token_hash,
-        expires_at=expires_at
+        expires_at=expires_at,
     )
-    session.add(verification_token)
-    session.commit()
-    session.refresh(verification_token)
-    
+    await verification_token.insert()
+
     return token, token_hash
 
 
-def verify_email_token(session: Session, token: str) -> Optional[User]:
-    """Verify an email token and activate the user account."""
+async def verify_email_token(token: str) -> Optional[User]:
+    """Verify an email token and activate the user account (Mongo/Beanie)."""
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    
-    verification = session.exec(
-        select(EmailVerificationToken).where(EmailVerificationToken.token == token_hash)
-    ).first()
-    
+
+    verification = await EmailVerificationToken.find_one(
+        EmailVerificationToken.token == token_hash
+    )
     if not verification:
         return None
-    
+
     if verification.verified_at is not None:
         return None  # Already verified
-    
+
     if verification.expires_at < datetime.utcnow():
         return None  # Expired
-    
+
     # Get user
-    user = session.get(User, verification.user_id)
+    user = await User.get(verification.user_id)
     if not user:
         return None
-    
+
     # Mark token as verified
     verification.verified_at = datetime.utcnow()
-    
+
     # Activate user and tenant
     user.email_verified = True
     user.is_active = True
-    
+
     # Activate tenant (no longer draft)
-    tenant = session.get(Tenant, user.tenant_id)
-    if tenant:
-        tenant.is_draft = False
-    
-    session.commit()
-    session.refresh(user)
-    
+    tenant = None
+    if user.tenant_id:
+        tenant = await Tenant.get(user.tenant_id)
+        if tenant:
+            tenant.is_draft = False
+            await tenant.save()
+
+    await user.save()
+    await verification.save()
+
     # Log verification event
-    log_registration_event(
-        session=session,
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        event_type="verification"
+    await log_registration_event(
+        user_id=str(user.id),
+        tenant_id=str(user.tenant_id) if user.tenant_id else "",
+        event_type="verification",
     )
-    
+
     return user
 
 
-def send_verification_email(session: Session, user: User, resend: bool = False) -> bool:
-    """Create verification token and send email to user."""
-    token, _ = create_verification_token(session, user.id)
-    
+async def send_verification_email(user: User, resend: bool = False) -> bool:
+    """Create verification token and send email to user (Mongo/Beanie)."""
+    token, _ = await create_verification_token(str(user.id))
+
     # Log resend event if applicable
     if resend:
-        log_registration_event(
-            session=session,
-            user_id=user.id,
-            tenant_id=user.tenant_id,
-            event_type="resend_verification"
+        await log_registration_event(
+            user_id=str(user.id),
+            tenant_id=str(user.tenant_id) if user.tenant_id else "",
+            event_type="resend_verification",
         )
-    
+
     return email_service.send_verification_email(
         to_email=user.email,
         verification_token=token,
-        user_name=user.email.split("@")[0]
+        user_name=user.email.split("@")[0],
     )
 

@@ -3,27 +3,34 @@ import asyncio
 from typing import Any, Dict, List, Optional
 from langchain_core.tools import tool
 
-from app.models import ModuleCode, User
-from app.services.vendor_stub import VendorStubClient
-from app.api.routes.modules import _require_entitlement
+from app.models import ModuleCode, ModuleEntitlement, User
 
 
-async def _get_module_client(module: ModuleCode, tenant_id: int, session: Any):
+async def _require_entitlement_async(tenant_id: str, module_code: ModuleCode) -> ModuleEntitlement:
+    """Check if tenant has module entitlement."""
+    ent = await ModuleEntitlement.find_one(
+        ModuleEntitlement.tenant_id == tenant_id,
+        ModuleEntitlement.module_code == module_code
+    )
+    if not ent or not ent.enabled:
+        raise ValueError(f"Module {module_code.value} not enabled for tenant")
+    return ent
+
+
+async def _get_module_client(module: ModuleCode, tenant_id: str):
     """
     Get module client for tenant. Uses real client if available, falls back to stub.
-    
-    Note: session is Any to avoid Pydantic schema issues with LangChain tools.
     """
     from app.services.vendor_clients.factory import create_vendor_client
     from app.services.vendor_stub import VendorStubClient
     
-    real_client = await create_vendor_client(module, tenant_id, session)
+    real_client = await create_vendor_client(module, tenant_id)
     if real_client:
         return real_client
     return VendorStubClient(vendor=module.value, credentials={"tenant_id": tenant_id})
 
 
-def _get_module_client_sync(module: ModuleCode, tenant_id: int, session: Any):
+def _get_module_client_sync(module: ModuleCode, tenant_id: str):
     """
     Synchronous version for non-async tools (fallback to stub only).
     """
@@ -33,75 +40,71 @@ def _get_module_client_sync(module: ModuleCode, tenant_id: int, session: Any):
 
 # CRM Tools
 @tool
-async def get_crm_leads(tenant_id: int, session: Any) -> List[Dict[str, Any]]:
+async def get_crm_leads(tenant_id: str) -> List[Dict[str, Any]]:
     """Get all CRM leads for the tenant.
     
     Args:
         tenant_id: The tenant ID
-        session: Database session
         
     Returns:
         List of leads
     """
-    _require_entitlement(session, tenant_id, ModuleCode.CRM)
-    client = await _get_module_client(ModuleCode.CRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.CRM)
+    client = await _get_module_client(ModuleCode.CRM, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("leads")
     return client.list_records("leads")
 
 
 @tool
-async def get_crm_clients(tenant_id: int, session: Any) -> List[Dict[str, Any]]:
+async def get_crm_clients(tenant_id: str) -> List[Dict[str, Any]]:
     """Get all CRM clients for the tenant.
     
     Args:
         tenant_id: The tenant ID
-        session: Database session
         
     Returns:
         List of clients
     """
-    _require_entitlement(session, tenant_id, ModuleCode.CRM)
-    client = await _get_module_client(ModuleCode.CRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.CRM)
+    client = await _get_module_client(ModuleCode.CRM, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("clients")
     return client.list_records("clients")
 
 
 @tool
-async def create_crm_deal(tenant_id: int, deal_data: Dict[str, Any], session: Any) -> Dict[str, Any]:
+async def create_crm_deal(tenant_id: str, deal_data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new deal in CRM.
     
     Args:
         tenant_id: The tenant ID
         deal_data: Deal information (title, value, client_id, etc.)
-        session: Database session
         
     Returns:
         Created deal information
     """
-    _require_entitlement(session, tenant_id, ModuleCode.CRM)
-    client = await _get_module_client(ModuleCode.CRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.CRM)
+    client = await _get_module_client(ModuleCode.CRM, tenant_id)
     if asyncio.iscoroutinefunction(client.create_record):
         return await client.create_record("deals", deal_data)
     return client.create_record("deals", deal_data)
 
 
 @tool
-async def add_crm_note(tenant_id: int, record_id: str, note: str, session: Any) -> Dict[str, Any]:
+async def add_crm_note(tenant_id: str, record_id: str, note: str) -> Dict[str, Any]:
     """Add a note to a CRM record (lead, client, or deal).
     
     Args:
         tenant_id: The tenant ID
         record_id: The CRM record ID
         note: The note content
-        session: Database session
         
     Returns:
         Note creation result
     """
-    _require_entitlement(session, tenant_id, ModuleCode.CRM)
-    client = await _get_module_client(ModuleCode.CRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.CRM)
+    client = await _get_module_client(ModuleCode.CRM, tenant_id)
     if hasattr(client, "add_note"):
         if asyncio.iscoroutinefunction(client.add_note):
             return await client.add_note(record_id, note)
@@ -110,7 +113,7 @@ async def add_crm_note(tenant_id: int, record_id: str, note: str, session: Any) 
 
 
 @tool
-async def draft_crm_email(tenant_id: int, to: str, subject: str, body: str, session: Any) -> Dict[str, Any]:
+async def draft_crm_email(tenant_id: str, to: str, subject: str, body: str) -> Dict[str, Any]:
     """Draft an email in CRM.
     
     Args:
@@ -118,13 +121,12 @@ async def draft_crm_email(tenant_id: int, to: str, subject: str, body: str, sess
         to: Recipient email address
         subject: Email subject
         body: Email body content
-        session: Database session
         
     Returns:
         Drafted email information
     """
-    _require_entitlement(session, tenant_id, ModuleCode.CRM)
-    client = await _get_module_client(ModuleCode.CRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.CRM)
+    client = await _get_module_client(ModuleCode.CRM, tenant_id)
     if hasattr(client, "draft_email"):
         if asyncio.iscoroutinefunction(client.draft_email):
             return await client.draft_email(to, subject, body)
@@ -134,55 +136,52 @@ async def draft_crm_email(tenant_id: int, to: str, subject: str, body: str, sess
 
 # HRM Tools
 @tool
-async def get_hrm_employees(tenant_id: int, session: Any) -> List[Dict[str, Any]]:
+async def get_hrm_employees(tenant_id: str) -> List[Dict[str, Any]]:
     """Get all employees for the tenant.
     
     Args:
         tenant_id: The tenant ID
-        session: Database session
         
     Returns:
         List of employees
     """
-    _require_entitlement(session, tenant_id, ModuleCode.HRM)
-    client = await _get_module_client(ModuleCode.HRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.HRM)
+    client = await _get_module_client(ModuleCode.HRM, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("employees")
     return client.list_records("employees")
 
 
 @tool
-async def get_hrm_attendance(tenant_id: int, date: Optional[str] = None, session: Any = None) -> List[Dict[str, Any]]:
+async def get_hrm_attendance(tenant_id: str, date: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get attendance records for the tenant.
     
     Args:
         tenant_id: The tenant ID
         date: Optional date filter (YYYY-MM-DD format)
-        session: Database session
         
     Returns:
         List of attendance records
     """
-    _require_entitlement(session, tenant_id, ModuleCode.HRM)
-    client = await _get_module_client(ModuleCode.HRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.HRM)
+    client = await _get_module_client(ModuleCode.HRM, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("attendance", date=date) if date else await client.list_records("attendance")
     return client.list_records("attendance")
 
 
 @tool
-async def get_hrm_leave_requests(tenant_id: int, session: Any) -> List[Dict[str, Any]]:
+async def get_hrm_leave_requests(tenant_id: str) -> List[Dict[str, Any]]:
     """Get leave requests for the tenant.
     
     Args:
         tenant_id: The tenant ID
-        session: Database session
         
     Returns:
         List of leave requests
     """
-    _require_entitlement(session, tenant_id, ModuleCode.HRM)
-    client = await _get_module_client(ModuleCode.HRM, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.HRM)
+    client = await _get_module_client(ModuleCode.HRM, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("leave_requests")
     return client.list_records("leave_requests")
@@ -190,56 +189,53 @@ async def get_hrm_leave_requests(tenant_id: int, session: Any) -> List[Dict[str,
 
 # POS Tools
 @tool
-async def get_pos_sales(tenant_id: int, start_date: Optional[str] = None, end_date: Optional[str] = None, session: Any = None) -> List[Dict[str, Any]]:
+async def get_pos_sales(tenant_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get sales records from POS.
     
     Args:
         tenant_id: The tenant ID
         start_date: Optional start date filter (YYYY-MM-DD)
         end_date: Optional end date filter (YYYY-MM-DD)
-        session: Database session
         
     Returns:
         List of sales records
     """
-    _require_entitlement(session, tenant_id, ModuleCode.POS)
-    client = await _get_module_client(ModuleCode.POS, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.POS)
+    client = await _get_module_client(ModuleCode.POS, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("sales")
     return client.list_records("sales")
 
 
 @tool
-async def get_pos_inventory(tenant_id: int, session: Any) -> List[Dict[str, Any]]:
+async def get_pos_inventory(tenant_id: str) -> List[Dict[str, Any]]:
     """Get inventory items from POS.
     
     Args:
         tenant_id: The tenant ID
-        session: Database session
         
     Returns:
         List of inventory items
     """
-    _require_entitlement(session, tenant_id, ModuleCode.POS)
-    client = await _get_module_client(ModuleCode.POS, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.POS)
+    client = await _get_module_client(ModuleCode.POS, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("inventory")
     return client.list_records("inventory")
 
 
 @tool
-async def get_pos_products(tenant_id: int, session: Any) -> List[Dict[str, Any]]:
+async def get_pos_products(tenant_id: str) -> List[Dict[str, Any]]:
     """Get products from POS.
     
     Args:
         tenant_id: The tenant ID
-        session: Database session
         
     Returns:
         List of products
     """
-    _require_entitlement(session, tenant_id, ModuleCode.POS)
-    client = await _get_module_client(ModuleCode.POS, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.POS)
+    client = await _get_module_client(ModuleCode.POS, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("products")
     return client.list_records("products")
@@ -247,28 +243,24 @@ async def get_pos_products(tenant_id: int, session: Any) -> List[Dict[str, Any]]
 
 # Task Management Tools
 @tool
-async def create_task(tenant_id: int, task_data: Dict[str, Any], session: Any) -> Dict[str, Any]:
+async def create_task(tenant_id: str, task_data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new task.
     
     Args:
         tenant_id: The tenant ID
         task_data: Task information (title, description, project_id, status_id, assignee_ids, due_date, etc.)
-        session: Database session
         
     Returns:
         Created task information
     """
-    _require_entitlement(session, tenant_id, ModuleCode.TASKS)
+    await _require_entitlement_async(tenant_id, ModuleCode.TASKS)
     from app.services.tasks import create_task as create_task_service
     from app.models import User
     
-    # Get a user for the tenant (use first user as creator)
-    from sqlmodel import select
-    user = session.exec(select(User).where(User.tenant_id == tenant_id).limit(1)).first()
+    user = await User.find_one(User.tenant_id == tenant_id)
     if not user:
         raise ValueError("No user found for tenant")
     
-    # Normalize task data
     normalized_data = {
         "title": task_data.get("title", ""),
         "description": task_data.get("description"),
@@ -279,9 +271,9 @@ async def create_task(tenant_id: int, task_data: Dict[str, Any], session: Any) -
         "assignee_ids": task_data.get("assignee_ids", []) or task_data.get("assignee_id", []),
     }
     
-    task = create_task_service(session, tenant_id, user.id, normalized_data)
+    task = await create_task_service(tenant_id, str(user.id), normalized_data)
     return {
-        "id": task.id,
+        "id": str(task.id),
         "title": task.title,
         "description": task.description,
         "project_id": task.project_id,
@@ -290,74 +282,65 @@ async def create_task(tenant_id: int, task_data: Dict[str, Any], session: Any) -
 
 
 @tool
-async def list_tasks(tenant_id: int, status: Optional[str] = None, session: Any = None) -> List[Dict[str, Any]]:
+async def list_tasks(tenant_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
     """List tasks for the tenant.
     
     Args:
         tenant_id: The tenant ID
         status: Optional status filter (status name or status_id)
-        session: Database session
         
     Returns:
         List of tasks
     """
-    _require_entitlement(session, tenant_id, ModuleCode.TASKS)
+    await _require_entitlement_async(tenant_id, ModuleCode.TASKS)
     from app.services.tasks import list_tasks as list_tasks_service
-    from sqlmodel import select
-    from app.models import TaskStatus
+    from app.models.tasks import TaskStatus, Task, Project
     
-    # Convert status name to status_id if needed
     status_id = None
     if status:
-        if status.isdigit():
-            status_id = int(status)
+        if len(status) == 24:
+            status_id = status
         else:
-            # Try to find status by name
-            status_obj = session.exec(
-                select(TaskStatus).where(
-                    TaskStatus.tenant_id == tenant_id,
-                    TaskStatus.name.ilike(f"%{status}%")
-                ).limit(1)
-            ).first()
+            status_obj = await TaskStatus.find_one(
+                TaskStatus.tenant_id == tenant_id,
+                {"name": {"$regex": status, "$options": "i"}}
+            )
             if status_obj:
-                status_id = status_obj.id
+                status_id = str(status_obj.id)
     
-    tasks = list_tasks_service(session, tenant_id, status_id=status_id)
-    return [
-        {
-            "id": t.id,
+    tasks = await list_tasks_service(tenant_id, status_id=status_id)
+    
+    result = []
+    for t in tasks:
+        task_status = await TaskStatus.get(t.status_id) if t.status_id else None
+        task_project = await Project.get(t.project_id) if t.project_id else None
+        result.append({
+            "id": str(t.id),
             "title": t.title,
             "description": t.description,
-            "status": t.status.name if t.status else None,
-            "project": t.project.name if t.project else None,
+            "status": task_status.name if task_status else None,
+            "project": task_project.name if task_project else None,
             "due_date": str(t.due_date) if t.due_date else None,
-        }
-        for t in tasks
-    ]
+        })
+    
+    return result
 
 
 @tool
-async def update_task(tenant_id: int, task_id: str, updates: Dict[str, Any], session: Any) -> Dict[str, Any]:
+async def update_task(tenant_id: str, task_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     """Update a task.
     
     Args:
         tenant_id: The tenant ID
         task_id: The task ID
         updates: Fields to update (status, assignee_id, due_date, etc.)
-        session: Database session
         
     Returns:
         Updated task information
     """
-    _require_entitlement(session, tenant_id, ModuleCode.TASKS)
+    await _require_entitlement_async(tenant_id, ModuleCode.TASKS)
     from app.services.tasks import update_task as update_task_service
     
-    try:
-        task_id_int = int(task_id)
-    except ValueError:
-        raise ValueError(f"Invalid task ID: {task_id}")
-    
-    # Normalize updates
     normalized_updates = {
         "title": updates.get("title"),
         "description": updates.get("description"),
@@ -368,9 +351,9 @@ async def update_task(tenant_id: int, task_id: str, updates: Dict[str, Any], ses
     }
     normalized_updates = {k: v for k, v in normalized_updates.items() if v is not None}
     
-    task = update_task_service(session, tenant_id, task_id_int, normalized_updates)
+    task = await update_task_service(tenant_id, task_id, normalized_updates)
     return {
-        "id": task.id,
+        "id": str(task.id),
         "title": task.title,
         "status_id": task.status_id,
     }
@@ -378,184 +361,146 @@ async def update_task(tenant_id: int, task_id: str, updates: Dict[str, Any], ses
 
 # Booking Tools
 @tool
-async def get_appointments(tenant_id: int, start_date: Optional[str] = None, end_date: Optional[str] = None, session: Any = None) -> List[Dict[str, Any]]:
+async def get_appointments(tenant_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get appointments/bookings for the tenant.
     
     Args:
         tenant_id: The tenant ID
         start_date: Optional start date filter (YYYY-MM-DD)
         end_date: Optional end date filter (YYYY-MM-DD)
-        session: Database session
         
     Returns:
         List of appointments
     """
-    _require_entitlement(session, tenant_id, ModuleCode.BOOKING)
-    client = await _get_module_client(ModuleCode.BOOKING, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.BOOKING)
+    client = await _get_module_client(ModuleCode.BOOKING, tenant_id)
     if asyncio.iscoroutinefunction(client.list_records):
         return await client.list_records("appointments")
     return client.list_records("appointments")
 
 
 @tool
-async def create_booking(tenant_id: int, booking_data: Dict[str, Any], session: Any) -> Dict[str, Any]:
+async def create_booking(tenant_id: str, booking_data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new booking/appointment.
     
     Args:
         tenant_id: The tenant ID
         booking_data: Booking information (customer_name, service_id, date, time, etc.)
-        session: Database session
         
     Returns:
         Created booking information
     """
-    _require_entitlement(session, tenant_id, ModuleCode.BOOKING)
-    client = await _get_module_client(ModuleCode.BOOKING, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.BOOKING)
+    client = await _get_module_client(ModuleCode.BOOKING, tenant_id)
     if asyncio.iscoroutinefunction(client.create_record):
         return await client.create_record("appointments", booking_data)
     return client.create_record("appointments", booking_data)
 
 
 @tool
-async def check_availability(tenant_id: int, service_id: str, date: str, session: Any) -> Dict[str, Any]:
+async def check_availability(tenant_id: str, service_id: str, date: str) -> Dict[str, Any]:
     """Check availability for a service on a specific date.
     
     Args:
         tenant_id: The tenant ID
         service_id: The service ID
         date: Date to check (YYYY-MM-DD)
-        session: Database session
         
     Returns:
         Availability information with available time slots
     """
-    _require_entitlement(session, tenant_id, ModuleCode.BOOKING)
-    client = await _get_module_client(ModuleCode.BOOKING, tenant_id, session)
-    # Stub implementation - real would query availability
+    await _require_entitlement_async(tenant_id, ModuleCode.BOOKING)
     return {"service_id": service_id, "date": date, "available_slots": ["09:00", "10:00", "11:00", "14:00", "15:00"]}
 
 
 # Landing Page Builder Tools
 @tool
-async def create_landing_page(tenant_id: int, page_data: Dict[str, Any], session: Any) -> Dict[str, Any]:
+async def create_landing_page(tenant_id: str, page_data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new landing page.
     
     Args:
         tenant_id: The tenant ID
         page_data: Page information (title, slug, content, etc.)
-        session: Database session
         
     Returns:
         Created page information
     """
-    _require_entitlement(session, tenant_id, ModuleCode.LANDING)
-    client = await _get_module_client(ModuleCode.LANDING, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.LANDING)
+    client = await _get_module_client(ModuleCode.LANDING, tenant_id)
     if asyncio.iscoroutinefunction(client.create_record):
         return await client.create_record("pages", page_data)
     return client.create_record("pages", page_data)
 
 
 @tool
-async def update_page_content(tenant_id: int, page_id: str, content: str, session: Any) -> Dict[str, Any]:
+async def update_page_content(tenant_id: str, page_id: str, content: str) -> Dict[str, Any]:
     """Update landing page content.
     
     Args:
         tenant_id: The tenant ID
         page_id: The page ID
         content: New content (HTML or structured content)
-        session: Database session
         
     Returns:
         Updated page information
     """
-    _require_entitlement(session, tenant_id, ModuleCode.LANDING)
-    client = await _get_module_client(ModuleCode.LANDING, tenant_id, session)
+    await _require_entitlement_async(tenant_id, ModuleCode.LANDING)
     return {"page_id": page_id, "content": content, "status": "updated"}
 
 
-def get_all_tools(tenant_id: int, user: User, session: Any) -> List:
+def get_all_tools(tenant_id: str, user: User) -> List:
     """Get all available tools for a tenant based on their entitlements.
     
     Args:
         tenant_id: The tenant ID
         user: The current user
-        session: Database session
         
     Returns:
         List of LangChain tools
     """
     tools = []
     
-    # Bind session and tenant_id to tools
-    # Note: LangChain tools need to be bound with context
-    # We'll create a tool factory that injects these dependencies
-    
     # CRM tools
-    try:
-        _require_entitlement(session, tenant_id, ModuleCode.CRM)
-        tools.extend([
-            get_crm_leads,
-            get_crm_clients,
-            create_crm_deal,
-            add_crm_note,
-            draft_crm_email,
-        ])
-    except:
-        pass
+    tools.extend([
+        get_crm_leads,
+        get_crm_clients,
+        create_crm_deal,
+        add_crm_note,
+        draft_crm_email,
+    ])
     
     # HRM tools
-    try:
-        _require_entitlement(session, tenant_id, ModuleCode.HRM)
-        tools.extend([
-            get_hrm_employees,
-            get_hrm_attendance,
-            get_hrm_leave_requests,
-        ])
-    except:
-        pass
+    tools.extend([
+        get_hrm_employees,
+        get_hrm_attendance,
+        get_hrm_leave_requests,
+    ])
     
     # POS tools
-    try:
-        _require_entitlement(session, tenant_id, ModuleCode.POS)
-        tools.extend([
-            get_pos_sales,
-            get_pos_inventory,
-            get_pos_products,
-        ])
-    except:
-        pass
+    tools.extend([
+        get_pos_sales,
+        get_pos_inventory,
+        get_pos_products,
+    ])
     
     # Task tools
-    try:
-        _require_entitlement(session, tenant_id, ModuleCode.TASKS)
-        tools.extend([
-            create_task,
-            list_tasks,
-            update_task,
-        ])
-    except:
-        pass
+    tools.extend([
+        create_task,
+        list_tasks,
+        update_task,
+    ])
     
     # Booking tools
-    try:
-        _require_entitlement(session, tenant_id, ModuleCode.BOOKING)
-        tools.extend([
-            get_appointments,
-            create_booking,
-            check_availability,
-        ])
-    except:
-        pass
+    tools.extend([
+        get_appointments,
+        create_booking,
+        check_availability,
+    ])
     
     # Landing page tools
-    try:
-        _require_entitlement(session, tenant_id, ModuleCode.LANDING)
-        tools.extend([
-            create_landing_page,
-            update_page_content,
-        ])
-    except:
-        pass
+    tools.extend([
+        create_landing_page,
+        update_page_content,
+    ])
     
     return tools
-

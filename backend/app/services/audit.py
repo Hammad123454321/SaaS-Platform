@@ -1,14 +1,11 @@
 from typing import Optional
 
-from sqlmodel import Session
-
 from app.models import AuditLog
 
 
-def log_audit(
-    session: Session,
-    tenant_id: int,
-    actor_user_id: int,
+async def log_audit(
+    tenant_id: str,
+    actor_user_id: str,
     action: str,
     target: str = "",
     details: Optional[dict] = None,
@@ -20,7 +17,4 @@ def log_audit(
         target=target,
         details=details or {},
     )
-    session.add(entry)
-    session.commit()
-
-
+    await entry.insert()

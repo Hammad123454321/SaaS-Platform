@@ -8,7 +8,7 @@ from datetime import datetime, date, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 
-from sqlmodel import Session, select, and_, or_, func
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
 from app.models import Task, User, TimeEntry, TimeTracker, Project
@@ -17,17 +17,19 @@ logger = logging.getLogger(__name__)
 
 
 # ========== Time Entry Operations ==========
-def create_time_entry(
-    session: Session,
-    tenant_id: int,
-    task_id: int,
-    user_id: int,
+async def create_time_entry(
+    tenant_id: str,
+    task_id: str,
+    user_id: str,
     time_data: Dict[str, Any]
 ) -> TimeEntry:
     """Create a time entry for a task."""
     # Verify task exists
-    task = session.get(Task, task_id)
-    if not task or task.tenant_id != tenant_id:
+    task = await Task.find_one(
+        Task.id == PydanticObjectId(task_id),
+        Task.tenant_id == tenant_id
+    )
+    if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
@@ -42,52 +44,58 @@ def create_time_entry(
         description=time_data.get("description"),
         is_billable=time_data.get("is_billable", True)
     )
-    session.add(time_entry)
-    session.commit()
-    session.refresh(time_entry)
+    await time_entry.insert()
     return time_entry
 
 
-def list_time_entries(
-    session: Session,
-    tenant_id: int,
-    task_id: Optional[int] = None,
-    user_id: Optional[int] = None,
-    project_id: Optional[int] = None,
+async def list_time_entries(
+    tenant_id: str,
+    task_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ) -> List[TimeEntry]:
     """List time entries with filters."""
-    query = select(TimeEntry).where(TimeEntry.tenant_id == tenant_id)
+    conditions = [TimeEntry.tenant_id == tenant_id]
     
     if task_id:
-        query = query.where(TimeEntry.task_id == task_id)
+        conditions.append(TimeEntry.task_id == task_id)
     
     if user_id:
-        query = query.where(TimeEntry.user_id == user_id)
-    
-    if project_id:
-        # Join with tasks to filter by project
-        query = query.join(Task).where(Task.project_id == project_id)
+        conditions.append(TimeEntry.user_id == user_id)
     
     if start_date:
-        query = query.where(TimeEntry.entry_date >= start_date)
+        conditions.append(TimeEntry.entry_date >= start_date)
     
     if end_date:
-        query = query.where(TimeEntry.entry_date <= end_date)
+        conditions.append(TimeEntry.entry_date <= end_date)
     
-    return list(session.exec(query.order_by(TimeEntry.entry_date.desc(), TimeEntry.created_at.desc())).all())
+    entries = await TimeEntry.find(*conditions).sort(-TimeEntry.entry_date, -TimeEntry.created_at).to_list()
+    
+    # Filter by project if needed (join through task)
+    if project_id:
+        filtered_entries = []
+        for entry in entries:
+            task = await Task.get(entry.task_id)
+            if task and task.project_id == project_id:
+                filtered_entries.append(entry)
+        return filtered_entries
+    
+    return entries
 
 
-def update_time_entry(
-    session: Session,
-    tenant_id: int,
-    time_entry_id: int,
+async def update_time_entry(
+    tenant_id: str,
+    time_entry_id: str,
     updates: Dict[str, Any]
 ) -> TimeEntry:
     """Update a time entry."""
-    time_entry = session.get(TimeEntry, time_entry_id)
-    if not time_entry or time_entry.tenant_id != tenant_id:
+    time_entry = await TimeEntry.find_one(
+        TimeEntry.id == PydanticObjectId(time_entry_id),
+        TimeEntry.tenant_id == tenant_id
+    )
+    if not time_entry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Time entry not found"
@@ -101,44 +109,39 @@ def update_time_entry(
                 setattr(time_entry, key, value)
     
     time_entry.updated_at = datetime.utcnow()
-    session.add(time_entry)
-    session.commit()
-    session.refresh(time_entry)
+    await time_entry.save()
     return time_entry
 
 
-def delete_time_entry(session: Session, tenant_id: int, time_entry_id: int) -> None:
+async def delete_time_entry(tenant_id: str, time_entry_id: str) -> None:
     """Delete a time entry."""
-    time_entry = session.get(TimeEntry, time_entry_id)
-    if not time_entry or time_entry.tenant_id != tenant_id:
+    time_entry = await TimeEntry.find_one(
+        TimeEntry.id == PydanticObjectId(time_entry_id),
+        TimeEntry.tenant_id == tenant_id
+    )
+    if not time_entry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Time entry not found"
         )
     
-    session.delete(time_entry)
-    session.commit()
+    await time_entry.delete()
 
 
 # ========== Time Tracker (Start/Stop) Operations ==========
-def start_time_tracker(
-    session: Session,
-    tenant_id: int,
-    user_id: int,
-    task_id: Optional[int] = None,
+async def start_time_tracker(
+    tenant_id: str,
+    user_id: str,
+    task_id: Optional[str] = None,
     message: Optional[str] = None
 ) -> TimeTracker:
     """Start a time tracker session."""
     # Check if user has an active tracker
-    active_tracker = session.exec(
-        select(TimeTracker).where(
-            and_(
-                TimeTracker.tenant_id == tenant_id,
-                TimeTracker.user_id == user_id,
-                TimeTracker.is_running == True
-            )
-        )
-    ).first()
+    active_tracker = await TimeTracker.find_one(
+        TimeTracker.tenant_id == tenant_id,
+        TimeTracker.user_id == user_id,
+        TimeTracker.is_running == True
+    )
     
     if active_tracker:
         raise HTTPException(
@@ -148,8 +151,11 @@ def start_time_tracker(
     
     # Verify task if provided
     if task_id:
-        task = session.get(Task, task_id)
-        if not task or task.tenant_id != tenant_id:
+        task = await Task.find_one(
+            Task.id == PydanticObjectId(task_id),
+            Task.tenant_id == tenant_id
+        )
+        if not task:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Task not found"
@@ -163,21 +169,21 @@ def start_time_tracker(
         message=message,
         is_running=True
     )
-    session.add(tracker)
-    session.commit()
-    session.refresh(tracker)
+    await tracker.insert()
     return tracker
 
 
-def stop_time_tracker(
-    session: Session,
-    tenant_id: int,
-    tracker_id: int,
-    user_id: Optional[int] = None
+async def stop_time_tracker(
+    tenant_id: str,
+    tracker_id: str,
+    user_id: Optional[str] = None
 ) -> TimeTracker:
     """Stop a time tracker and create time entry."""
-    tracker = session.get(TimeTracker, tracker_id)
-    if not tracker or tracker.tenant_id != tenant_id:
+    tracker = await TimeTracker.find_one(
+        TimeTracker.id == PydanticObjectId(tracker_id),
+        TimeTracker.tenant_id == tenant_id
+    )
+    if not tracker:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Time tracker not found"
@@ -206,8 +212,7 @@ def stop_time_tracker(
     
     # Create time entry if task is associated
     if tracker.task_id:
-        create_time_entry(
-            session,
+        await create_time_entry(
             tenant_id,
             tracker.task_id,
             tracker.user_id,
@@ -219,112 +224,101 @@ def stop_time_tracker(
             }
         )
     
-    session.add(tracker)
-    session.commit()
-    session.refresh(tracker)
+    await tracker.save()
     return tracker
 
 
-def get_active_tracker(session: Session, tenant_id: int, user_id: int) -> Optional[TimeTracker]:
+async def get_active_tracker(tenant_id: str, user_id: str) -> Optional[TimeTracker]:
     """Get active time tracker for a user."""
-    return session.exec(
-        select(TimeTracker).where(
-            and_(
-                TimeTracker.tenant_id == tenant_id,
-                TimeTracker.user_id == user_id,
-                TimeTracker.is_running == True
-            )
-        )
-    ).first()
+    return await TimeTracker.find_one(
+        TimeTracker.tenant_id == tenant_id,
+        TimeTracker.user_id == user_id,
+        TimeTracker.is_running == True
+    )
 
 
-def list_time_trackers(
-    session: Session,
-    tenant_id: int,
-    user_id: Optional[int] = None,
-    task_id: Optional[int] = None,
+async def list_time_trackers(
+    tenant_id: str,
+    user_id: Optional[str] = None,
+    task_id: Optional[str] = None,
     is_running: Optional[bool] = None
 ) -> List[TimeTracker]:
     """List time trackers with filters."""
-    query = select(TimeTracker).where(TimeTracker.tenant_id == tenant_id)
+    conditions = [TimeTracker.tenant_id == tenant_id]
     
     if user_id:
-        query = query.where(TimeTracker.user_id == user_id)
+        conditions.append(TimeTracker.user_id == user_id)
     
     if task_id:
-        query = query.where(TimeTracker.task_id == task_id)
+        conditions.append(TimeTracker.task_id == task_id)
     
     if is_running is not None:
-        query = query.where(TimeTracker.is_running == is_running)
+        conditions.append(TimeTracker.is_running == is_running)
     
-    return list(session.exec(query.order_by(TimeTracker.start_date_time.desc())).all())
+    return await TimeTracker.find(*conditions).sort(-TimeTracker.start_date_time).to_list()
 
 
 # ========== Time Reports & Analytics ==========
-def get_time_report(
-    session: Session,
-    tenant_id: int,
-    project_id: Optional[int] = None,
-    user_id: Optional[int] = None,
+async def get_time_report(
+    tenant_id: str,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ) -> Dict[str, Any]:
     """Generate time report with analytics."""
-    query = select(
-        TimeEntry.user_id,
-        TimeEntry.task_id,
-        func.sum(TimeEntry.hours).label("total_hours"),
-        func.sum(func.case((TimeEntry.is_billable == True, TimeEntry.hours), else_=0)).label("billable_hours"),
-        func.count(TimeEntry.id).label("entry_count")
-    ).where(TimeEntry.tenant_id == tenant_id)
-    
-    if project_id:
-        query = query.join(Task).where(Task.project_id == project_id)
+    conditions = [TimeEntry.tenant_id == tenant_id]
     
     if user_id:
-        query = query.where(TimeEntry.user_id == user_id)
+        conditions.append(TimeEntry.user_id == user_id)
     
     if start_date:
-        query = query.where(TimeEntry.entry_date >= start_date)
+        conditions.append(TimeEntry.entry_date >= start_date)
     
     if end_date:
-        query = query.where(TimeEntry.entry_date <= end_date)
+        conditions.append(TimeEntry.entry_date <= end_date)
     
-    query = query.group_by(TimeEntry.user_id, TimeEntry.task_id)
+    entries = await TimeEntry.find(*conditions).to_list()
     
-    results = session.exec(query).all()
+    # Filter by project if needed
+    if project_id:
+        filtered_entries = []
+        for entry in entries:
+            task = await Task.get(entry.task_id)
+            if task and task.project_id == project_id:
+                filtered_entries.append(entry)
+        entries = filtered_entries
     
     # Aggregate data
     total_hours = Decimal("0")
     total_billable = Decimal("0")
     total_entries = 0
-    by_user: Dict[int, Dict[str, Any]] = {}
-    by_task: Dict[int, Dict[str, Any]] = {}
+    by_user: Dict[str, Dict[str, Any]] = {}
+    by_task: Dict[str, Dict[str, Any]] = {}
     
-    for row in results:
-        user_id_val = row[0]
-        task_id_val = row[1]
-        hours = Decimal(str(row[2] or 0))
-        billable = Decimal(str(row[3] or 0))
-        count = row[4] or 0
+    for entry in entries:
+        hours = entry.hours or Decimal("0")
+        billable = hours if entry.is_billable else Decimal("0")
         
         total_hours += hours
         total_billable += billable
-        total_entries += count
+        total_entries += 1
         
         # By user
-        if user_id_val not in by_user:
-            by_user[user_id_val] = {"total_hours": Decimal("0"), "billable_hours": Decimal("0"), "entry_count": 0}
-        by_user[user_id_val]["total_hours"] += hours
-        by_user[user_id_val]["billable_hours"] += billable
-        by_user[user_id_val]["entry_count"] += count
+        user_key = str(entry.user_id)
+        if user_key not in by_user:
+            by_user[user_key] = {"total_hours": Decimal("0"), "billable_hours": Decimal("0"), "entry_count": 0}
+        by_user[user_key]["total_hours"] += hours
+        by_user[user_key]["billable_hours"] += billable
+        by_user[user_key]["entry_count"] += 1
         
         # By task
-        if task_id_val not in by_task:
-            by_task[task_id_val] = {"total_hours": Decimal("0"), "billable_hours": Decimal("0"), "entry_count": 0}
-        by_task[task_id_val]["total_hours"] += hours
-        by_task[task_id_val]["billable_hours"] += billable
-        by_task[task_id_val]["entry_count"] += count
+        task_key = str(entry.task_id)
+        if task_key not in by_task:
+            by_task[task_key] = {"total_hours": Decimal("0"), "billable_hours": Decimal("0"), "entry_count": 0}
+        by_task[task_key]["total_hours"] += hours
+        by_task[task_key]["billable_hours"] += billable
+        by_task[task_key]["entry_count"] += 1
     
     return {
         "summary": {
@@ -333,48 +327,56 @@ def get_time_report(
             "non_billable_hours": float(total_hours - total_billable),
             "total_entries": total_entries
         },
-        "by_user": {str(k): {**v, "total_hours": float(v["total_hours"]), "billable_hours": float(v["billable_hours"])} for k, v in by_user.items()},
-        "by_task": {str(k): {**v, "total_hours": float(v["total_hours"]), "billable_hours": float(v["billable_hours"])} for k, v in by_task.items()}
+        "by_user": {k: {**v, "total_hours": float(v["total_hours"]), "billable_hours": float(v["billable_hours"])} for k, v in by_user.items()},
+        "by_task": {k: {**v, "total_hours": float(v["total_hours"]), "billable_hours": float(v["billable_hours"])} for k, v in by_task.items()}
     }
 
 
-def get_time_by_date_range(
-    session: Session,
-    tenant_id: int,
+async def get_time_by_date_range(
+    tenant_id: str,
     start_date: date,
     end_date: date,
-    project_id: Optional[int] = None,
-    user_id: Optional[int] = None
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """Get time entries grouped by date."""
-    query = select(
-        TimeEntry.date,
-        func.sum(TimeEntry.hours).label("total_hours"),
-        func.count(TimeEntry.id).label("entry_count")
-    ).where(
-        and_(
-            TimeEntry.tenant_id == tenant_id,
-            TimeEntry.date >= start_date,
-            TimeEntry.date <= end_date
-        )
-    )
-    
-    if project_id:
-        query = query.join(Task).where(Task.project_id == project_id)
+    conditions = [
+        TimeEntry.tenant_id == tenant_id,
+        TimeEntry.entry_date >= start_date,
+        TimeEntry.entry_date <= end_date
+    ]
     
     if user_id:
-        query = query.where(TimeEntry.user_id == user_id)
+        conditions.append(TimeEntry.user_id == user_id)
     
-    query = query.group_by(TimeEntry.date).order_by(TimeEntry.date)
+    entries = await TimeEntry.find(*conditions).to_list()
     
-    results = session.exec(query).all()
+    # Filter by project if needed
+    if project_id:
+        filtered_entries = []
+        for entry in entries:
+            task = await Task.get(entry.task_id)
+            if task and task.project_id == project_id:
+                filtered_entries.append(entry)
+        entries = filtered_entries
     
-    return [
+    # Group by date
+    by_date: Dict[str, Dict[str, Any]] = {}
+    for entry in entries:
+        date_key = str(entry.entry_date) if entry.entry_date else str(date.today())
+        if date_key not in by_date:
+            by_date[date_key] = {"total_hours": Decimal("0"), "entry_count": 0}
+        by_date[date_key]["total_hours"] += entry.hours or Decimal("0")
+        by_date[date_key]["entry_count"] += 1
+    
+    # Sort by date and format
+    result = [
         {
-            "date": str(row[0]),
-            "total_hours": float(row[1] or 0),
-            "entry_count": row[2] or 0
+            "date": date_key,
+            "total_hours": float(data["total_hours"]),
+            "entry_count": data["entry_count"]
         }
-        for row in results
+        for date_key, data in sorted(by_date.items())
     ]
-
+    
+    return result

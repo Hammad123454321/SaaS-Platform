@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select, func
+
 from app.api.deps import get_current_user
 from app.models import User, Tenant, ModuleEntitlement, Subscription
 from app.api.authz import require_permission
@@ -16,19 +16,13 @@ async def get_admin_stats(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super Admin access required.")
     
-    total_tenants = session.exec(select(func.count(Tenant.id))).one()
-    total_users = session.exec(select(func.count(User.id)).where(User.is_active == True)).one()  # noqa: E712
+    total_tenants = await Tenant.find().count()
+    total_users = await User.find(User.is_active == True).count()
     
-    # Count active subscriptions
-    active_subscriptions = session.exec(
-        select(func.count(Subscription.id)).where(Subscription.status == "active")
-    ).one()
+    active_subscriptions = await Subscription.find(Subscription.status == "active").count()
     
-    # Calculate total revenue (sum of all subscription amounts)
-    total_revenue_result = session.exec(
-        select(func.sum(Subscription.amount)).where(Subscription.status == "active")
-    ).one()
-    total_revenue = float(total_revenue_result) if total_revenue_result else 0.0
+    active_subs = await Subscription.find(Subscription.status == "active").to_list()
+    total_revenue = sum(float(s.amount) for s in active_subs if s.amount)
     
     return {
         "total_tenants": total_tenants or 0,
@@ -48,8 +42,8 @@ async def list_tenants(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super Admin access required.")
     
-    tenants = session.exec(select(Tenant).offset(skip).limit(limit)).all()
-    return {"tenants": [{"id": t.id, "name": t.name, "created_at": t.created_at} for t in tenants]}
+    tenants = await Tenant.find().skip(skip).limit(limit).to_list()
+    return {"tenants": [{"id": str(t.id), "name": t.name, "created_at": t.created_at} for t in tenants]}
 
 
 @router.get("/users")
@@ -62,11 +56,11 @@ async def list_all_users(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super Admin access required.")
     
-    users = session.exec(select(User).offset(skip).limit(limit)).all()
+    users = await User.find().skip(skip).limit(limit).to_list()
     return {
         "users": [
             {
-                "id": u.id,
+                "id": str(u.id),
                 "email": u.email,
                 "tenant_id": u.tenant_id,
                 "is_super_admin": u.is_super_admin,
@@ -75,4 +69,3 @@ async def list_all_users(
             for u in users
         ]
     }
-

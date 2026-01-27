@@ -1,16 +1,14 @@
 """Service for Owner role management and confirmation."""
 from typing import Optional
-from sqlmodel import Session, select
 
 from app.models.user import User
 from app.models.onboarding import OwnerConfirmation
 from app.models.role import Role, UserRole
 
 
-def confirm_owner(
-    session: Session,
-    user_id: int,
-    tenant_id: int,
+async def confirm_owner(
+    user_id: str,
+    tenant_id: str,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
 ) -> OwnerConfirmation:
@@ -23,53 +21,47 @@ def confirm_owner(
     - Ensures user has company_admin role (or creates it)
     - Owner cannot be deleted (enforced in user deletion endpoints)
     """
-    user = session.get(User, user_id)
+    user = await User.get(user_id)
     if not user or user.tenant_id != tenant_id:
         raise ValueError("User not found or tenant mismatch")
     
     # Check if owner already exists for this tenant
-    existing_owner = session.exec(
-        select(User).where(
-            User.tenant_id == tenant_id,
-            User.is_owner == True
-        )
-    ).first()
+    existing_owner = await User.find_one(
+        User.tenant_id == tenant_id,
+        User.is_owner == True
+    )
     
-    if existing_owner and existing_owner.id != user_id:
+    if existing_owner and str(existing_owner.id) != user_id:
         raise ValueError("An owner already exists for this tenant")
     
     # Mark user as owner
     user.is_owner = True
+    await user.save()
     
     # Ensure user has company_admin role
-    roles = session.exec(
-        select(Role).where(
-            Role.tenant_id == tenant_id,
-            Role.name == "company_admin"
-        )
-    ).all()
-    
-    company_admin_role = roles[0] if roles else None
+    company_admin_role = await Role.find_one(
+        Role.tenant_id == tenant_id,
+        Role.name == "company_admin"
+    )
     
     if not company_admin_role:
         # Create company_admin role if it doesn't exist
         company_admin_role = Role(
             tenant_id=tenant_id,
-            name="company_admin"
+            name="company_admin",
+            permission_codes=[]
         )
-        session.add(company_admin_role)
-        session.flush()
+        await company_admin_role.insert()
     
     # Assign role if not already assigned
-    existing_assignment = session.exec(
-        select(UserRole).where(
-            UserRole.user_id == user_id,
-            UserRole.role_id == company_admin_role.id
-        )
-    ).first()
+    existing_assignment = await UserRole.find_one(
+        UserRole.user_id == user_id,
+        UserRole.role_id == str(company_admin_role.id)
+    )
     
     if not existing_assignment:
-        session.add(UserRole(user_id=user_id, role_id=company_admin_role.id))
+        user_role = UserRole(user_id=user_id, role_id=str(company_admin_role.id))
+        await user_role.insert()
     
     # Create confirmation record
     confirmation = OwnerConfirmation(
@@ -79,27 +71,20 @@ def confirm_owner(
         ip_address=ip_address,
         user_agent=user_agent
     )
-    session.add(confirmation)
-    session.commit()
-    session.refresh(confirmation)
-    session.refresh(user)
+    await confirmation.insert()
     
     return confirmation
 
 
-def get_owner_for_tenant(session: Session, tenant_id: int) -> Optional[User]:
+async def get_owner_for_tenant(tenant_id: str) -> Optional[User]:
     """Get the owner user for a tenant."""
-    owner = session.exec(
-        select(User).where(
-            User.tenant_id == tenant_id,
-            User.is_owner == True
-        )
-    ).first()
-    return owner
+    return await User.find_one(
+        User.tenant_id == tenant_id,
+        User.is_owner == True
+    )
 
 
-def is_user_owner(session: Session, user_id: int, tenant_id: int) -> bool:
+async def is_user_owner(user_id: str, tenant_id: str) -> bool:
     """Check if a user is the owner of a tenant."""
-    user = session.get(User, user_id)
+    user = await User.get(user_id)
     return user is not None and user.tenant_id == tenant_id and user.is_owner == True
-

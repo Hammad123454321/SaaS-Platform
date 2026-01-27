@@ -1,6 +1,5 @@
 """Service for jurisdiction mapping and compliance rule activation."""
 from typing import List
-from sqlmodel import Session, select
 
 from app.models.tenant import Tenant
 from app.models.onboarding import (
@@ -26,18 +25,13 @@ def get_compliance_rules_for_jurisdiction(province: ProvinceCode, country: str =
     
     # Province-specific rules
     if province == ProvinceCode.ONTARIO:
-        rules.append(ComplianceRuleCode.PAWS)  # Provincial Animal Welfare Services
-        rules.append(ComplianceRuleCode.WSIB)  # Workplace Safety and Insurance Board
-    
-    # Add more province-specific mappings as needed
-    # if province == ProvinceCode.ALBERTA:
-    #     rules.append(ComplianceRuleCode.ALBERTA_SPECIFIC_RULE)
+        rules.append(ComplianceRuleCode.PAWS)
+        rules.append(ComplianceRuleCode.WSIB)
     
     return rules
 
 
-def activate_compliance_rules_for_business_profile(
-    session: Session,
+async def activate_compliance_rules_for_business_profile(
     business_profile: BusinessProfile
 ) -> List[TenantComplianceRule]:
     """
@@ -55,12 +49,10 @@ def activate_compliance_rules_for_business_profile(
     
     for rule_code in rule_codes:
         # Check if rule already exists for this tenant
-        existing = session.exec(
-            select(TenantComplianceRule).where(
-                TenantComplianceRule.tenant_id == business_profile.tenant_id,
-                TenantComplianceRule.rule_code == rule_code
-            )
-        ).first()
+        existing = await TenantComplianceRule.find_one(
+            TenantComplianceRule.tenant_id == business_profile.tenant_id,
+            TenantComplianceRule.rule_code == rule_code
+        )
         
         if existing:
             continue  # Already activated
@@ -68,28 +60,19 @@ def activate_compliance_rules_for_business_profile(
         # Create new compliance rule
         compliance_rule = TenantComplianceRule(
             tenant_id=business_profile.tenant_id,
-            business_profile_id=business_profile.id,
+            business_profile_id=str(business_profile.id),
             rule_code=rule_code,
             activated_by_jurisdiction=True
         )
-        session.add(compliance_rule)
+        await compliance_rule.insert()
         activated_rules.append(compliance_rule)
-    
-    session.commit()
-    
-    # Refresh all rules
-    for rule in activated_rules:
-        session.refresh(rule)
     
     return activated_rules
 
 
-def get_activated_rules_for_tenant(session: Session, tenant_id: int) -> List[TenantComplianceRule]:
+async def get_activated_rules_for_tenant(tenant_id: str) -> List[TenantComplianceRule]:
     """Get all activated compliance rules for a tenant."""
-    rules = session.exec(
-        select(TenantComplianceRule).where(
-            TenantComplianceRule.tenant_id == tenant_id
-        )
-    ).all()
-    return list(rules)
-
+    rules = await TenantComplianceRule.find(
+        TenantComplianceRule.tenant_id == tenant_id
+    ).to_list()
+    return rules

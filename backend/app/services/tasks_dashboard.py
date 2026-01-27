@@ -8,57 +8,51 @@ from datetime import date, datetime, timedelta
 from typing import Dict, Any, Optional
 from decimal import Decimal
 
-from sqlmodel import Session, select, and_, or_, func
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
-from app.models import Task, Project, User, TaskStatus, TaskStatusCategory, TimeEntry, TaskPriority
-from app.models.tasks import task_assignments_table
+from app.models import Task, Project, User, TaskStatus, TimeEntry, TaskPriority
+from app.models.tasks import TaskStatusCategory
 
 logger = logging.getLogger(__name__)
 
 
-def get_dashboard_metrics(
-    session: Session,
-    tenant_id: int,
-    user_id: Optional[int] = None,
-    project_id: Optional[int] = None
+async def get_dashboard_metrics(
+    tenant_id: str,
+    user_id: Optional[str] = None,
+    project_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Get comprehensive dashboard metrics."""
     # Base query for tasks
-    task_query = select(Task).where(Task.tenant_id == tenant_id)
+    conditions = [Task.tenant_id == tenant_id]
     
     if project_id:
-        task_query = task_query.where(Task.project_id == project_id)
+        conditions.append(Task.project_id == project_id)
     
     if user_id:
         # Filter tasks assigned to user
-        task_query = task_query.join(task_assignments_table).where(
-            task_assignments_table.c.user_id == user_id
-        )
+        conditions.append({"assignee_ids": user_id})
     
-    all_tasks = list(session.exec(task_query).all())
+    all_tasks = await Task.find(*conditions).to_list()
     
     # Calculate metrics
     total_tasks = len(all_tasks)
     
     # Status breakdown
-    status_counts = {}
+    status_counts: Dict[str, int] = {}
     for task in all_tasks:
-        status = session.get(TaskStatus, task.status_id)
-        if status:
-            status_name = status.name
-            status_counts[status_name] = status_counts.get(status_name, 0) + 1
+        if task.status_id:
+            task_status = await TaskStatus.get(task.status_id)
+            if task_status:
+                status_name = task_status.name
+                status_counts[status_name] = status_counts.get(status_name, 0) + 1
     
     # Completion rate
-    completed_statuses = session.exec(
-        select(TaskStatus).where(
-            and_(
-                TaskStatus.tenant_id == tenant_id,
-                TaskStatus.category == TaskStatusCategory.DONE
-            )
-        )
-    ).all()
-    completed_status_ids = [s.id for s in completed_statuses]
+    completed_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
+    completed_status_ids = [str(s.id) for s in completed_statuses]
     completed_count = sum(1 for t in all_tasks if t.status_id in completed_status_ids)
     completion_rate = (completed_count / total_tasks * 100) if total_tasks > 0 else 0
     
@@ -82,7 +76,7 @@ def get_dashboard_metrics(
     priority_counts = {"high": 0, "medium": 0, "low": 0, "none": 0}
     for task in all_tasks:
         if task.priority_id:
-            priority = session.get(TaskPriority, task.priority_id)
+            priority = await TaskPriority.get(task.priority_id)
             if priority:
                 if priority.level >= 3:
                     priority_counts["high"] += 1
@@ -94,45 +88,39 @@ def get_dashboard_metrics(
             priority_counts["none"] += 1
     
     # Workload distribution (if user_id provided)
-    workload_distribution = {}
+    workload_distribution: Dict[str, int] = {}
     if user_id:
         # Get tasks assigned to user grouped by project
-        user_tasks = [
-            t for t in all_tasks
-            if any(a.id == user_id for a in (t.assignees or []))
-        ]
+        user_tasks = [t for t in all_tasks if user_id in (t.assignee_ids or [])]
         
-        project_counts = {}
+        project_counts: Dict[str, int] = {}
         for task in user_tasks:
             project_id_val = task.project_id
             project_counts[project_id_val] = project_counts.get(project_id_val, 0) + 1
         
         # Get project names
         for proj_id, count in project_counts.items():
-            project = session.get(Project, proj_id)
+            project = await Project.get(proj_id)
             if project:
                 workload_distribution[project.name] = count
     
     # Time tracking summary (if user_id provided)
-    time_summary = {}
+    time_summary: Dict[str, Any] = {}
     if user_id:
-        time_query = select(
-            func.sum(TimeEntry.hours).label("total_hours"),
-            func.sum(func.case((TimeEntry.is_billable == True, TimeEntry.hours), else_=0)).label("billable_hours")
-        ).where(
-            and_(
-                TimeEntry.tenant_id == tenant_id,
-                TimeEntry.user_id == user_id,
-                TimeEntry.entry_date >= date.today() - timedelta(days=30)  # Last 30 days
-            )
-        )
+        thirty_days_ago = date.today() - timedelta(days=30)
+        time_entries = await TimeEntry.find(
+            TimeEntry.tenant_id == tenant_id,
+            TimeEntry.user_id == user_id,
+            TimeEntry.entry_date >= thirty_days_ago
+        ).to_list()
         
-        result = session.exec(time_query).first()
-        if result:
-            time_summary = {
-                "total_hours_30d": float(result[0] or 0),
-                "billable_hours_30d": float(result[1] or 0)
-            }
+        total_hours = sum(float(e.hours or 0) for e in time_entries)
+        billable_hours = sum(float(e.hours or 0) for e in time_entries if e.is_billable)
+        
+        time_summary = {
+            "total_hours_30d": round(total_hours, 2),
+            "billable_hours_30d": round(billable_hours, 2)
+        }
     
     return {
         "summary": {
@@ -149,7 +137,7 @@ def get_dashboard_metrics(
         "time_summary": time_summary,
         "overdue_tasks": [
             {
-                "id": t.id,
+                "id": str(t.id),
                 "title": t.title,
                 "due_date": str(t.due_date),
                 "project_id": t.project_id
@@ -158,7 +146,7 @@ def get_dashboard_metrics(
         ],
         "due_soon_tasks": [
             {
-                "id": t.id,
+                "id": str(t.id),
                 "title": t.title,
                 "due_date": str(t.due_date),
                 "project_id": t.project_id
@@ -168,54 +156,40 @@ def get_dashboard_metrics(
     }
 
 
-def get_employee_progress_overview(
-    session: Session,
-    tenant_id: int,
-    project_id: Optional[int] = None
+async def get_employee_progress_overview(
+    tenant_id: str,
+    project_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Get employee assignment and progress overview."""
     # Get all users in tenant
-    users = list(
-        session.exec(
-            select(User).where(
-                and_(
-                    User.tenant_id == tenant_id,
-                    User.is_active == True
-                )
-            )
-        ).all()
-    )
+    users = await User.find(
+        User.tenant_id == tenant_id,
+        User.is_active == True
+    ).to_list()
     
     employee_stats = []
     
     for user in users:
         # Get tasks assigned to user
-        task_query = select(Task).where(
-            and_(
-                Task.tenant_id == tenant_id
-            )
-        ).join(task_assignments_table).where(
-            task_assignments_table.c.user_id == user.id
-        )
+        conditions = [
+            Task.tenant_id == tenant_id,
+            {"assignee_ids": str(user.id)}
+        ]
         
         if project_id:
-            task_query = task_query.where(Task.project_id == project_id)
+            conditions.append(Task.project_id == project_id)
         
-        user_tasks = list(session.exec(task_query).all())
+        user_tasks = await Task.find(*conditions).to_list()
         
         # Calculate stats
         total_assigned = len(user_tasks)
         
         # Completed tasks
-        completed_statuses = session.exec(
-            select(TaskStatus).where(
-                and_(
-                    TaskStatus.tenant_id == tenant_id,
-                    TaskStatus.category == TaskStatusCategory.DONE
-                )
-            )
-        ).all()
-        completed_status_ids = [s.id for s in completed_statuses]
+        completed_statuses = await TaskStatus.find(
+            TaskStatus.tenant_id == tenant_id,
+            TaskStatus.category == TaskStatusCategory.DONE
+        ).to_list()
+        completed_status_ids = [str(s.id) for s in completed_statuses]
         completed = sum(1 for t in user_tasks if t.status_id in completed_status_ids)
         
         # Overdue tasks
@@ -229,18 +203,16 @@ def get_employee_progress_overview(
         avg_completion = sum(t.completion_percentage for t in user_tasks) / total_assigned if total_assigned > 0 else 0
         
         # Time logged (last 30 days)
-        time_query = select(func.sum(TimeEntry.hours)).where(
-            and_(
-                TimeEntry.tenant_id == tenant_id,
-                TimeEntry.user_id == user.id,
-                TimeEntry.date >= date.today() - timedelta(days=30)
-            )
-        )
-        time_result = session.exec(time_query).first()
-        hours_logged = float(time_result or 0)
+        thirty_days_ago = date.today() - timedelta(days=30)
+        time_entries = await TimeEntry.find(
+            TimeEntry.tenant_id == tenant_id,
+            TimeEntry.user_id == str(user.id),
+            TimeEntry.entry_date >= thirty_days_ago
+        ).to_list()
+        hours_logged = sum(float(e.hours or 0) for e in time_entries)
         
         employee_stats.append({
-            "user_id": user.id,
+            "user_id": str(user.id),
             "email": user.email,
             "total_assigned": total_assigned,
             "completed": completed,
@@ -248,11 +220,10 @@ def get_employee_progress_overview(
             "overdue": overdue,
             "completion_rate": round((completed / total_assigned * 100) if total_assigned > 0 else 0, 2),
             "average_completion_percentage": round(avg_completion, 2),
-            "hours_logged_30d": hours_logged
+            "hours_logged_30d": round(hours_logged, 2)
         })
     
     return {
         "employees": employee_stats,
         "total_employees": len(employee_stats)
     }
-

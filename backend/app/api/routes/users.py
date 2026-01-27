@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from beanie import PydanticObjectId
+
 from app.api.deps import get_current_user
 from app.models import User, Tenant, UserRole, Role
 from app.api.authz import require_permission
@@ -20,17 +21,21 @@ async def list_users(
     limit: int = 100,
 ) -> List[UserRead]:
     """List users in the current tenant."""
-    users = session.exec(
-        select(User)
-        .where(User.tenant_id == current_user.tenant_id, User.is_active == True)  # noqa: E712
-        .offset(skip)
-        .limit(limit)
-    ).all()
+    tenant_id = str(current_user.tenant_id)
+    users = await User.find(
+        User.tenant_id == tenant_id,
+        User.is_active == True
+    ).skip(skip).limit(limit).to_list()
     
     result = []
     for user in users:
-        roles = [r.name for r in user.roles]
-        result.append(UserRead.model_validate({**user.model_dump(), "roles": roles}))
+        user_roles = await UserRole.find(UserRole.user_id == str(user.id)).to_list()
+        role_names = []
+        for ur in user_roles:
+            role = await Role.get(ur.role_id)
+            if role:
+                role_names.append(role.name)
+        result.append(UserRead.model_validate({**user.model_dump(), "roles": role_names}))
     
     return result
 
@@ -41,13 +46,12 @@ async def create_user(
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
 ) -> UserRead:
     """Create a new user in the current tenant."""
-    # Check if email already exists in tenant
-    existing = session.exec(
-        select(User).where(
-            User.email == payload.email.lower(),
-            User.tenant_id == current_user.tenant_id
-        )
-    ).first()
+    tenant_id = str(current_user.tenant_id)
+    
+    existing = await User.find_one(
+        User.email == payload.email.lower(),
+        User.tenant_id == tenant_id
+    )
     
     if existing:
         raise HTTPException(
@@ -58,77 +62,85 @@ async def create_user(
     _validate_password_strength(payload.password)
     
     user = User(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         email=payload.email.lower(),
         hashed_password=hash_password(payload.password),
         is_super_admin=False,
         is_active=True,
     )
-    session.add(user)
-    session.flush()
+    await user.insert()
     
-    # Assign roles if provided
+    role_names = []
     if payload.role_names:
-        roles = session.exec(
-            select(Role).where(
-                Role.tenant_id == current_user.tenant_id,
-                Role.name.in_(payload.role_names)
-            )
-        ).all()
+        roles = await Role.find(
+            Role.tenant_id == tenant_id,
+            {"name": {"$in": payload.role_names}}
+        ).to_list()
         for role in roles:
-            session.add(UserRole(user_id=user.id, role_id=role.id))  # type: ignore[arg-type]
+            user_role = UserRole(user_id=str(user.id), role_id=str(role.id))
+            await user_role.insert()
+            role_names.append(role.name)
     
-    session.commit()
-    session.refresh(user)
-    
-    # Automatically provision user to enabled modules (especially Taskify)
     try:
         from app.services.module_onboarding import provision_user_to_modules
-        # Provision user to all enabled modules
-        await provision_user_to_modules(session, user, payload.password)
+        await provision_user_to_modules(user, payload.password)
     except Exception as e:
-        # Log but don't fail user creation if provisioning fails
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to provision user {user.email} to modules: {e}")
     
-    roles = [r.name for r in user.roles]
-    return UserRead.model_validate({**user.model_dump(), "roles": roles})
+    return UserRead.model_validate({**user.model_dump(), "roles": role_names})
 
 
 @router.get("/{user_id}", response_model=UserRead)
 async def get_user(
-    user_id: int,
+    user_id: str,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
 ) -> UserRead:
     """Get a specific user."""
-    user = session.get(User, user_id)
-    if not user or user.tenant_id != current_user.tenant_id:
+    tenant_id = str(current_user.tenant_id)
+    
+    try:
+        user = await User.get(PydanticObjectId(user_id))
+    except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     
-    roles = [r.name for r in user.roles]
-    return UserRead.model_validate({**user.model_dump(), "roles": roles})
+    if not user or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    user_roles = await UserRole.find(UserRole.user_id == str(user.id)).to_list()
+    role_names = []
+    for ur in user_roles:
+        role = await Role.get(ur.role_id)
+        if role:
+            role_names.append(role.name)
+    
+    return UserRead.model_validate({**user.model_dump(), "roles": role_names})
 
 
 @router.patch("/{user_id}", response_model=UserRead)
 async def update_user(
-    user_id: int,
+    user_id: str,
     payload: UserUpdate,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
 ) -> UserRead:
     """Update a user."""
-    user = session.get(User, user_id)
-    if not user or user.tenant_id != current_user.tenant_id:
+    tenant_id = str(current_user.tenant_id)
+    
+    try:
+        user = await User.get(PydanticObjectId(user_id))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    if not user or user.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     
     if payload.email and payload.email.lower() != user.email:
-        existing = session.exec(
-            select(User).where(
-                User.email == payload.email.lower(),
-                User.tenant_id == current_user.tenant_id,
-                User.id != user_id
-            )
-        ).first()
+        existing = await User.find_one(
+            User.email == payload.email.lower(),
+            User.tenant_id == tenant_id,
+            User.id != user.id
+        )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -143,54 +155,56 @@ async def update_user(
     if payload.is_active is not None:
         user.is_active = payload.is_active
     
-    # Update roles if provided
     if payload.role_names is not None:
-        # Remove existing roles
-        session.exec(
-            UserRole.__table__.delete().where(UserRole.user_id == user_id)
-        )
-        # Add new roles
-        roles = session.exec(
-            select(Role).where(
-                Role.tenant_id == current_user.tenant_id,
-                Role.name.in_(payload.role_names)
-            )
-        ).all()
+        await UserRole.find(UserRole.user_id == str(user.id)).delete()
+        
+        roles = await Role.find(
+            Role.tenant_id == tenant_id,
+            {"name": {"$in": payload.role_names}}
+        ).to_list()
         for role in roles:
-            session.add(UserRole(user_id=user.id, role_id=role.id))  # type: ignore[arg-type]
+            user_role = UserRole(user_id=str(user.id), role_id=str(role.id))
+            await user_role.insert()
     
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+    await user.save()
     
-    roles = [r.name for r in user.roles]
-    return UserRead.model_validate({**user.model_dump(), "roles": roles})
+    user_roles = await UserRole.find(UserRole.user_id == str(user.id)).to_list()
+    role_names = []
+    for ur in user_roles:
+        role = await Role.get(ur.role_id)
+        if role:
+            role_names.append(role.name)
+    
+    return UserRead.model_validate({**user.model_dump(), "roles": role_names})
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: int,
+    user_id: str,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_USERS)),
 ) -> None:
     """Delete (deactivate) a user."""
-    user = session.get(User, user_id)
-    if not user or user.tenant_id != current_user.tenant_id:
+    tenant_id = str(current_user.tenant_id)
+    
+    try:
+        user = await User.get(PydanticObjectId(user_id))
+    except Exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     
-    if user.id == current_user.id:
+    if not user or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    if str(user.id) == str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete your own account.",
         )
     
-    # Stage 2: Owner cannot be deleted
-    if is_user_owner(session, user.id, user.tenant_id):
+    if await is_user_owner(str(user.id), tenant_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete the owner account. The owner role is locked.",
         )
     
     user.is_active = False
-    session.add(user)
-    session.commit()
-
+    await user.save()

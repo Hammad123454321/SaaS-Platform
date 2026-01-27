@@ -8,10 +8,8 @@ Flow:
 4. For Tasks module: Initialize default statuses and priorities
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-
-from sqlmodel import Session, select
 
 from app.models import (
     User,
@@ -54,9 +52,8 @@ async def get_available_modules() -> List[Dict[str, Any]]:
 
 
 async def create_checkout_session(
-    session: Session,
-    tenant_id: int,
-    user_id: int,
+    tenant_id: str,
+    user_id: str,
     selected_modules: List[str],
     billing_interval: str = "month",  # month or year
 ) -> Dict[str, Any]:
@@ -89,14 +86,12 @@ async def create_checkout_session(
         raise ValueError("No valid modules selected")
     
     # Get tenant
-    tenant = session.get(Tenant, tenant_id)
+    tenant = await Tenant.get(tenant_id)
     if not tenant:
         raise ValueError("Tenant not found")
     
     # Get or create subscription
-    subscription = session.exec(
-        select(Subscription).where(Subscription.tenant_id == tenant_id)
-    ).first()
+    subscription = await Subscription.find_one(Subscription.tenant_id == tenant_id)
     
     if not subscription:
         subscription = Subscription(
@@ -107,9 +102,7 @@ async def create_checkout_session(
             plan_name=", ".join([m["name"] for m in valid_modules]),
             modules={m["code"].value: True for m in valid_modules},
         )
-        session.add(subscription)
-        session.commit()
-        session.refresh(subscription)
+        await subscription.insert()
     else:
         # Update existing subscription
         subscription.amount = total_amount
@@ -117,37 +110,21 @@ async def create_checkout_session(
         subscription.plan_name = ", ".join([m["name"] for m in valid_modules])
         subscription.modules = {m["code"].value: True for m in valid_modules}
         subscription.updated_at = datetime.utcnow()
-        session.add(subscription)
-        session.commit()
+        await subscription.save()
     
     # In production, create actual Stripe checkout session here
-    # For now, return a mock response that can be used for testing
-    # 
-    # Example Stripe integration:
-    # import stripe
-    # stripe.api_key = settings.stripe_secret_key
-    # checkout_session = stripe.checkout.Session.create(
-    #     customer_email=user.email,
-    #     line_items=[...],
-    #     mode='subscription',
-    #     success_url=f"{settings.frontend_base_url}/onboarding/success?session_id={{CHECKOUT_SESSION_ID}}",
-    #     cancel_url=f"{settings.frontend_base_url}/onboarding/cancel",
-    # )
-    
     return {
-        "subscription_id": subscription.id,
+        "subscription_id": str(subscription.id),
         "checkout_url": f"/onboarding/payment?subscription_id={subscription.id}",
         "total_amount": total_amount / 100,
         "currency": "usd",
         "modules": [{"code": m["code"].value, "name": m["name"]} for m in valid_modules],
         "billing_interval": billing_interval,
-        # In production: "stripe_session_id": checkout_session.id
     }
 
 
 async def complete_subscription(
-    session: Session,
-    subscription_id: int,
+    subscription_id: str,
     stripe_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
@@ -157,9 +134,9 @@ async def complete_subscription(
     1. By Stripe webhook after payment
     2. Manually for testing/development
     
-    Provisions all selected modules including Taskify workspace.
+    Provisions all selected modules.
     """
-    subscription = session.get(Subscription, subscription_id)
+    subscription = await Subscription.get(subscription_id)
     if not subscription:
         raise ValueError("Subscription not found")
     
@@ -167,10 +144,8 @@ async def complete_subscription(
     subscription.status = "active"
     subscription.current_period_start = datetime.utcnow()
     if subscription.interval == "month":
-        from datetime import timedelta
         subscription.current_period_end = datetime.utcnow() + timedelta(days=30)
     else:
-        from datetime import timedelta
         subscription.current_period_end = datetime.utcnow() + timedelta(days=365)
     
     if stripe_data:
@@ -179,7 +154,7 @@ async def complete_subscription(
         subscription.stripe_price_id = stripe_data.get("price_id")
     
     subscription.updated_at = datetime.utcnow()
-    session.add(subscription)
+    await subscription.save()
     
     # Enable modules
     modules = subscription.modules or {}
@@ -195,44 +170,38 @@ async def complete_subscription(
             continue
         
         # Enable module entitlement
-        entitlement = session.exec(
-            select(ModuleEntitlement).where(
-                ModuleEntitlement.tenant_id == subscription.tenant_id,
-                ModuleEntitlement.module_code == module_code,
-            )
-        ).first()
+        entitlement = await ModuleEntitlement.find_one(
+            ModuleEntitlement.tenant_id == subscription.tenant_id,
+            ModuleEntitlement.module_code == module_code,
+        )
         
         if entitlement:
             entitlement.enabled = True
             entitlement.seats = 10  # Default seats
             entitlement.updated_at = datetime.utcnow()
-            session.add(entitlement)
+            await entitlement.save()
         
         # Provision module-specific resources
         if module_code == ModuleCode.TASKS:
-            await initialize_tasks_module(session, subscription.tenant_id)
+            await initialize_tasks_module(subscription.tenant_id)
         
         provisioned_modules.append(module_code_str)
     
-    session.commit()
-    
     return {
-        "subscription_id": subscription.id,
+        "subscription_id": str(subscription.id),
         "status": "active",
         "provisioned_modules": provisioned_modules,
     }
 
 
-async def initialize_tasks_module(session: Session, tenant_id: int) -> None:
+async def initialize_tasks_module(tenant_id: str) -> None:
     """
     Initialize the Tasks module for a tenant.
     
     Creates default task statuses and priorities.
     """
     # Check if already initialized
-    existing_status = session.exec(
-        select(TaskStatus).where(TaskStatus.tenant_id == tenant_id)
-    ).first()
+    existing_status = await TaskStatus.find_one(TaskStatus.tenant_id == tenant_id)
     
     if existing_status:
         logger.info(f"Tasks module already initialized for tenant {tenant_id}")
@@ -251,7 +220,7 @@ async def initialize_tasks_module(session: Session, tenant_id: int) -> None:
             tenant_id=tenant_id,
             **status_data
         )
-        session.add(status)
+        await status.insert()
     
     # Create default priorities
     default_priorities = [
@@ -266,11 +235,6 @@ async def initialize_tasks_module(session: Session, tenant_id: int) -> None:
             tenant_id=tenant_id,
             **priority_data
         )
-        session.add(priority)
+        await priority.insert()
     
-    session.commit()
     logger.info(f"Initialized Tasks module for tenant {tenant_id}")
-
-
-# Legacy function - removed, no longer needed
-

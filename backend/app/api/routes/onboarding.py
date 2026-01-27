@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
 from app.models import ModuleEntitlement, ModuleCode, Tenant, User
@@ -21,49 +20,49 @@ async def onboarding(
     payload: OnboardingRequest,
     current_user: User = Depends(get_current_user),
 ) -> OnboardingResponse:
-    tenant = session.get(Tenant, current_user.tenant_id)
+    tenant_id = str(current_user.tenant_id)
+    tenant = await Tenant.get(current_user.tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found.")
 
     if payload.company.name and payload.company.name != tenant.name:
-        conflict = session.exec(
-            select(Tenant).where(Tenant.name == payload.company.name, Tenant.id != tenant.id)
-        ).first()
+        conflict = await Tenant.find_one(
+            Tenant.name == payload.company.name,
+            Tenant.id != tenant.id
+        )
         if conflict:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Company name already in use.",
             )
         tenant.name = payload.company.name
-        session.add(tenant)
+        await tenant.save()
 
     selected = {module for module in payload.modules}
     if selected:
-        existing = session.exec(
-            select(ModuleEntitlement).where(ModuleEntitlement.tenant_id == current_user.tenant_id)
-        ).all()
+        existing = await ModuleEntitlement.find(
+            ModuleEntitlement.tenant_id == tenant_id
+        ).to_list()
         existing_by_code = {ent.module_code: ent for ent in existing}
         for module_code in selected:
             entitlement = existing_by_code.get(module_code)
             if not entitlement:
                 entitlement = ModuleEntitlement(
-                    tenant_id=current_user.tenant_id,
+                    tenant_id=tenant_id,
                     module_code=ModuleCode(module_code),
                 )
             entitlement.enabled = True
-            session.add(entitlement)
+            await entitlement.save()
 
-    session.commit()
-
-    updated_entitlements = session.exec(
-        select(ModuleEntitlement).where(ModuleEntitlement.tenant_id == current_user.tenant_id)
-    ).all()
-    log_audit(
-        session,
-        tenant_id=current_user.tenant_id,
-        actor_user_id=current_user.id,  # type: ignore[arg-type]
+    updated_entitlements = await ModuleEntitlement.find(
+        ModuleEntitlement.tenant_id == tenant_id
+    ).to_list()
+    
+    await log_audit(
+        tenant_id=tenant_id,
+        actor_user_id=str(current_user.id),
         action="onboarding.complete",
-        target=str(current_user.tenant_id),
+        target=tenant_id,
         details={
             "modules": [m.value for m in selected],
             "branding": payload.branding.model_dump() if payload.branding else None,
@@ -90,9 +89,10 @@ async def onboard_taskify(
     payload: TaskifyOnboardingRequest,
     current_user: User = Depends(get_current_user),
 ) -> TaskifyOnboardingResponse:
+    tenant_id = str(current_user.tenant_id)
+    
     await onboard_tenant_to_taskify(
-        session=session,
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         taskify_base_url=payload.base_url,
         api_token=payload.api_token,
         workspace_id=payload.workspace_id,
@@ -100,12 +100,11 @@ async def onboard_taskify(
 
     health = None
     if payload.verify:
-        health = await verify_taskify_connection(session=session, tenant_id=current_user.tenant_id)
+        health = await verify_taskify_connection(tenant_id=tenant_id)
 
-    log_audit(
-        session,
-        tenant_id=current_user.tenant_id,
-        actor_user_id=current_user.id,  # type: ignore[arg-type]
+    await log_audit(
+        tenant_id=tenant_id,
+        actor_user_id=str(current_user.id),
         action="onboarding.taskify",
         target="tasks",
         details={"base_url": payload.base_url, "workspace_id": payload.workspace_id, "verified": payload.verify},

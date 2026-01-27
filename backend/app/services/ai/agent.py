@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Tuple
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from sqlmodel import Session
 
 from app.config import settings
 from app.models import User
@@ -19,25 +18,23 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_agent(user: User, session: Session) -> AgentExecutor:
+def build_agent(user: User) -> AgentExecutor:
     """Build a LangChain agent for a given user and tenant.
 
     The agent uses OpenAI GPT-3.5-turbo with function calling tools
     that wrap the tenant's module APIs.
     """
-    tenant_id = int(user.tenant_id)  # type: ignore[arg-type]
+    tenant_id = str(user.tenant_id)
 
-    tools = get_all_tools(tenant_id=tenant_id, user=user, session=session)
+    tools = get_all_tools(tenant_id=tenant_id, user=user)
 
     llm = ChatOpenAI(
         api_key=settings.openai_api_key,
         model=settings.openai_model or "gpt-3.5-turbo",
         temperature=settings.openai_temperature,
-        streaming=False,  # FastAPI streaming can be added later
+        streaming=False,
     )
 
-    # LangChain's create_openai_functions_agent expects an `agent_scratchpad`
-    # placeholder where it can inject intermediate tool call messages.
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", SYSTEM_PROMPT),
@@ -79,21 +76,20 @@ def _convert_history(
 
 
 async def run_agent_chat(
-    user: User, session: Session, messages: List[Dict[str, str]]
+    user: User, messages: List[Dict[str, str]]
 ) -> str:
     """Run the agent for a chat-style request.
 
     Args:
         user: Current authenticated user
-        session: Database session
-        messages: List of {\"role\": \"user\"|\"assistant\"|\"system\", \"content\": \"...\"}
+        messages: List of {"role": "user"|"assistant"|"system", "content": "..."}
 
     Returns:
         Assistant reply as plain text.
     """
     chat_history, last_user_message = _convert_history(messages)
 
-    agent = build_agent(user, session)
+    agent = build_agent(user)
 
     result: Dict[str, Any] = await agent.ainvoke(
         {
@@ -102,7 +98,6 @@ async def run_agent_chat(
         }
     )
 
-    # LangChain agents typically return {\"output\": \"...\"}
     if isinstance(result, dict) and "output" in result:
         return str(result["output"])
 

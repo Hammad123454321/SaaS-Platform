@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
 from app.api.authz import require_permission
@@ -12,10 +11,13 @@ router = APIRouter(prefix="/entitlements", tags=["entitlements"])
 
 
 @router.get("", response_model=list[EntitlementRead])
-def list_entitlements(
-    current_user: User = Depends(get_current_user)) -> list[EntitlementRead]:
-    statement = select(ModuleEntitlement).where(ModuleEntitlement.tenant_id == current_user.tenant_id)
-    entitlements = session.exec(statement).all()
+async def list_entitlements(
+    current_user: User = Depends(get_current_user),
+) -> list[EntitlementRead]:
+    tenant_id = str(current_user.tenant_id)
+    entitlements = await ModuleEntitlement.find(
+        ModuleEntitlement.tenant_id == tenant_id
+    ).to_list()
     return [EntitlementRead.model_validate({
         "module_code": e.module_code,
         "enabled": e.enabled,
@@ -30,22 +32,20 @@ async def toggle_entitlement(
     payload: EntitlementToggleRequest,
     current_user: User = Depends(require_permission(PermissionCode.MANAGE_ENTITLEMENTS)),
 ) -> EntitlementRead:
-    # Ensure tenant exists (guards against stale users)
-    tenant = session.get(Tenant, current_user.tenant_id)
+    tenant_id = str(current_user.tenant_id)
+    tenant = await Tenant.get(current_user.tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found.")
 
-    stmt = select(ModuleEntitlement).where(
-        ModuleEntitlement.tenant_id == current_user.tenant_id,
+    entitlement = await ModuleEntitlement.find_one(
+        ModuleEntitlement.tenant_id == tenant_id,
         ModuleEntitlement.module_code == module_code,
     )
-    entitlement = session.exec(stmt).first()
     if not entitlement:
         entitlement = ModuleEntitlement(
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant_id,
             module_code=module_code,
         )
-        session.add(entitlement)
 
     was_enabled = entitlement.enabled
     entitlement.enabled = payload.enabled
@@ -54,17 +54,13 @@ async def toggle_entitlement(
     if payload.ai_access is not None:
         entitlement.ai_access = payload.ai_access
 
-    session.add(entitlement)
-    session.commit()
-    session.refresh(entitlement)
+    await entitlement.save()
     
-    # If module was just enabled, sync all existing users to this module
     if payload.enabled and not was_enabled:
         try:
             from app.services.module_onboarding import sync_all_users_to_module
             sync_result = await sync_all_users_to_module(
-                session=session,
-                tenant_id=current_user.tenant_id,
+                tenant_id=tenant_id,
                 module_code=module_code,
             )
             import logging
@@ -75,10 +71,9 @@ async def toggle_entitlement(
             logger = logging.getLogger(__name__)
             logger.warning(f"Failed to sync users to {module_code.value}: {e}")
     
-    log_audit(
-        session,
-        tenant_id=current_user.tenant_id,
-        actor_user_id=current_user.id,  # type: ignore[arg-type]
+    await log_audit(
+        tenant_id=tenant_id,
+        actor_user_id=str(current_user.id),
         action="entitlement.toggle",
         target=str(module_code),
         details={"enabled": payload.enabled, "seats": payload.seats, "ai_access": payload.ai_access},
@@ -89,4 +84,3 @@ async def toggle_entitlement(
         "seats": entitlement.seats,
         "ai_access": entitlement.ai_access,
     })
-

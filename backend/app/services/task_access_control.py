@@ -3,7 +3,6 @@
 Role-based access control for task management operations.
 """
 from typing import Optional
-from sqlmodel import Session, select
 
 from app.models.user import User
 from app.models.role import Role
@@ -12,19 +11,19 @@ from app.models.tasks import Task, Project
 from app.services.owner_service import is_user_owner
 
 
-def can_user_access_task_management(user: User, session: Session) -> bool:
+def can_user_access_task_management(user: User) -> bool:
     """Check if user can access task management module at all."""
     # Accountant has read-only access, others have full access
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Accountant, Staff, Manager, Owner, company_admin all can access
     # Only users with no roles cannot access
     return len(role_names) > 0
 
 
-def can_user_create_task(user: User, session: Session) -> bool:
+async def can_user_create_task(user: User) -> bool:
     """Check if user can create tasks."""
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Owner, Manager, Staff can create tasks
     # Accountant cannot create (read-only)
@@ -34,12 +33,13 @@ def can_user_create_task(user: User, session: Session) -> bool:
     return "owner" in role_names or "manager" in role_names or "staff" in role_names or "company_admin" in role_names
 
 
-def can_user_update_task(user: User, task: Task, session: Session) -> bool:
+async def can_user_update_task(user: User, task: Task) -> bool:
     """Check if user can update a task."""
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Owner and Manager have full access
-    if is_user_owner(session, user.id, user.tenant_id) or "manager" in role_names or "company_admin" in role_names:
+    is_owner = await is_user_owner(str(user.id), user.tenant_id)
+    if is_owner or "manager" in role_names or "company_admin" in role_names:
         return True
     
     # Staff can only change status
@@ -50,9 +50,9 @@ def can_user_update_task(user: User, task: Task, session: Session) -> bool:
     return False
 
 
-def can_user_change_task_status(user: User, session: Session) -> bool:
+async def can_user_change_task_status(user: User) -> bool:
     """Check if user can change task status."""
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Owner, Manager, Staff can change status
     # Accountant cannot
@@ -62,90 +62,88 @@ def can_user_change_task_status(user: User, session: Session) -> bool:
     return "owner" in role_names or "manager" in role_names or "staff" in role_names or "company_admin" in role_names
 
 
-def can_user_delete_task(user: User, task: Task, session: Session) -> bool:
+async def can_user_delete_task(user: User, task: Task) -> bool:
     """Check if user can delete a task."""
     # Required tasks cannot be deleted by anyone
     if task.is_required:
         return False
     
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Only Owner and Manager can delete
-    if is_user_owner(session, user.id, user.tenant_id) or "manager" in role_names or "company_admin" in role_names:
+    is_owner = await is_user_owner(str(user.id), user.tenant_id)
+    if is_owner or "manager" in role_names or "company_admin" in role_names:
         return True
     
     return False
 
 
-def can_user_create_project(user: User, session: Session) -> bool:
+async def can_user_create_project(user: User) -> bool:
     """Check if user can create projects."""
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Owner and Manager can always create projects
-    if is_user_owner(session, user.id, user.tenant_id) or "manager" in role_names or "company_admin" in role_names:
+    is_owner = await is_user_owner(str(user.id), user.tenant_id)
+    if is_owner or "manager" in role_names or "company_admin" in role_names:
         return True
     
     # Staff can create projects if granted permission
     if "staff" in role_names:
-        permission = session.exec(
-            select(UserPermission).where(
-                UserPermission.user_id == user.id,
-                UserPermission.permission_code == "create_projects"
-            )
-        ).first()
+        permission = await UserPermission.find_one(
+            UserPermission.user_id == str(user.id),
+            UserPermission.permission_code == "create_projects"
+        )
         return permission is not None
     
     return False
 
 
-def can_user_update_project(user: User, project: Project, session: Session) -> bool:
+async def can_user_update_project(user: User, project: Project) -> bool:
     """Check if user can update a project."""
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Owner and Manager have full access
-    if is_user_owner(session, user.id, user.tenant_id) or "manager" in role_names or "company_admin" in role_names:
+    is_owner = await is_user_owner(str(user.id), user.tenant_id)
+    if is_owner or "manager" in role_names or "company_admin" in role_names:
         return True
     
     # Staff can update if they created it or have permission
     if "staff" in role_names:
-        if project.created_by == user.id:
+        # Check if project has created_by field and matches user
+        if hasattr(project, 'created_by') and project.created_by == str(user.id):
             return True
-        permission = session.exec(
-            select(UserPermission).where(
-                UserPermission.user_id == user.id,
-                UserPermission.permission_code == "create_projects"
-            )
-        ).first()
+        permission = await UserPermission.find_one(
+            UserPermission.user_id == str(user.id),
+            UserPermission.permission_code == "create_projects"
+        )
         return permission is not None
     
     return False
 
 
-def can_user_delete_project(user: User, project: Project, session: Session) -> bool:
+async def can_user_delete_project(user: User, project: Project) -> bool:
     """Check if user can delete a project."""
-    role_names = [r.name.lower() for r in user.roles]
+    role_names = [r.name.lower() for r in user.roles] if user.roles else []
     
     # Only Owner and Manager can delete
-    if is_user_owner(session, user.id, user.tenant_id) or "manager" in role_names or "company_admin" in role_names:
+    is_owner = await is_user_owner(str(user.id), user.tenant_id)
+    if is_owner or "manager" in role_names or "company_admin" in role_names:
         return True
     
     return False
 
 
-def grant_project_creation_permission(
-    session: Session,
-    user_id: int,
-    tenant_id: int,
-    granted_by_user_id: int
+async def grant_project_creation_permission(
+    user_id: str,
+    tenant_id: str,
+    granted_by_user_id: str
 ) -> UserPermission:
     """Grant a Staff user permission to create projects."""
     # Check if permission already exists
-    existing = session.exec(
-        select(UserPermission).where(
-            UserPermission.user_id == user_id,
-            UserPermission.permission_code == "create_projects"
-        )
-    ).first()
+    existing = await UserPermission.find_one(
+        UserPermission.user_id == user_id,
+        UserPermission.permission_code == "create_projects"
+    )
     
     if existing:
         return existing
@@ -156,25 +154,19 @@ def grant_project_creation_permission(
         permission_code="create_projects",
         granted_by_user_id=granted_by_user_id
     )
-    session.add(permission)
-    session.commit()
-    session.refresh(permission)
+    await permission.insert()
     return permission
 
 
-def revoke_project_creation_permission(session: Session, user_id: int) -> bool:
+async def revoke_project_creation_permission(user_id: str) -> bool:
     """Revoke a Staff user's permission to create projects."""
-    permission = session.exec(
-        select(UserPermission).where(
-            UserPermission.user_id == user_id,
-            UserPermission.permission_code == "create_projects"
-        )
-    ).first()
+    permission = await UserPermission.find_one(
+        UserPermission.user_id == user_id,
+        UserPermission.permission_code == "create_projects"
+    )
     
     if permission:
-        session.delete(permission)
-        session.commit()
+        await permission.delete()
         return True
     
     return False
-

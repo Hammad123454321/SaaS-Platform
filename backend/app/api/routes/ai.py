@@ -2,7 +2,6 @@ from typing import List, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlmodel import Session
 
 from app.api.deps import get_current_user
 from app.models import User
@@ -37,7 +36,6 @@ async def ai_chat(
     """
     reply = await run_agent_chat(
         user=current_user,
-        session=session,
         messages=[m.model_dump() for m in payload.messages],
     )
     return AgentChatResponse(reply=reply)
@@ -53,7 +51,7 @@ class InsightsResponse(BaseModel):
 
 class TaskAIRequest(BaseModel):
     title: str
-    context: str = ""  # Optional context like project name, industry, etc.
+    context: str = ""
 
 
 class TaskAIResponse(BaseModel):
@@ -71,7 +69,6 @@ async def get_ai_insights(
     
     result = await generate_insights(
         user=current_user,
-        session=session,
     )
     return InsightsResponse(**result)
 
@@ -88,6 +85,5 @@ async def generate_task_description(
         title=payload.title,
         context=payload.context,
         user=current_user,
-        session=session,
     )
     return TaskAIResponse(**result)

@@ -1,7 +1,6 @@
 """API routes for Stages 4 and 5."""
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlmodel import Session, select
 from typing import List
 
 from app.api.deps import get_current_user
@@ -39,7 +38,7 @@ router = APIRouter(prefix="/compliance", tags=["compliance"])
 # ========== Stage 4: Privacy & CASL Wording ==========
 
 @router.get("/privacy-wording")
-def get_privacy_wording_endpoint(
+async def get_privacy_wording_endpoint(
     wording_type: str = "privacy_policy",
     current_user: User = Depends(get_current_user),
 ) -> dict:
@@ -62,24 +61,24 @@ def get_privacy_wording_endpoint(
 
 
 @router.post("/privacy-wording/confirm")
-def confirm_privacy_wording_endpoint(
+async def confirm_privacy_wording_endpoint(
     payload: PrivacyWordingConfirm,
     request: Request,
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Confirm privacy policy or CASL wording."""
-    # Only owner can confirm
-    if not is_user_owner(session, current_user.id, current_user.tenant_id):
+    tenant_id = str(current_user.tenant_id)
+    
+    if not await is_user_owner(str(current_user.id), tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can confirm privacy wording."
         )
     
-    wording = confirm_privacy_wording(
-        session=session,
-        tenant_id=current_user.tenant_id,
+    wording = await confirm_privacy_wording(
+        tenant_id=tenant_id,
         wording_type=payload.wording_type,
-        confirmed_by_user_id=current_user.id
+        confirmed_by_user_id=str(current_user.id)
     )
     
     return {
@@ -92,21 +91,21 @@ def confirm_privacy_wording_endpoint(
 # ========== Stage 4: Financial Setup ==========
 
 @router.post("/financial-setup", response_model=FinancialSetupResponse, status_code=status.HTTP_201_CREATED)
-def create_financial_setup(
+async def create_financial_setup(
     payload: FinancialSetupCreate,
     current_user: User = Depends(get_current_user),
 ) -> FinancialSetupResponse:
     """Create or update financial setup."""
-    # Only owner can configure financial setup
-    if not is_user_owner(session, current_user.id, current_user.tenant_id):
+    tenant_id = str(current_user.tenant_id)
+    
+    if not await is_user_owner(str(current_user.id), tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can configure financial setup."
         )
     
-    financial_setup = create_or_update_financial_setup(
-        session=session,
-        tenant_id=current_user.tenant_id,
+    financial_setup = await create_or_update_financial_setup(
+        tenant_id=tenant_id,
         payroll_type=payload.payroll_type,
         pay_schedule=payload.pay_schedule,
         wsib_class=payload.wsib_class
@@ -116,13 +115,15 @@ def create_financial_setup(
 
 
 @router.get("/financial-setup", response_model=FinancialSetupResponse)
-def get_financial_setup(
+async def get_financial_setup(
     current_user: User = Depends(get_current_user),
 ) -> FinancialSetupResponse:
     """Get financial setup for tenant."""
-    financial_setup = session.exec(
-        select(FinancialSetup).where(FinancialSetup.tenant_id == current_user.tenant_id)
-    ).first()
+    tenant_id = str(current_user.tenant_id)
+    
+    financial_setup = await FinancialSetup.find_one(
+        FinancialSetup.tenant_id == tenant_id
+    )
     
     if not financial_setup:
         raise HTTPException(
@@ -134,7 +135,7 @@ def get_financial_setup(
 
 
 @router.post("/financial-setup/confirm", response_model=FinancialSetupResponse)
-def confirm_financial_setup_endpoint(
+async def confirm_financial_setup_endpoint(
     payload: FinancialSetupConfirm,
     current_user: User = Depends(get_current_user),
 ) -> FinancialSetupResponse:
@@ -145,17 +146,17 @@ def confirm_financial_setup_endpoint(
             detail="You must confirm the financial setup values."
         )
     
-    # Only owner can confirm
-    if not is_user_owner(session, current_user.id, current_user.tenant_id):
+    tenant_id = str(current_user.tenant_id)
+    
+    if not await is_user_owner(str(current_user.id), tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can confirm financial setup."
         )
     
-    financial_setup = confirm_financial_setup(
-        session=session,
-        tenant_id=current_user.tenant_id,
-        confirmed_by_user_id=current_user.id
+    financial_setup = await confirm_financial_setup(
+        tenant_id=tenant_id,
+        confirmed_by_user_id=str(current_user.id)
     )
     
     return FinancialSetupResponse(**financial_setup.model_dump())
@@ -164,23 +165,21 @@ def confirm_financial_setup_endpoint(
 # ========== Stage 4: HR Policies ==========
 
 @router.post("/hr-policies/seed", response_model=List[HRPolicyResponse])
-def seed_hr_policies_endpoint(
-) -> List[HRPolicyResponse]:
+async def seed_hr_policies_endpoint() -> List[HRPolicyResponse]:
     """Seed predefined HR policies (idempotent)."""
-    policies = seed_hr_policies(session)
+    policies = await seed_hr_policies()
     return [HRPolicyResponse(**p.model_dump()) for p in policies]
 
 
 @router.get("/hr-policies", response_model=List[HRPolicyResponse])
-def get_hr_policies(
-) -> List[HRPolicyResponse]:
+async def get_hr_policies() -> List[HRPolicyResponse]:
     """Get all required HR policies."""
-    policies = get_required_hr_policies(session)
+    policies = await get_required_hr_policies()
     return [HRPolicyResponse(**p.model_dump()) for p in policies]
 
 
 @router.post("/hr-policies/acknowledge")
-def acknowledge_hr_policies_endpoint(
+async def acknowledge_hr_policies_endpoint(
     payload: PolicyAcknowledgementRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -189,9 +188,8 @@ def acknowledge_hr_policies_endpoint(
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     
-    acknowledgements = acknowledge_hr_policies(
-        session=session,
-        user_id=current_user.id,
+    acknowledgements = await acknowledge_hr_policies(
+        user_id=str(current_user.id),
         policy_ids=payload.policy_ids,
         ip_address=ip_address,
         user_agent=user_agent
@@ -205,14 +203,13 @@ def acknowledge_hr_policies_endpoint(
 
 
 @router.get("/hr-policies/acknowledgement-status")
-def get_acknowledgement_status(
+async def get_acknowledgement_status(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Check if user has acknowledged all required HR policies."""
-    has_acknowledged = has_user_acknowledged_all_required_policies(session, current_user.id)
+    has_acknowledged = await has_user_acknowledged_all_required_policies(str(current_user.id))
     
     return {
         "has_acknowledged_all": has_acknowledged,
-        "user_id": current_user.id
+        "user_id": str(current_user.id)
     }
-

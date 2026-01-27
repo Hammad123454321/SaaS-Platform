@@ -5,29 +5,27 @@ Business logic for tag management operations.
 All operations are tenant-isolated.
 """
 import logging
+import re
 from typing import Optional, List, Dict, Any
 
-from sqlmodel import Session, select, and_, or_
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
 from app.models import Tag, Task
-from app.models.tasks import task_tags_table
+from app.models.tasks import TaskTagLink
 
 logger = logging.getLogger(__name__)
 
 
 # ========== Tag Operations ==========
-def create_tag(session: Session, tenant_id: int, tag_data: Dict[str, Any]) -> Tag:
+async def create_tag(tenant_id: str, tag_data: Dict[str, Any]) -> Tag:
     """Create a new tag."""
-    # Check if tag name already exists for this tenant
-    existing = session.exec(
-        select(Tag).where(
-            and_(
-                Tag.tenant_id == tenant_id,
-                Tag.name.ilike(tag_data["name"])
-            )
-        )
-    ).first()
+    # Check if tag name already exists for this tenant (case-insensitive)
+    tag_name = tag_data["name"]
+    existing = await Tag.find_one(
+        Tag.tenant_id == tenant_id,
+        {"name": {"$regex": f"^{re.escape(tag_name)}$", "$options": "i"}}
+    )
     
     if existing:
         raise HTTPException(
@@ -40,37 +38,32 @@ def create_tag(session: Session, tenant_id: int, tag_data: Dict[str, Any]) -> Ta
         name=tag_data["name"],
         color=tag_data.get("color", "#6b7280"),
     )
-    session.add(tag)
-    session.commit()
-    session.refresh(tag)
+    await tag.insert()
     return tag
 
 
-def get_tag(session: Session, tenant_id: int, tag_id: int) -> Optional[Tag]:
+async def get_tag(tenant_id: str, tag_id: str) -> Optional[Tag]:
     """Get a tag by ID."""
-    return session.exec(
-        select(Tag).where(
-            and_(
-                Tag.id == tag_id,
-                Tag.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    return await Tag.find_one(
+        Tag.id == PydanticObjectId(tag_id),
+        Tag.tenant_id == tenant_id
+    )
 
 
-def list_tags(session: Session, tenant_id: int, search: Optional[str] = None) -> List[Tag]:
+async def list_tags(tenant_id: str, search: Optional[str] = None) -> List[Tag]:
     """List all tags for a tenant."""
-    query = select(Tag).where(Tag.tenant_id == tenant_id)
+    conditions = [Tag.tenant_id == tenant_id]
     
     if search:
-        query = query.where(Tag.name.ilike(f"%{search}%"))
+        search_regex = re.compile(f".*{re.escape(search)}.*", re.IGNORECASE)
+        conditions.append({"name": {"$regex": search_regex}})
     
-    return list(session.exec(query.order_by(Tag.name.asc())).all())
+    return await Tag.find(*conditions).sort(+Tag.name).to_list()
 
 
-def update_tag(session: Session, tenant_id: int, tag_id: int, updates: Dict[str, Any]) -> Tag:
+async def update_tag(tenant_id: str, tag_id: str, updates: Dict[str, Any]) -> Tag:
     """Update a tag."""
-    tag = get_tag(session, tenant_id, tag_id)
+    tag = await get_tag(tenant_id, tag_id)
     if not tag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -79,15 +72,11 @@ def update_tag(session: Session, tenant_id: int, tag_id: int, updates: Dict[str,
     
     # Check name uniqueness if name is being updated
     if "name" in updates and updates["name"] != tag.name:
-        existing = session.exec(
-            select(Tag).where(
-                and_(
-                    Tag.tenant_id == tenant_id,
-                    Tag.name.ilike(updates["name"]),
-                    Tag.id != tag_id
-                )
-            )
-        ).first()
+        existing = await Tag.find_one(
+            Tag.tenant_id == tenant_id,
+            {"name": {"$regex": f"^{re.escape(updates['name'])}$", "$options": "i"}},
+            Tag.id != PydanticObjectId(tag_id)
+        )
         
         if existing:
             raise HTTPException(
@@ -100,38 +89,39 @@ def update_tag(session: Session, tenant_id: int, tag_id: int, updates: Dict[str,
     if "color" in updates:
         tag.color = updates["color"]
     
-    session.add(tag)
-    session.commit()
-    session.refresh(tag)
+    await tag.save()
     return tag
 
 
-def delete_tag(session: Session, tenant_id: int, tag_id: int) -> None:
+async def delete_tag(tenant_id: str, tag_id: str) -> None:
     """Delete a tag (removes all task associations)."""
-    tag = get_tag(session, tenant_id, tag_id)
+    tag = await get_tag(tenant_id, tag_id)
     if not tag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tag not found"
         )
     
-    # Remove all task associations (handled by CASCADE in database)
-    session.delete(tag)
-    session.commit()
+    # Remove all task associations
+    links = await TaskTagLink.find(TaskTagLink.tag_id == tag_id).to_list()
+    for link in links:
+        await link.delete()
+    
+    await tag.delete()
 
 
-def assign_tags_to_task(
-    session: Session,
-    tenant_id: int,
-    task_id: int,
-    tag_ids: List[int]
+async def assign_tags_to_task(
+    tenant_id: str,
+    task_id: str,
+    tag_ids: List[str]
 ) -> Task:
     """Assign tags to a task."""
-    from sqlalchemy import delete, insert
-    
     # Verify task exists
-    task = session.get(Task, task_id)
-    if not task or task.tenant_id != tenant_id:
+    task = await Task.find_one(
+        Task.id == PydanticObjectId(task_id),
+        Task.tenant_id == tenant_id
+    )
+    if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
@@ -139,7 +129,7 @@ def assign_tags_to_task(
     
     # Verify all tags exist and belong to tenant
     for tag_id in tag_ids:
-        tag = get_tag(session, tenant_id, tag_id)
+        tag = await get_tag(tenant_id, tag_id)
         if not tag:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -147,72 +137,72 @@ def assign_tags_to_task(
             )
     
     # Remove existing associations
-    session.exec(
-        delete(task_tags_table).where(
-            task_tags_table.c.task_id == task_id
-        )
-    )
+    existing_links = await TaskTagLink.find(TaskTagLink.task_id == task_id).to_list()
+    for link in existing_links:
+        await link.delete()
     
     # Add new associations
-    if tag_ids:
-        session.exec(
-            insert(task_tags_table).values([
-                {"task_id": task_id, "tag_id": tag_id}
-                for tag_id in tag_ids
-            ])
-        )
+    for tag_id in tag_ids:
+        link = TaskTagLink(task_id=task_id, tag_id=tag_id)
+        await link.insert()
     
-    session.commit()
-    session.refresh(task)
     return task
 
 
-def get_task_tags(session: Session, tenant_id: int, task_id: int) -> List[Tag]:
+async def get_task_tags(tenant_id: str, task_id: str) -> List[Tag]:
     """Get all tags for a task."""
-    task = session.get(Task, task_id)
-    if not task or task.tenant_id != tenant_id:
+    task = await Task.find_one(
+        Task.id == PydanticObjectId(task_id),
+        Task.tenant_id == tenant_id
+    )
+    if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
         )
     
-    # Get tags via the association table
-    tags = session.exec(
-        select(Tag)
-        .join(task_tags_table, Tag.id == task_tags_table.c.tag_id)
-        .where(task_tags_table.c.task_id == task_id)
-    ).all()
+    # Get tags via the link collection
+    links = await TaskTagLink.find(TaskTagLink.task_id == task_id).to_list()
+    tag_ids = [link.tag_id for link in links]
     
-    return list(tags)
+    if not tag_ids:
+        return []
+    
+    tags = await Tag.find(
+        {"_id": {"$in": [PydanticObjectId(tid) for tid in tag_ids]}}
+    ).to_list()
+    
+    return tags
 
 
-def get_tasks_by_tag(session: Session, tenant_id: int, tag_id: int) -> List[Task]:
+async def get_tasks_by_tag(tenant_id: str, tag_id: str) -> List[Task]:
     """Get all tasks with a specific tag."""
-    tag = get_tag(session, tenant_id, tag_id)
+    tag = await get_tag(tenant_id, tag_id)
     if not tag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tag not found"
         )
     
-    tasks = session.exec(
-        select(Task)
-        .join(task_tags_table, Task.id == task_tags_table.c.task_id)
-        .where(
-            and_(
-                Task.tenant_id == tenant_id,
-                task_tags_table.c.tag_id == tag_id
-            )
-        )
-    ).all()
+    # Get task IDs via the link collection
+    links = await TaskTagLink.find(TaskTagLink.tag_id == tag_id).to_list()
+    task_ids = [link.task_id for link in links]
     
-    return list(tasks)
+    if not task_ids:
+        return []
+    
+    tasks = await Task.find(
+        Task.tenant_id == tenant_id,
+        {"_id": {"$in": [PydanticObjectId(tid) for tid in task_ids]}}
+    ).to_list()
+    
+    return tasks
 
 
-def merge_tags(session: Session, tenant_id: int, source_tag_id: int, target_tag_id: int) -> Tag:
+async def merge_tags(tenant_id: str, source_tag_id: str, target_tag_id: str) -> Tag:
     """Merge two tags (move all task associations from source to target, then delete source)."""
-    source_tag = get_tag(session, tenant_id, source_tag_id)
-    target_tag = get_tag(session, tenant_id, target_tag_id)
+    source_tag = await get_tag(tenant_id, source_tag_id)
+    target_tag = await get_tag(tenant_id, target_tag_id)
     
     if not source_tag or not target_tag:
         raise HTTPException(
@@ -227,28 +217,23 @@ def merge_tags(session: Session, tenant_id: int, source_tag_id: int, target_tag_
         )
     
     # Get all tasks with source tag
-    tasks_with_source = get_tasks_by_tag(session, tenant_id, source_tag_id)
+    tasks_with_source = await get_tasks_by_tag(tenant_id, source_tag_id)
     
     # For each task, ensure it has the target tag
     for task in tasks_with_source:
-        current_tags = get_task_tags(session, tenant_id, task.id)
-        current_tag_ids = [t.id for t in current_tags]
+        current_tags = await get_task_tags(tenant_id, str(task.id))
+        current_tag_ids = [str(t.id) for t in current_tags]
         
         # Remove source tag, add target tag if not present
         if target_tag_id not in current_tag_ids:
             new_tag_ids = [tid for tid in current_tag_ids if tid != source_tag_id] + [target_tag_id]
-            assign_tags_to_task(session, tenant_id, task.id, new_tag_ids)
+            await assign_tags_to_task(tenant_id, str(task.id), new_tag_ids)
         else:
             # Just remove source tag
             new_tag_ids = [tid for tid in current_tag_ids if tid != source_tag_id]
-            assign_tags_to_task(session, tenant_id, task.id, new_tag_ids)
+            await assign_tags_to_task(tenant_id, str(task.id), new_tag_ids)
     
     # Delete source tag
-    delete_tag(session, tenant_id, source_tag_id)
+    await delete_tag(tenant_id, source_tag_id)
     
     return target_tag
-
-
-
-
-

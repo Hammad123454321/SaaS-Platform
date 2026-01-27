@@ -1,62 +1,59 @@
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy.exc import IntegrityError
-# Note: User is a Beanie Document, use Beanie queries instead of SQLModel
-from pydantic import BaseModel, Field
-import secrets
-import logging
 
-from app.config import settings, is_development
+import logging
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, Field
+
+from app.api.authz import require_permission
+from app.api.deps import get_current_user
+from app.config import is_development, settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    decode_token,
     hash_password,
     verify_password,
-    decode_token,
 )
 from app.models import (
+    ImpersonationAudit,
+    ModuleCode,
+    ModuleEntitlement,
+    PasswordResetToken,
     Tenant,
     User,
-    ModuleEntitlement,
-    ModuleCode,
     UserRole,
-    PasswordResetToken,
-    ImpersonationAudit,
 )
-from app.services.tasks import ensure_default_statuses
 from app.models.onboarding import (
+    CommunicationPreferences,
     PolicyAcceptance,
     PolicyType,
-    CommunicationPreferences,
 )
 from app.models.role import PermissionCode, Role
-from app.seed import ensure_roles_for_tenant
 from app.schemas import (
-    SignupRequest,
+    ImpersonateRequest,
     LoginRequest,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    RefreshRequest,
+    SignupRequest,
     TokenResponse,
     UserRead,
-    PasswordResetRequest,
-    PasswordResetConfirm,
-    RefreshRequest,
-    ImpersonateRequest,
 )
 from app.schemas.onboarding_stages import (
-    VerifyEmailRequest,
     ResendVerificationRequest,
     VerificationStatusResponse,
+    VerifyEmailRequest,
 )
-from app.api.deps import get_current_user
-from app.api.authz import require_permission
+from app.seed import ensure_roles_for_tenant
+from app.services.audit_service import log_registration_event
 from app.services.email import send_password_reset
+from app.services.tasks import ensure_default_statuses
 from app.services.verification_service import (
-    create_verification_token,
     send_verification_email,
     verify_email_token,
 )
-from app.services.audit_service import log_registration_event
-from fastapi import Request
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -91,109 +88,116 @@ async def signup(
     if not payload.accept_privacy_policy or not payload.accept_terms_of_service:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You must accept Privacy Policy and Terms of Service to register."
+            detail="You must accept Privacy Policy and Terms of Service to register.",
         )
-    
+
     _validate_password_strength(payload.password)
 
-    # Create draft tenant
+    # Create draft tenant (Mongo/Beanie)
     tenant = Tenant(name=payload.tenant_name, is_draft=True)
+    try:
+        await tenant.insert()
+    except Exception:
+        # Likely duplicate tenant name or other constraint violation
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant already exists.",
+        )
+
     # Development mode override: auto-verify email and activate account
     auto_verify = is_development()
     user = User(
+        tenant_id=str(tenant.id),
         tenant=tenant,
         email=payload.email.lower(),
         hashed_password=hash_password(payload.password),
         is_super_admin=False,
-        email_verified=auto_verify,  # Auto-verify in development mode
-        is_active=auto_verify,  # Auto-activate in development mode
+        email_verified=auto_verify,
+        is_active=auto_verify,
+        is_owner=True,
     )
+
     try:
-        session.add(tenant)
-        session.flush()  # may raise duplicate tenant name
-        session.add(user)
-        session.flush()
-
-        # Store policy acceptances
-        policy_version = "1.0"  # Hardcoded for now
-        ip_address = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent")
-        
-        session.add(PolicyAcceptance(
-            user_id=user.id,
-            policy_type=PolicyType.PRIVACY_POLICY,
-            policy_version=policy_version,
-            ip_address=ip_address,
-            user_agent=user_agent
-        ))
-        session.add(PolicyAcceptance(
-            user_id=user.id,
-            policy_type=PolicyType.TERMS_OF_SERVICE,
-            policy_version=policy_version,
-            ip_address=ip_address,
-            user_agent=user_agent
-        ))
-
-        # Store communication preferences
-        marketing_consent_at = datetime.utcnow() if payload.marketing_email_consent else None
-        session.add(CommunicationPreferences(
-            user_id=user.id,
-            email_enabled=payload.email_enabled,
-            sms_enabled=payload.sms_enabled,
-            marketing_email_consent=payload.marketing_email_consent,
-            marketing_email_consent_at=marketing_consent_at,
-            marketing_email_consent_source="signup"
-        ))
-
-        roles_by_name = ensure_roles_for_tenant(session, tenant.id)  # type: ignore[arg-type]
-        # Assign company_admin role (not super_admin) for tenant owner
-        company_admin_role = roles_by_name.get("company_admin")
-        if company_admin_role:
-            session.add(UserRole(user_id=user.id, role_id=company_admin_role.id))  # type: ignore[arg-type]
-
-        # Initialize entitlements disabled by default
-        for module in ModuleCode:
-            session.add(
-                ModuleEntitlement(
-                    tenant_id=tenant.id,  # type: ignore[arg-type]
-                    module_code=module,
-                    enabled=False,
-                    seats=0,
-                    ai_access=False,
-                )
-            )
-        session.commit()
-        
-        # Create default task statuses for the new tenant
-        try:
-            ensure_default_statuses(session, tenant.id)  # type: ignore[arg-type]
-        except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to create default statuses for tenant {tenant.id}: {e}")
-            # Don't fail signup if status creation fails
-    except IntegrityError as exc:
-        session.rollback()
+        await user.insert()
+    except Exception:
+        # Clean up tenant if user creation fails due to duplicate email, etc.
+        await tenant.delete()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tenant or user already exists.",
-        ) from exc
-    
-    session.refresh(user)
+            detail="User already exists.",
+        )
+
+    # Store policy acceptances
+    policy_version = "1.0"  # Hardcoded for now
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    await PolicyAcceptance(
+        user_id=str(user.id),
+        policy_type=PolicyType.PRIVACY_POLICY,
+        policy_version=policy_version,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    ).insert()
+    await PolicyAcceptance(
+        user_id=str(user.id),
+        policy_type=PolicyType.TERMS_OF_SERVICE,
+        policy_version=policy_version,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    ).insert()
+
+    # Store communication preferences
+    marketing_consent_at = datetime.utcnow() if payload.marketing_email_consent else None
+    await CommunicationPreferences(
+        user_id=str(user.id),
+        email_enabled=payload.email_enabled,
+        sms_enabled=payload.sms_enabled,
+        marketing_email_consent=payload.marketing_email_consent,
+        marketing_email_consent_at=marketing_consent_at,
+        marketing_email_consent_source="signup",
+    ).insert()
+
+    # Ensure roles and assign company_admin to owner
+    roles_by_name = await ensure_roles_for_tenant(str(tenant.id))
+    company_admin_role = roles_by_name.get("company_admin")
+    if company_admin_role:
+        await UserRole(
+            user_id=str(user.id),
+            role_id=str(company_admin_role.id),
+        ).insert()
+
+    # Initialize entitlements disabled by default
+    for module in ModuleCode:
+        await ModuleEntitlement(
+            tenant_id=str(tenant.id),
+            module_code=module,
+            enabled=False,
+            seats=0,
+            ai_access=False,
+        ).insert()
+
+    # Create default task statuses for the new tenant (Mongo-aware helper)
+    try:
+        await ensure_default_statuses(str(tenant.id))
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to create default statuses for tenant {tenant.id}: {e}")
+        # Don't fail signup if status creation fails
 
     # Log registration event
-    log_registration_event(
-        session=session,
-        user_id=user.id,
-        tenant_id=user.tenant_id,
+    await log_registration_event(
+        user_id=str(user.id),
+        tenant_id=str(tenant.id),
         event_type="registration",
         ip_address=ip_address,
-        user_agent=user_agent
+        user_agent=user_agent,
     )
 
     # Send verification email (skip in development mode if auto-verified)
     if not auto_verify:
         try:
-            send_verification_email(session, user, resend=False)
+            await send_verification_email(user, resend=False)
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to send verification email: {e}")
@@ -208,7 +212,7 @@ async def signup(
     return {
         "status": "success",
         "message": message,
-        "email": user.email
+        "email": user.email,
     }
 
 
@@ -253,13 +257,13 @@ def me(
 
 
 @router.get("/onboarding-status")
-def get_onboarding_status(
+async def get_onboarding_status(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Check if user's onboarding is complete."""
     from app.services.onboarding_completion_service import is_onboarding_complete
-    
-    is_complete, missing_stage = is_onboarding_complete(session, current_user)
+
+    is_complete, missing_stage = await is_onboarding_complete(current_user)
     return {
         "onboarding_complete": is_complete,
         "missing_stage": missing_stage
@@ -293,38 +297,51 @@ async def request_password_reset(payload: PasswordResetRequest) -> dict[str, str
 
 
 @router.post("/password-reset/confirm")
-def confirm_password_reset(
-    payload: PasswordResetConfirm
+async def confirm_password_reset(
+    payload: PasswordResetConfirm,
 ) -> dict[str, str]:
-    stmt = select(PasswordResetToken).where(
-        PasswordResetToken.used_at.is_(None),
-        PasswordResetToken.expires_at >= datetime.utcnow(),
-    )
-    tokens = session.exec(stmt).all()
-    target = None
-    for t in tokens:
+    """Confirm password reset using a Beanie-stored reset token."""
+    now = datetime.utcnow()
+
+    # Find a valid token document and verify the raw token against the stored hash
+    candidates = await PasswordResetToken.find(
+        PasswordResetToken.used_at.is_(None),  # type: ignore[arg-type]
+        PasswordResetToken.expires_at >= now,
+    ).to_list()
+
+    target: PasswordResetToken | None = None
+    for t in candidates:
         if verify_password(payload.token, t.token_hash):
             target = t
             break
-    if not target:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token.")
 
-    user = session.get(User, target.user_id)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired token.",
+        )
+
+    user = await User.get(target.user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user.",
+        )
 
     _validate_password_strength(payload.new_password)
     user.hashed_password = hash_password(payload.new_password)
-    target.used_at = datetime.utcnow()
-    session.add(user)
-    session.add(target)
-    session.commit()
+    target.used_at = now
+
+    await user.save()
+    await target.save()
 
     # Cleanup expired tokens opportunistically
-    session.exec(
-        PasswordResetToken.__table__.delete().where(PasswordResetToken.expires_at < datetime.utcnow())
-    )
-    session.commit()
+    expired_tokens = await PasswordResetToken.find(
+        PasswordResetToken.expires_at < now
+    ).to_list()
+    for t in expired_tokens:
+        await t.delete()
+
     return {"status": "ok"}
 
 
@@ -340,7 +357,7 @@ class FirstLoginPasswordChangeRequest(BaseModel):
 
 
 @router.post("/first-login/change-password")
-def change_password_first_login(
+async def change_password_first_login(
     payload: FirstLoginPasswordChangeRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -364,44 +381,46 @@ def change_password_first_login(
     _validate_password_strength(payload.new_password)
     current_user.hashed_password = hash_password(payload.new_password)
     current_user.password_change_required = False  # Clear the flag
-    session.add(current_user)
-    session.flush()
-    
+    await current_user.save()
+
     # Store policy acceptances
     policy_version = "1.0"
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    
-    from app.models.onboarding import PolicyAcceptance, PolicyType, CommunicationPreferences
-    session.add(PolicyAcceptance(
-        user_id=current_user.id,
+
+    await PolicyAcceptance(
+        user_id=str(current_user.id),
         policy_type=PolicyType.PRIVACY_POLICY,
         policy_version=policy_version,
         ip_address=ip_address,
-        user_agent=user_agent
-    ))
-    session.add(PolicyAcceptance(
-        user_id=current_user.id,
+        user_agent=user_agent,
+    ).insert()
+    await PolicyAcceptance(
+        user_id=str(current_user.id),
         policy_type=PolicyType.TERMS_OF_SERVICE,
         policy_version=policy_version,
         ip_address=ip_address,
-        user_agent=user_agent
-    ))
-    
+        user_agent=user_agent,
+    ).insert()
+
     # Store communication preferences
     marketing_consent_at = datetime.utcnow() if payload.marketing_email_consent else None
-    session.add(CommunicationPreferences(
-        user_id=current_user.id,
+    await CommunicationPreferences(
+        user_id=str(current_user.id),
         email_enabled=payload.email_enabled,
         sms_enabled=payload.sms_enabled,
         marketing_email_consent=payload.marketing_email_consent,
         marketing_email_consent_at=marketing_consent_at,
-        marketing_email_consent_source="first_login"
-    ))
-    
+        marketing_email_consent_source="first_login",
+    ).insert()
+
     # Handle HR policy acknowledgements
-    from app.services.compliance_service import get_required_hr_policies, acknowledge_hr_policies
-    required_policies = get_required_hr_policies(session)
+    from app.services.compliance_service import (
+        get_required_hr_policies,
+        acknowledge_hr_policies,
+    )
+
+    required_policies = await get_required_hr_policies()
     required_policy_ids = {p.id for p in required_policies}
     
     if payload.hr_policy_acknowledgements:
@@ -413,12 +432,11 @@ def change_password_first_login(
             )
         
         # Record acknowledgements
-        acknowledge_hr_policies(
-            session=session,
-            user_id=current_user.id,
-            policy_ids=payload.hr_policy_acknowledgements,
+        await acknowledge_hr_policies(
+            user_id=str(current_user.id),
+            policy_ids=[str(pid) for pid in payload.hr_policy_acknowledgements],
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
     elif required_policies:
         # If policies exist but none acknowledged, block access
@@ -427,30 +445,40 @@ def change_password_first_login(
             detail="You must acknowledge all required HR policies."
         )
     
-    session.commit()
-    return {"status": "ok", "message": "Password changed successfully and policies accepted."}
+    return {
+        "status": "ok",
+        "message": "Password changed successfully and policies accepted.",
+    }
 
 
 @router.post("/impersonate", response_model=TokenResponse)
-def impersonate(
+async def impersonate(
     payload: ImpersonateRequest,
-    current_user: User = Depends(require_permission(PermissionCode.IMPERSONATE_USER)),
+    current_user: User = Depends(
+        require_permission(PermissionCode.IMPERSONATE_USER)
+    ),
 ) -> TokenResponse:
-    target = session.get(User, payload.target_user_id)
+    target = await User.get(payload.target_user_id)
     if not target or target.tenant_id != current_user.tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
+
     subject = f"{target.id}:{target.tenant_id}"
     role_names = [r.name for r in target.roles]
-    access = create_access_token(subject, roles=role_names, impersonated_by=current_user.id)
-    refresh = create_refresh_token(subject, impersonated_by=current_user.id)
-    session.add(
-        ImpersonationAudit(
-            actor_user_id=current_user.id,  # type: ignore[arg-type]
-            target_user_id=target.id,  # type: ignore[arg-type]
-            reason=payload.reason or "",
-        )
+    access = create_access_token(
+        subject, roles=role_names, impersonated_by=str(current_user.id)
     )
-    session.commit()
+    refresh = create_refresh_token(
+        subject, impersonated_by=str(current_user.id)
+    )
+
+    await ImpersonationAudit(
+        actor_user_id=str(current_user.id),
+        target_user_id=str(target.id),
+        reason=payload.reason or "",
+    ).insert()
+
     return TokenResponse(access_token=access, refresh_token=refresh)
 
 
@@ -464,7 +492,7 @@ def logout() -> dict[str, str]:
 @router.post("/verify-email", response_model=dict)
 async def verify_email(payload: VerifyEmailRequest) -> dict:
     """Verify email address using token."""
-    user = verify_email_token(session, payload.token)
+    user = await verify_email_token(payload.token)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -490,16 +518,16 @@ async def resend_verification(
     
     if user.email_verified:
         return {"status": "success", "message": "Email is already verified."}
-    
+
     try:
-        send_verification_email(session, user, resend=True)
+        await send_verification_email(user, resend=True)
         return {"status": "success", "message": "Verification email sent."}
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(f"Failed to resend verification email: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to send verification email. Please try again later."
+            detail="Failed to send verification email. Please try again later.",
         )
 
 

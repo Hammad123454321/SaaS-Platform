@@ -1,7 +1,7 @@
 """Service for onboarding tenants to modules (Taskify, CRM, etc.)."""
 import logging
+import secrets
 from typing import Dict, Any, Optional, List
-from sqlmodel import Session, select
 
 from app.models import VendorCredential, Tenant, ModuleCode, ModuleEntitlement, User
 from app.services.vendor_clients.factory import create_vendor_client
@@ -10,35 +10,19 @@ logger = logging.getLogger(__name__)
 
 
 async def onboard_tenant_to_taskify(
-    session: Session,
-    tenant_id: int,
+    tenant_id: str,
     taskify_base_url: str,
     api_token: str,
-    workspace_id: Optional[int] = None,
+    workspace_id: Optional[str] = None,
 ) -> VendorCredential:
     """
     Onboard a tenant to Taskify module.
-    
-    This creates:
-    1. VendorCredential record with Taskify API credentials
-    2. ModuleEntitlement record (enabled)
-    
-    Args:
-        session: Database session
-        tenant_id: Tenant ID
-        taskify_base_url: Base URL of Taskify instance (e.g., "http://taskify:8001")
-        api_token: Laravel Sanctum API token
-        workspace_id: Optional workspace ID (if not provided, will be created in Taskify)
-    
-    Returns:
-        Created VendorCredential
     """
     # Check if credential already exists
-    stmt = select(VendorCredential).where(
+    existing = await VendorCredential.find_one(
         VendorCredential.tenant_id == tenant_id,
         VendorCredential.vendor == ModuleCode.TASKS.value,
     )
-    existing = session.exec(stmt).first()
     
     if existing:
         # Update existing
@@ -47,9 +31,7 @@ async def onboard_tenant_to_taskify(
             "api_token": api_token,
             "workspace_id": workspace_id,
         }
-        session.add(existing)
-        session.commit()
-        session.refresh(existing)
+        await existing.save()
         return existing
     
     # Create new credential
@@ -62,14 +44,13 @@ async def onboard_tenant_to_taskify(
             "workspace_id": workspace_id,
         },
     )
-    session.add(credential)
+    await credential.insert()
     
     # Ensure entitlement exists and is enabled
-    stmt = select(ModuleEntitlement).where(
+    entitlement = await ModuleEntitlement.find_one(
         ModuleEntitlement.tenant_id == tenant_id,
         ModuleEntitlement.module_code == ModuleCode.TASKS,
     )
-    entitlement = session.exec(stmt).first()
     
     if not entitlement:
         entitlement = ModuleEntitlement(
@@ -77,25 +58,17 @@ async def onboard_tenant_to_taskify(
             module_code=ModuleCode.TASKS,
             enabled=True,
         )
-        session.add(entitlement)
+        await entitlement.insert()
     
-    session.commit()
-    session.refresh(credential)
     return credential
 
 
-async def verify_taskify_connection(
-    session: Session,
-    tenant_id: int,
-) -> Dict[str, Any]:
+async def verify_taskify_connection(tenant_id: str) -> Dict[str, Any]:
     """
     Verify Taskify connection for a tenant.
-    
-    Returns:
-        Dict with status and error message if any
     """
     try:
-        client = await create_vendor_client(ModuleCode.TASKS, tenant_id, session)
+        client = await create_vendor_client(ModuleCode.TASKS, tenant_id)
         if not client:
             return {"status": "error", "message": "No credentials found"}
         
@@ -107,32 +80,19 @@ async def verify_taskify_connection(
 
 
 async def provision_user_to_modules(
-    session: Session,
     user: User,
     password: str,
 ) -> Dict[str, Any]:
     """
     Provision a user to all enabled modules for their tenant.
-    
-    This creates the user in each enabled module (Taskify, CRM, etc.)
-    so they can access those services.
-    
-    Args:
-        session: Database session
-        user: User to provision
-        password: User's plain text password (for module accounts)
-    
-    Returns:
-        Dict with provisioning results per module
     """
     results = {}
     
     # Get all enabled modules for this tenant
-    stmt = select(ModuleEntitlement).where(
+    enabled_modules = await ModuleEntitlement.find(
         ModuleEntitlement.tenant_id == user.tenant_id,
-        ModuleEntitlement.enabled == True,  # noqa: E712
-    )
-    enabled_modules = session.exec(stmt).all()
+        ModuleEntitlement.enabled == True,
+    ).to_list()
     
     if not enabled_modules:
         logger.info(f"No enabled modules for tenant {user.tenant_id}, skipping user provisioning")
@@ -146,7 +106,7 @@ async def provision_user_to_modules(
     for entitlement in enabled_modules:
         module_code = entitlement.module_code
         try:
-            client = await create_vendor_client(module_code, user.tenant_id, session)
+            client = await create_vendor_client(module_code, user.tenant_id)
             if not client:
                 logger.warning(f"No client available for {module_code.value}, skipping")
                 continue
@@ -159,8 +119,8 @@ async def provision_user_to_modules(
                         "last_name": last_name,
                         "email": user.email,
                         "password": password,
-                        "status": 1,  # Active
-                        "require_ev": 0,  # Skip email verification (already verified in SaaS platform)
+                        "status": 1,
+                        "require_ev": 0,
                     }
                     result = await client.create_user(user_data)
                     results[module_code.value] = {"status": "success", "data": result}
@@ -178,27 +138,14 @@ async def provision_user_to_modules(
 
 
 async def sync_all_users_to_module(
-    session: Session,
-    tenant_id: int,
+    tenant_id: str,
     module_code: ModuleCode,
 ) -> Dict[str, Any]:
     """
     Sync all existing users from a tenant to a newly enabled module.
-    
-    This is called when a module is first enabled to create accounts
-    for all existing users.
-    
-    Args:
-        session: Database session
-        tenant_id: Tenant ID
-        module_code: Module to sync users to
-    
-    Returns:
-        Dict with sync results
     """
     # Get all users for this tenant
-    stmt = select(User).where(User.tenant_id == tenant_id, User.is_active == True)  # noqa: E712
-    users = session.exec(stmt).all()
+    users = await User.find(User.tenant_id == tenant_id, User.is_active == True).to_list()
     
     if not users:
         return {"synced": 0, "errors": []}
@@ -209,7 +156,7 @@ async def sync_all_users_to_module(
     # Try to provision each user (without password - they'll need to reset)
     for user in users:
         try:
-            client = await create_vendor_client(module_code, tenant_id, session)
+            client = await create_vendor_client(module_code, tenant_id)
             if not client:
                 errors.append(f"No client for {user.email}")
                 continue
@@ -221,8 +168,6 @@ async def sync_all_users_to_module(
             
             if module_code == ModuleCode.TASKS and hasattr(client, "create_user"):
                 # Create user in Taskify with a temporary password
-                # User will need to reset password via Taskify's forgot password
-                import secrets
                 temp_password = secrets.token_urlsafe(16)
                 user_data = {
                     "first_name": first_name,
@@ -230,7 +175,7 @@ async def sync_all_users_to_module(
                     "email": user.email,
                     "password": temp_password,
                     "status": 1,
-                    "require_ev": 0,  # Skip email verification
+                    "require_ev": 0,
                 }
                 await client.create_user(user_data)
                 synced += 1
@@ -246,8 +191,5 @@ async def sync_all_users_to_module(
         "synced": synced,
         "total_users": len(users),
         "errors": errors,
-        "message": f"Synced {synced}/{len(users)} users. Users may need to reset passwords in {module_code.value}." if synced < len(users) else f"All {synced} users synced successfully.",
+        "message": f"Synced {synced}/{len(users)} users." if synced < len(users) else f"All {synced} users synced successfully.",
     }
-
-
-

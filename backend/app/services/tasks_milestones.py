@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 
-from sqlmodel import Session, select, and_
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
 from app.models import Project, Milestone, Task
@@ -17,16 +17,18 @@ logger = logging.getLogger(__name__)
 
 
 # ========== Milestone Operations ==========
-def create_milestone(
-    session: Session,
-    tenant_id: int,
-    project_id: int,
+async def create_milestone(
+    tenant_id: str,
+    project_id: str,
     milestone_data: Dict[str, Any]
 ) -> Milestone:
     """Create a new milestone for a project."""
     # Verify project exists and belongs to tenant
-    project = session.get(Project, project_id)
-    if not project or project.tenant_id != tenant_id:
+    project = await Project.find_one(
+        Project.id == PydanticObjectId(project_id),
+        Project.tenant_id == tenant_id
+    )
+    if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
@@ -44,50 +46,42 @@ def create_milestone(
     if milestone.is_completed:
         milestone.completed_at = datetime.utcnow()
     
-    session.add(milestone)
-    session.commit()
-    session.refresh(milestone)
+    await milestone.insert()
     return milestone
 
 
-def get_milestone(session: Session, tenant_id: int, milestone_id: int) -> Optional[Milestone]:
+async def get_milestone(tenant_id: str, milestone_id: str) -> Optional[Milestone]:
     """Get a milestone by ID."""
-    return session.exec(
-        select(Milestone).where(
-            and_(
-                Milestone.id == milestone_id,
-                Milestone.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    return await Milestone.find_one(
+        Milestone.id == PydanticObjectId(milestone_id),
+        Milestone.tenant_id == tenant_id
+    )
 
 
-def list_milestones(
-    session: Session,
-    tenant_id: int,
-    project_id: Optional[int] = None,
+async def list_milestones(
+    tenant_id: str,
+    project_id: Optional[str] = None,
     is_completed: Optional[bool] = None
 ) -> List[Milestone]:
     """List milestones for a tenant/project."""
-    query = select(Milestone).where(Milestone.tenant_id == tenant_id)
+    conditions = [Milestone.tenant_id == tenant_id]
     
     if project_id:
-        query = query.where(Milestone.project_id == project_id)
+        conditions.append(Milestone.project_id == project_id)
     
     if is_completed is not None:
-        query = query.where(Milestone.is_completed == is_completed)
+        conditions.append(Milestone.is_completed == is_completed)
     
-    return list(session.exec(query.order_by(Milestone.due_date.asc(), Milestone.created_at.desc())).all())
+    return await Milestone.find(*conditions).sort(+Milestone.due_date, -Milestone.created_at).to_list()
 
 
-def update_milestone(
-    session: Session,
-    tenant_id: int,
-    milestone_id: int,
+async def update_milestone(
+    tenant_id: str,
+    milestone_id: str,
     updates: Dict[str, Any]
 ) -> Milestone:
     """Update a milestone."""
-    milestone = get_milestone(session, tenant_id, milestone_id)
+    milestone = await get_milestone(tenant_id, milestone_id)
     if not milestone:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -111,28 +105,25 @@ def update_milestone(
             milestone.completed_at = None
     
     milestone.updated_at = datetime.utcnow()
-    session.add(milestone)
-    session.commit()
-    session.refresh(milestone)
+    await milestone.save()
     return milestone
 
 
-def delete_milestone(session: Session, tenant_id: int, milestone_id: int) -> None:
+async def delete_milestone(tenant_id: str, milestone_id: str) -> None:
     """Delete a milestone."""
-    milestone = get_milestone(session, tenant_id, milestone_id)
+    milestone = await get_milestone(tenant_id, milestone_id)
     if not milestone:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Milestone not found"
         )
     
-    session.delete(milestone)
-    session.commit()
+    await milestone.delete()
 
 
-def get_milestone_tasks(session: Session, tenant_id: int, milestone_id: int) -> List[Task]:
+async def get_milestone_tasks(tenant_id: str, milestone_id: str) -> List[Task]:
     """Get all tasks associated with a milestone (via project)."""
-    milestone = get_milestone(session, tenant_id, milestone_id)
+    milestone = await get_milestone(tenant_id, milestone_id)
     if not milestone:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -140,22 +131,17 @@ def get_milestone_tasks(session: Session, tenant_id: int, milestone_id: int) -> 
         )
     
     # Get all tasks in the milestone's project
-    # Note: In a more advanced implementation, you might want a direct task-milestone relationship
-    tasks = session.exec(
-        select(Task).where(
-            and_(
-                Task.tenant_id == tenant_id,
-                Task.project_id == milestone.project_id
-            )
-        )
-    ).all()
+    tasks = await Task.find(
+        Task.tenant_id == tenant_id,
+        Task.project_id == milestone.project_id
+    ).to_list()
     
-    return list(tasks)
+    return tasks
 
 
-def get_milestone_completion_stats(session: Session, tenant_id: int, milestone_id: int) -> Dict[str, Any]:
+async def get_milestone_completion_stats(tenant_id: str, milestone_id: str) -> Dict[str, Any]:
     """Get completion statistics for a milestone."""
-    milestone = get_milestone(session, tenant_id, milestone_id)
+    milestone = await get_milestone(tenant_id, milestone_id)
     if not milestone:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,14 +149,10 @@ def get_milestone_completion_stats(session: Session, tenant_id: int, milestone_i
         )
     
     # Get all tasks in the project
-    tasks = session.exec(
-        select(Task).where(
-            and_(
-                Task.tenant_id == tenant_id,
-                Task.project_id == milestone.project_id
-            )
-        )
-    ).all()
+    tasks = await Task.find(
+        Task.tenant_id == tenant_id,
+        Task.project_id == milestone.project_id
+    ).to_list()
     
     total_tasks = len(tasks)
     completed_tasks = sum(1 for t in tasks if t.completion_percentage == 100)
@@ -184,8 +166,3 @@ def get_milestone_completion_stats(session: Session, tenant_id: int, milestone_i
         "completion_rate": round(completion_rate, 2),
         "due_date": str(milestone.due_date) if milestone.due_date else None,
     }
-
-
-
-
-

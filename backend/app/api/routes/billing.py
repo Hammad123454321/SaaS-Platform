@@ -3,7 +3,6 @@ from typing import Any, Optional
 
 import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
 from app.models.role import PermissionCode
@@ -25,40 +24,34 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 stripe.api_key = settings.stripe_secret_key
 
 
-def _resolve_tenant_id(
-    session: Session, customer_id: Optional[str], payload_object: dict[str, Any]
-) -> Optional[int]:
+async def _resolve_tenant_id(
+    customer_id: Optional[str], payload_object: dict[str, Any]
+) -> Optional[str]:
     if payload_object.get("metadata", {}).get("tenant_id"):
-        try:
-            return int(payload_object["metadata"]["tenant_id"])
-        except ValueError:
-            return None
+        return payload_object["metadata"]["tenant_id"]
     if customer_id:
-        stmt = select(Subscription).where(Subscription.stripe_customer_id == customer_id)
-        subscription = session.exec(stmt).first()
+        subscription = await Subscription.find_one(Subscription.stripe_customer_id == customer_id)
         if subscription:
             return subscription.tenant_id
     return None
 
 
-def _apply_plan_entitlements(
-    session: Session, tenant_id: int, modules: list[ModuleCode], seats: int | None, ai: bool | None
+async def _apply_plan_entitlements(
+    tenant_id: str, modules: list[ModuleCode], seats: int | None, ai: bool | None
 ) -> None:
     for module in modules:
-        stmt = select(ModuleEntitlement).where(
+        ent = await ModuleEntitlement.find_one(
             ModuleEntitlement.tenant_id == tenant_id,
             ModuleEntitlement.module_code == module,
         )
-        ent = session.exec(stmt).first()
         if not ent:
             ent = ModuleEntitlement(tenant_id=tenant_id, module_code=module)
-            session.add(ent)
         ent.enabled = True
         if seats is not None:
             ent.seats = seats
         if ai is not None:
             ent.ai_access = ai
-        session.add(ent)
+        await ent.save()
 
 
 @router.post("/webhook")
@@ -78,24 +71,20 @@ async def stripe_webhook(
     if not event_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing event id.")
 
-    # Idempotency guard
-    if session.exec(select(WebhookEvent).where(WebhookEvent.event_id == event_id)).first():
+    existing_event = await WebhookEvent.find_one(WebhookEvent.event_id == event_id)
+    if existing_event:
         return {"status": "ok"}
 
     obj = event.get("data", {}).get("object", {}) or {}
     customer_id = obj.get("customer")
-    tenant_id = _resolve_tenant_id(session, customer_id, obj)
+    tenant_id = await _resolve_tenant_id(customer_id, obj)
     if tenant_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant not resolved.")
 
-    subscription = session.exec(
-        select(Subscription).where(Subscription.tenant_id == tenant_id)
-    ).first()
+    subscription = await Subscription.find_one(Subscription.tenant_id == tenant_id)
     if not subscription:
         subscription = Subscription(tenant_id=tenant_id)
-        session.add(subscription)
 
-    # Map plan → modules (placeholder logic)
     modules: list[ModuleCode] = []
     seats: int | None = None
     ai_access: bool | None = None
@@ -105,7 +94,6 @@ async def stripe_webhook(
     if obj.get("metadata", {}).get("modules"):
         modules = [ModuleCode(m.strip()) for m in obj["metadata"]["modules"].split(",") if m.strip()]
     elif price_id:
-        # simple placeholder mapping based on price id prefix
         if "crm" in price_id:
             modules.append(ModuleCode.CRM)
         if "hrm" in price_id:
@@ -129,7 +117,6 @@ async def stripe_webhook(
     if obj.get("metadata", {}).get("ai_access"):
         ai_access = obj["metadata"]["ai_access"] in ("1", "true", "True", True)
 
-    # Update subscription record
     subscription.stripe_customer_id = customer_id or subscription.stripe_customer_id
     subscription.stripe_subscription_id = obj.get("subscription") or subscription.stripe_subscription_id
     subscription.status = event.get("type", "unknown")
@@ -137,10 +124,10 @@ async def stripe_webhook(
         subscription.current_period_end = datetime.fromtimestamp(obj["current_period_end"])
     if obj.get("plan", {}).get("nickname"):
         subscription.plan_name = obj["plan"]["nickname"]
-    session.add(subscription)
+    await subscription.save()
 
     if modules:
-        _apply_plan_entitlements(session, tenant_id, modules, seats, ai_access)
+        await _apply_plan_entitlements(tenant_id, modules, seats, ai_access)
 
     amount = None
     currency = None
@@ -155,32 +142,29 @@ async def stripe_webhook(
         event_type=event.get("type", "unknown"),
         amount=amount,
         currency=currency,
-        raw=event.to_dict() if hasattr(event, "to_dict") else event,  # type: ignore[arg-type]
+        raw=event.to_dict() if hasattr(event, "to_dict") else event,
     )
-    session.add(history)
-    session.add(WebhookEvent(event_id=event_id))
+    await history.insert()
+    
+    webhook_event = WebhookEvent(event_id=event_id)
+    await webhook_event.insert()
 
-    session.commit()
     return {"status": "ok"}
 
 
 @router.get("/history", response_model=list[BillingHistoryRead])
-def list_billing_history(
+async def list_billing_history(
     current_user: User = Depends(require_permission(PermissionCode.VIEW_BILLING)),
 ) -> list[BillingHistoryRead]:
-    stmt = (
-        select(BillingHistory)
-        .where(BillingHistory.tenant_id == current_user.tenant_id)
-        .order_by(BillingHistory.created_at.desc())
-        .limit(50)
-    )
-    history = session.exec(stmt).all()
-    log_audit(
-        session,
-        tenant_id=current_user.tenant_id,
-        actor_user_id=current_user.id,  # type: ignore[arg-type]
+    tenant_id = str(current_user.tenant_id)
+    history = await BillingHistory.find(
+        BillingHistory.tenant_id == tenant_id
+    ).sort(-BillingHistory.created_at).limit(50).to_list()
+    
+    await log_audit(
+        tenant_id=tenant_id,
+        actor_user_id=str(current_user.id),
         action="billing.history.view",
-        target=str(current_user.tenant_id),
+        target=tenant_id,
     )
     return [BillingHistoryRead.model_validate(h) for h in history]
-

@@ -5,12 +5,13 @@ Handles document uploads, versioning, categories, folders, and document library.
 """
 import logging
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from sqlmodel import Session, select, and_, or_
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status, UploadFile
 
 from app.models import Task, Project
@@ -21,30 +22,35 @@ logger = logging.getLogger(__name__)
 
 # ========== Document Operations ==========
 async def upload_document(
-    session: Session,
-    tenant_id: int,
-    user_id: int,
+    tenant_id: str,
+    user_id: str,
     file: UploadFile,
-    task_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    folder_id: Optional[int] = None,
-    category_id: Optional[int] = None,
+    task_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    folder_id: Optional[str] = None,
+    category_id: Optional[str] = None,
     description: Optional[str] = None,
     tags: Optional[List[str]] = None
 ) -> TaskAttachment:
     """Upload a document/file."""
     # Verify task or project exists
     if task_id:
-        task = session.get(Task, task_id)
-        if not task or task.tenant_id != tenant_id:
+        task = await Task.find_one(
+            Task.id == PydanticObjectId(task_id),
+            Task.tenant_id == tenant_id
+        )
+        if not task:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Task not found"
             )
         project_id = task.project_id
     elif project_id:
-        project = session.get(Project, project_id)
-        if not project or project.tenant_id != tenant_id:
+        project = await Project.find_one(
+            Project.id == PydanticObjectId(project_id),
+            Project.tenant_id == tenant_id
+        )
+        if not project:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found"
@@ -57,8 +63,11 @@ async def upload_document(
     
     # Verify folder if provided
     if folder_id:
-        folder = session.get(DocumentFolder, folder_id)
-        if not folder or folder.tenant_id != tenant_id:
+        folder = await DocumentFolder.find_one(
+            DocumentFolder.id == PydanticObjectId(folder_id),
+            DocumentFolder.tenant_id == tenant_id
+        )
+        if not folder:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Folder not found"
@@ -66,8 +75,11 @@ async def upload_document(
     
     # Verify category if provided
     if category_id:
-        category = session.get(DocumentCategory, category_id)
-        if not category or category.tenant_id != tenant_id:
+        category = await DocumentCategory.find_one(
+            DocumentCategory.id == PydanticObjectId(category_id),
+            DocumentCategory.tenant_id == tenant_id
+        )
+        if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Category not found"
@@ -82,7 +94,7 @@ async def upload_document(
     if file_size > max_size:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File size exceeds maximum allowed size of 50MB"
+            detail="File size exceeds maximum allowed size of 50MB"
         )
     
     # Generate unique filename
@@ -121,22 +133,22 @@ async def upload_document(
         version=1,
         is_current_version=True
     )
-    session.add(document)
-    session.commit()
-    session.refresh(document)
+    await document.insert()
     return document
 
 
 async def create_document_version(
-    session: Session,
-    tenant_id: int,
-    document_id: int,
-    user_id: int,
+    tenant_id: str,
+    document_id: str,
+    user_id: str,
     file: UploadFile
 ) -> TaskAttachment:
     """Create a new version of an existing document."""
-    original = session.get(TaskAttachment, document_id)
-    if not original or original.tenant_id != tenant_id:
+    original = await TaskAttachment.find_one(
+        TaskAttachment.id == PydanticObjectId(document_id),
+        TaskAttachment.tenant_id == tenant_id
+    )
+    if not original:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
@@ -144,11 +156,10 @@ async def create_document_version(
     
     # Mark old version as not current
     original.is_current_version = False
-    session.add(original)
+    await original.save()
     
     # Upload new version
     new_version = await upload_document(
-        session,
         tenant_id,
         user_id,
         file,
@@ -161,89 +172,85 @@ async def create_document_version(
     )
     
     # Set version info
-    new_version.parent_id = original.id
+    new_version.parent_id = str(original.id)
     new_version.version = original.version + 1
     new_version.is_current_version = True
+    await new_version.save()
     
-    session.add(new_version)
-    session.commit()
-    session.refresh(new_version)
     return new_version
 
 
-def list_documents(
-    session: Session,
-    tenant_id: int,
-    task_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    folder_id: Optional[int] = None,
-    category_id: Optional[int] = None,
+async def list_documents(
+    tenant_id: str,
+    task_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    folder_id: Optional[str] = None,
+    category_id: Optional[str] = None,
     search: Optional[str] = None,
     include_versions: bool = False
 ) -> List[TaskAttachment]:
     """List documents with filters."""
-    query = select(TaskAttachment).where(
-        and_(
-            TaskAttachment.tenant_id == tenant_id,
-            TaskAttachment.is_current_version == True if not include_versions else True
-        )
-    )
+    conditions = [TaskAttachment.tenant_id == tenant_id]
+    
+    if not include_versions:
+        conditions.append(TaskAttachment.is_current_version == True)
     
     if task_id:
-        query = query.where(TaskAttachment.task_id == task_id)
+        conditions.append(TaskAttachment.task_id == task_id)
     
     if project_id:
-        query = query.where(TaskAttachment.project_id == project_id)
+        conditions.append(TaskAttachment.project_id == project_id)
     
     if folder_id:
-        query = query.where(TaskAttachment.folder_id == folder_id)
+        conditions.append(TaskAttachment.folder_id == folder_id)
     
     if category_id:
-        query = query.where(TaskAttachment.category_id == category_id)
+        conditions.append(TaskAttachment.category_id == category_id)
     
     if search:
-        query = query.where(
-            or_(
-                TaskAttachment.original_filename.ilike(f"%{search}%"),
-                TaskAttachment.description.ilike(f"%{search}%")
-            )
-        )
+        search_regex = re.compile(f".*{re.escape(search)}.*", re.IGNORECASE)
+        conditions.append({
+            "$or": [
+                {"original_filename": {"$regex": search_regex}},
+                {"description": {"$regex": search_regex}}
+            ]
+        })
     
-    return list(session.exec(query.order_by(TaskAttachment.created_at.desc())).all())
+    return await TaskAttachment.find(*conditions).sort(-TaskAttachment.created_at).to_list()
 
 
-def get_document_versions(session: Session, tenant_id: int, document_id: int) -> List[TaskAttachment]:
+async def get_document_versions(tenant_id: str, document_id: str) -> List[TaskAttachment]:
     """Get all versions of a document."""
-    document = session.get(TaskAttachment, document_id)
-    if not document or document.tenant_id != tenant_id:
+    document = await TaskAttachment.find_one(
+        TaskAttachment.id == PydanticObjectId(document_id),
+        TaskAttachment.tenant_id == tenant_id
+    )
+    if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
     
     # Get root document (original)
-    root_id = document.parent_id if document.parent_id else document.id
+    root_id = document.parent_id if document.parent_id else str(document.id)
     
     # Get all versions
-    return list(
-        session.exec(
-            select(TaskAttachment).where(
-                and_(
-                    TaskAttachment.tenant_id == tenant_id,
-                    or_(
-                        TaskAttachment.id == root_id,
-                        TaskAttachment.parent_id == root_id
-                    )
-                )
-            ).order_by(TaskAttachment.version.asc())
-        ).all()
-    )
+    return await TaskAttachment.find(
+        TaskAttachment.tenant_id == tenant_id,
+        {"$or": [
+            {"_id": PydanticObjectId(root_id)},
+            {"parent_id": root_id}
+        ]}
+    ).sort(+TaskAttachment.version).to_list()
 
 
-def delete_document(session: Session, tenant_id: int, document_id: int) -> None:
+async def delete_document(tenant_id: str, document_id: str) -> None:
     """Delete a document (and all versions if current)."""
-    document = session.get(TaskAttachment, document_id)
-    if not document or document.tenant_id != tenant_id:
+    document = await TaskAttachment.find_one(
+        TaskAttachment.id == PydanticObjectId(document_id),
+        TaskAttachment.tenant_id == tenant_id
+    )
+    if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
@@ -258,42 +265,45 @@ def delete_document(session: Session, tenant_id: int, document_id: int) -> None:
     
     # If current version, delete all versions
     if document.is_current_version:
-        root_id = document.parent_id if document.parent_id else document.id
-        versions = get_document_versions(session, tenant_id, root_id)
+        root_id = document.parent_id if document.parent_id else str(document.id)
+        versions = await get_document_versions(tenant_id, root_id)
         for version in versions:
             if os.path.exists(version.file_path):
                 try:
                     os.remove(version.file_path)
                 except Exception as e:
                     logger.warning(f"Failed to delete file {version.file_path}: {e}")
-            session.delete(version)
+            await version.delete()
     else:
-        session.delete(document)
-    
-    session.commit()
+        await document.delete()
 
 
 # ========== Folder Operations ==========
-def create_folder(
-    session: Session,
-    tenant_id: int,
-    project_id: Optional[int],
+async def create_folder(
+    tenant_id: str,
+    project_id: Optional[str],
     name: str,
     description: Optional[str] = None,
-    parent_id: Optional[int] = None
+    parent_id: Optional[str] = None
 ) -> DocumentFolder:
     """Create a document folder."""
     if project_id:
-        project = session.get(Project, project_id)
-        if not project or project.tenant_id != tenant_id:
+        project = await Project.find_one(
+            Project.id == PydanticObjectId(project_id),
+            Project.tenant_id == tenant_id
+        )
+        if not project:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found"
             )
     
     if parent_id:
-        parent = session.get(DocumentFolder, parent_id)
-        if not parent or parent.tenant_id != tenant_id:
+        parent = await DocumentFolder.find_one(
+            DocumentFolder.id == PydanticObjectId(parent_id),
+            DocumentFolder.tenant_id == tenant_id
+        )
+        if not parent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Parent folder not found"
@@ -306,34 +316,30 @@ def create_folder(
         name=name,
         description=description
     )
-    session.add(folder)
-    session.commit()
-    session.refresh(folder)
+    await folder.insert()
     return folder
 
 
-def list_folders(
-    session: Session,
-    tenant_id: int,
-    project_id: Optional[int] = None,
-    parent_id: Optional[int] = None
+async def list_folders(
+    tenant_id: str,
+    project_id: Optional[str] = None,
+    parent_id: Optional[str] = None
 ) -> List[DocumentFolder]:
     """List folders."""
-    query = select(DocumentFolder).where(DocumentFolder.tenant_id == tenant_id)
+    conditions = [DocumentFolder.tenant_id == tenant_id]
     
     if project_id:
-        query = query.where(DocumentFolder.project_id == project_id)
+        conditions.append(DocumentFolder.project_id == project_id)
     
     if parent_id is not None:
-        query = query.where(DocumentFolder.parent_id == parent_id)
+        conditions.append(DocumentFolder.parent_id == parent_id)
     
-    return list(session.exec(query.order_by(DocumentFolder.name)).all())
+    return await DocumentFolder.find(*conditions).sort(+DocumentFolder.name).to_list()
 
 
 # ========== Category Operations ==========
-def create_category(
-    session: Session,
-    tenant_id: int,
+async def create_category(
+    tenant_id: str,
     name: str,
     color: Optional[str] = None,
     description: Optional[str] = None
@@ -345,19 +351,12 @@ def create_category(
         color=color or "#6b7280",
         description=description
     )
-    session.add(category)
-    session.commit()
-    session.refresh(category)
+    await category.insert()
     return category
 
 
-def list_categories(session: Session, tenant_id: int) -> List[DocumentCategory]:
+async def list_categories(tenant_id: str) -> List[DocumentCategory]:
     """List all categories for a tenant."""
-    return list(
-        session.exec(
-            select(DocumentCategory).where(
-                DocumentCategory.tenant_id == tenant_id
-            ).order_by(DocumentCategory.name)
-        ).all()
-    )
-
+    return await DocumentCategory.find(
+        DocumentCategory.tenant_id == tenant_id
+    ).sort(+DocumentCategory.name).to_list()

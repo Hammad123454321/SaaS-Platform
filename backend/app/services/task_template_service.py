@@ -3,16 +3,16 @@
 Tenant-configurable task templates for incidents and safety.
 """
 from typing import List, Optional
-from sqlmodel import Session, select
+
+from beanie import PydanticObjectId
 
 from app.models.workflows import TaskTemplate
 from app.models.tasks import Task, Project, TaskStatus
 from app.models.user import User
 
 
-def create_task_template(
-    session: Session,
-    tenant_id: int,
+async def create_task_template(
+    tenant_id: str,
     template_name: str,
     template_type: str,
     title: str,
@@ -34,40 +34,34 @@ def create_task_template(
         is_locked=is_locked,
         metadata=metadata or {}
     )
-    session.add(template)
-    session.commit()
-    session.refresh(template)
+    await template.insert()
     return template
 
 
-def get_task_templates(
-    session: Session,
-    tenant_id: int,
+async def get_task_templates(
+    tenant_id: str,
     template_type: Optional[str] = None
 ) -> List[TaskTemplate]:
     """Get task templates for tenant."""
-    query = select(TaskTemplate).where(TaskTemplate.tenant_id == tenant_id)
+    conditions = [TaskTemplate.tenant_id == tenant_id]
     
     if template_type:
-        query = query.where(TaskTemplate.template_type == template_type)
+        conditions.append(TaskTemplate.template_type == template_type)
     
-    templates = session.exec(query).all()
-    return list(templates)
+    templates = await TaskTemplate.find(*conditions).to_list()
+    return templates
 
 
-def update_task_template(
-    session: Session,
-    template_id: int,
-    tenant_id: int,
+async def update_task_template(
+    template_id: str,
+    tenant_id: str,
     **updates
 ) -> TaskTemplate:
     """Update a task template."""
-    template = session.exec(
-        select(TaskTemplate).where(
-            TaskTemplate.id == template_id,
-            TaskTemplate.tenant_id == tenant_id
-        )
-    ).first()
+    template = await TaskTemplate.find_one(
+        TaskTemplate.id == PydanticObjectId(template_id),
+        TaskTemplate.tenant_id == tenant_id
+    )
     
     if not template:
         raise ValueError("Template not found")
@@ -80,20 +74,16 @@ def update_task_template(
         if hasattr(template, key) and value is not None:
             setattr(template, key, value)
     
-    session.add(template)
-    session.commit()
-    session.refresh(template)
+    await template.save()
     return template
 
 
-def delete_task_template(session: Session, template_id: int, tenant_id: int) -> bool:
+async def delete_task_template(template_id: str, tenant_id: str) -> bool:
     """Delete a task template."""
-    template = session.exec(
-        select(TaskTemplate).where(
-            TaskTemplate.id == template_id,
-            TaskTemplate.tenant_id == tenant_id
-        )
-    ).first()
+    template = await TaskTemplate.find_one(
+        TaskTemplate.id == PydanticObjectId(template_id),
+        TaskTemplate.tenant_id == tenant_id
+    )
     
     if not template:
         return False
@@ -101,36 +91,28 @@ def delete_task_template(session: Session, template_id: int, tenant_id: int) -> 
     if template.is_locked:
         raise ValueError("Cannot delete locked template")
     
-    session.delete(template)
-    session.commit()
+    await template.delete()
     return True
 
 
-def create_task_from_template(
-    session: Session,
-    template_id: int,
-    tenant_id: int,
-    project_id: int,
-    created_by_user_id: int,
+async def create_task_from_template(
+    template_id: str,
+    tenant_id: str,
+    project_id: str,
+    created_by_user_id: str,
     **override_fields
 ) -> Task:
     """Create a Task from a template."""
-    template = session.exec(
-        select(TaskTemplate).where(
-            TaskTemplate.id == template_id,
-            TaskTemplate.tenant_id == tenant_id
-        )
-    ).first()
+    template = await TaskTemplate.find_one(
+        TaskTemplate.id == PydanticObjectId(template_id),
+        TaskTemplate.tenant_id == tenant_id
+    )
     
     if not template:
         raise ValueError("Template not found")
     
     # Get default status
-    default_status = session.exec(
-        select(TaskStatus).where(
-            TaskStatus.tenant_id == tenant_id
-        ).limit(1)
-    ).first()
+    default_status = await TaskStatus.find_one(TaskStatus.tenant_id == tenant_id)
     
     if not default_status:
         raise ValueError("No task status found")
@@ -141,17 +123,9 @@ def create_task_from_template(
         project_id=project_id,
         title=override_fields.get("title", template.title),
         description=override_fields.get("description", template.description),
-        status_id=default_status.id,
+        status_id=str(default_status.id),
         created_by=created_by_user_id
     )
     
-    # Apply template data if any
-    if template.template_data:
-        # Can store template-specific data here
-        pass
-    
-    session.add(task)
-    session.commit()
-    session.refresh(task)
+    await task.insert()
     return task
-

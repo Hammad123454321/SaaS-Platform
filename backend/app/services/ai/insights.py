@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from langchain_openai import ChatOpenAI
-from sqlmodel import Session, select, and_, func
 
 from app.config import settings
 from app.models import User
@@ -15,35 +14,29 @@ from app.models.tasks import Task, TaskStatus, Project, TaskStatusCategory
 from app.models.workflows import OnboardingTask
 
 
-async def generate_insights(user: User, session: Session) -> dict:
+async def generate_insights(user: User) -> dict:
     """Generate AI-powered insights for the current user's tenant.
     
     Returns:
         Dictionary with summary, counts, and AI-generated suggestions.
     """
-    tenant_id = int(user.tenant_id)
+    tenant_id = str(user.tenant_id)
     today = datetime.utcnow().date()
     week_from_now = today + timedelta(days=7)
     
-    # Get overdue tasks
-    overdue_tasks = _get_overdue_tasks(session, tenant_id)
+    overdue_tasks = await _get_overdue_tasks(tenant_id)
     overdue_count = len(overdue_tasks)
     
-    # Get upcoming deadlines (next 7 days)
-    upcoming_deadlines = _get_upcoming_deadlines(session, tenant_id, week_from_now)
+    upcoming_deadlines = await _get_upcoming_deadlines(tenant_id, week_from_now)
     deadline_count = len(upcoming_deadlines)
     
-    # Get pending onboarding items
-    pending_onboarding = _get_pending_onboarding(session, tenant_id)
+    pending_onboarding = await _get_pending_onboarding(tenant_id)
     pending_count = len(pending_onboarding)
     
-    # Get in-progress tasks
-    in_progress_tasks = _get_in_progress_tasks(session, tenant_id)
+    in_progress_tasks = await _get_in_progress_tasks(tenant_id)
     
-    # Get recently completed tasks (for context)
-    recent_completed = _get_recently_completed(session, tenant_id)
+    recent_completed = await _get_recently_completed(tenant_id)
     
-    # Build context for AI
     context = _build_context(
         overdue_tasks=overdue_tasks,
         upcoming_deadlines=upcoming_deadlines,
@@ -53,7 +46,6 @@ async def generate_insights(user: User, session: Session) -> dict:
         user_name=user.email.split('@')[0] if user.email else "User"
     )
     
-    # Generate AI summary and suggestions
     summary, suggestions = await _generate_ai_summary(context)
     
     return {
@@ -65,118 +57,91 @@ async def generate_insights(user: User, session: Session) -> dict:
     }
 
 
-def _get_overdue_tasks(session: Session, tenant_id: int) -> List[Task]:
+async def _get_overdue_tasks(tenant_id: str) -> List[Task]:
     """Get all overdue tasks for the tenant."""
     today = datetime.utcnow().date()
     
-    # Get done/cancelled status IDs to exclude
-    done_statuses = session.exec(
-        select(TaskStatus.id).where(
-            and_(
-                TaskStatus.tenant_id == tenant_id,
-                TaskStatus.category.in_([TaskStatusCategory.DONE, TaskStatusCategory.CANCELLED])
-            )
-        )
-    ).all()
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        {"category": {"$in": [TaskStatusCategory.DONE, TaskStatusCategory.CANCELLED]}}
+    ).to_list()
+    done_status_ids = [str(s.id) for s in done_statuses]
     
-    query = select(Task).where(
-        and_(
-            Task.tenant_id == tenant_id,
-            Task.due_date < today,
-            Task.status_id.not_in(done_statuses) if done_statuses else True
-        )
-    ).limit(10)
+    query_filter = {
+        "tenant_id": tenant_id,
+        "due_date": {"$lt": today},
+    }
+    if done_status_ids:
+        query_filter["status_id"] = {"$nin": done_status_ids}
     
-    return list(session.exec(query).all())
+    return await Task.find(query_filter).limit(10).to_list()
 
 
-def _get_upcoming_deadlines(session: Session, tenant_id: int, until_date) -> List[Task]:
+async def _get_upcoming_deadlines(tenant_id: str, until_date) -> List[Task]:
     """Get tasks with upcoming deadlines."""
     today = datetime.utcnow().date()
     
-    # Get done/cancelled status IDs to exclude
-    done_statuses = session.exec(
-        select(TaskStatus.id).where(
-            and_(
-                TaskStatus.tenant_id == tenant_id,
-                TaskStatus.category.in_([TaskStatusCategory.DONE, TaskStatusCategory.CANCELLED])
-            )
-        )
-    ).all()
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        {"category": {"$in": [TaskStatusCategory.DONE, TaskStatusCategory.CANCELLED]}}
+    ).to_list()
+    done_status_ids = [str(s.id) for s in done_statuses]
     
-    query = select(Task).where(
-        and_(
-            Task.tenant_id == tenant_id,
-            Task.due_date >= today,
-            Task.due_date <= until_date,
-            Task.status_id.not_in(done_statuses) if done_statuses else True
-        )
-    ).order_by(Task.due_date).limit(10)
+    query_filter = {
+        "tenant_id": tenant_id,
+        "due_date": {"$gte": today, "$lte": until_date},
+    }
+    if done_status_ids:
+        query_filter["status_id"] = {"$nin": done_status_ids}
     
-    return list(session.exec(query).all())
+    return await Task.find(query_filter).sort(+Task.due_date).limit(10).to_list()
 
 
-def _get_pending_onboarding(session: Session, tenant_id: int) -> List[OnboardingTask]:
+async def _get_pending_onboarding(tenant_id: str) -> List[OnboardingTask]:
     """Get pending onboarding tasks."""
-    query = select(OnboardingTask).where(
-        and_(
-            OnboardingTask.tenant_id == tenant_id,
-            OnboardingTask.completed_at == None
-        )
-    ).limit(10)
-    
-    return list(session.exec(query).all())
+    return await OnboardingTask.find(
+        OnboardingTask.tenant_id == tenant_id,
+        OnboardingTask.completed_at == None
+    ).limit(10).to_list()
 
 
-def _get_in_progress_tasks(session: Session, tenant_id: int) -> List[Task]:
+async def _get_in_progress_tasks(tenant_id: str) -> List[Task]:
     """Get tasks currently in progress."""
-    in_progress_statuses = session.exec(
-        select(TaskStatus.id).where(
-            and_(
-                TaskStatus.tenant_id == tenant_id,
-                TaskStatus.category == TaskStatusCategory.IN_PROGRESS
-            )
-        )
-    ).all()
+    in_progress_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.IN_PROGRESS
+    ).to_list()
     
     if not in_progress_statuses:
         return []
     
-    query = select(Task).where(
-        and_(
-            Task.tenant_id == tenant_id,
-            Task.status_id.in_(in_progress_statuses)
-        )
-    ).limit(10)
+    in_progress_ids = [str(s.id) for s in in_progress_statuses]
     
-    return list(session.exec(query).all())
+    return await Task.find(
+        Task.tenant_id == tenant_id,
+        {"status_id": {"$in": in_progress_ids}}
+    ).limit(10).to_list()
 
 
-def _get_recently_completed(session: Session, tenant_id: int) -> List[Task]:
+async def _get_recently_completed(tenant_id: str) -> List[Task]:
     """Get recently completed tasks (last 7 days)."""
     week_ago = datetime.utcnow() - timedelta(days=7)
     
-    done_statuses = session.exec(
-        select(TaskStatus.id).where(
-            and_(
-                TaskStatus.tenant_id == tenant_id,
-                TaskStatus.category == TaskStatusCategory.DONE
-            )
-        )
-    ).all()
+    done_statuses = await TaskStatus.find(
+        TaskStatus.tenant_id == tenant_id,
+        TaskStatus.category == TaskStatusCategory.DONE
+    ).to_list()
     
     if not done_statuses:
         return []
     
-    query = select(Task).where(
-        and_(
-            Task.tenant_id == tenant_id,
-            Task.status_id.in_(done_statuses),
-            Task.updated_at >= week_ago
-        )
-    ).order_by(Task.updated_at.desc()).limit(5)
+    done_ids = [str(s.id) for s in done_statuses]
     
-    return list(session.exec(query).all())
+    return await Task.find(
+        Task.tenant_id == tenant_id,
+        {"status_id": {"$in": done_ids}},
+        Task.updated_at >= week_ago
+    ).sort(-Task.updated_at).limit(5).to_list()
 
 
 def _build_context(
@@ -190,31 +155,26 @@ def _build_context(
     """Build context string for AI summary generation."""
     context_parts = [f"User: {user_name}"]
     
-    # Overdue tasks
     if overdue_tasks:
         overdue_items = [f"- {t.title} (due: {t.due_date})" for t in overdue_tasks[:5]]
         context_parts.append(f"OVERDUE TASKS ({len(overdue_tasks)} total):\n" + "\n".join(overdue_items))
     else:
         context_parts.append("OVERDUE TASKS: None - great job!")
     
-    # Upcoming deadlines
     if upcoming_deadlines:
         deadline_items = [f"- {t.title} (due: {t.due_date})" for t in upcoming_deadlines[:5]]
         context_parts.append(f"UPCOMING DEADLINES (next 7 days, {len(upcoming_deadlines)} total):\n" + "\n".join(deadline_items))
     else:
         context_parts.append("UPCOMING DEADLINES: None in the next 7 days")
     
-    # Pending onboarding
     if pending_onboarding:
         onboarding_items = [f"- {t.title}" for t in pending_onboarding[:5]]
         context_parts.append(f"PENDING SETUP ITEMS ({len(pending_onboarding)} total):\n" + "\n".join(onboarding_items))
     
-    # In progress
     if in_progress_tasks:
         progress_items = [f"- {t.title}" for t in in_progress_tasks[:5]]
         context_parts.append(f"IN PROGRESS ({len(in_progress_tasks)} total):\n" + "\n".join(progress_items))
     
-    # Recent completed
     if recent_completed:
         context_parts.append(f"RECENTLY COMPLETED: {len(recent_completed)} tasks this week")
     
@@ -224,7 +184,6 @@ def _build_context(
 async def _generate_ai_summary(context: str) -> tuple[str, List[str]]:
     """Generate AI summary and suggestions using GPT."""
     
-    # Check if OpenAI is configured
     if not settings.openai_api_key:
         return _generate_fallback_summary(context)
     
@@ -251,9 +210,7 @@ Respond in this exact JSON format:
         response = await llm.ainvoke(prompt)
         content = response.content
         
-        # Parse JSON response
         try:
-            # Handle potential markdown code blocks
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
@@ -262,11 +219,9 @@ Respond in this exact JSON format:
             result = json.loads(content.strip())
             return result.get("summary", ""), result.get("suggestions", [])
         except json.JSONDecodeError:
-            # If JSON parsing fails, extract text directly
             return content[:200], []
             
     except Exception as e:
-        # Fallback if AI fails
         return _generate_fallback_summary(context)
 
 
@@ -276,7 +231,6 @@ def _generate_fallback_summary(context: str) -> tuple[str, List[str]]:
     suggestions = []
     
     if "OVERDUE TASKS: None" not in context:
-        # Extract overdue count
         if "OVERDUE TASKS (" in context:
             count = context.split("OVERDUE TASKS (")[1].split(" ")[0]
             summary_parts.append(f"You have {count} overdue tasks that need attention")
@@ -304,4 +258,3 @@ def _generate_fallback_summary(context: str) -> tuple[str, List[str]]:
         summary = ". ".join(summary_parts) + "."
     
     return summary, suggestions[:4]
-

@@ -7,7 +7,7 @@ All operations are tenant-isolated.
 import logging
 from typing import Optional, List, Dict, Any
 
-from sqlmodel import Session, select, and_, or_
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
 from app.models import Task
@@ -17,25 +17,30 @@ logger = logging.getLogger(__name__)
 
 
 # ========== Dependency Operations ==========
-def create_dependency(
-    session: Session,
-    tenant_id: int,
-    task_id: int,
-    depends_on_task_id: int,
+async def create_dependency(
+    tenant_id: str,
+    task_id: str,
+    depends_on_task_id: str,
     dependency_type: str = "blocks"
 ) -> TaskDependency:
     """Create a task dependency."""
     # Verify both tasks exist and belong to tenant
-    task = session.get(Task, task_id)
-    depends_on = session.get(Task, depends_on_task_id)
+    task = await Task.find_one(
+        Task.id == PydanticObjectId(task_id),
+        Task.tenant_id == tenant_id
+    )
+    depends_on = await Task.find_one(
+        Task.id == PydanticObjectId(depends_on_task_id),
+        Task.tenant_id == tenant_id
+    )
     
-    if not task or task.tenant_id != tenant_id:
+    if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
         )
     
-    if not depends_on or depends_on.tenant_id != tenant_id:
+    if not depends_on:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dependency task not found"
@@ -48,22 +53,18 @@ def create_dependency(
         )
     
     # Check for circular dependencies
-    if _would_create_circular_dependency(session, tenant_id, task_id, depends_on_task_id):
+    if await _would_create_circular_dependency(tenant_id, task_id, depends_on_task_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This dependency would create a circular reference"
         )
     
     # Check if dependency already exists
-    existing = session.exec(
-        select(TaskDependency).where(
-            and_(
-                TaskDependency.tenant_id == tenant_id,
-                TaskDependency.task_id == task_id,
-                TaskDependency.depends_on_task_id == depends_on_task_id
-            )
-        )
-    ).first()
+    existing = await TaskDependency.find_one(
+        TaskDependency.tenant_id == tenant_id,
+        TaskDependency.task_id == task_id,
+        TaskDependency.depends_on_task_id == depends_on_task_id
+    )
     
     if existing:
         raise HTTPException(
@@ -77,17 +78,14 @@ def create_dependency(
         depends_on_task_id=depends_on_task_id,
         dependency_type=dependency_type
     )
-    session.add(dependency)
-    session.commit()
-    session.refresh(dependency)
+    await dependency.insert()
     return dependency
 
 
-def _would_create_circular_dependency(
-    session: Session,
-    tenant_id: int,
-    task_id: int,
-    depends_on_task_id: int
+async def _would_create_circular_dependency(
+    tenant_id: str,
+    task_id: str,
+    depends_on_task_id: str
 ) -> bool:
     """Check if adding this dependency would create a circular reference."""
     # If depends_on_task_id depends on task_id (directly or indirectly), it's circular
@@ -104,14 +102,10 @@ def _would_create_circular_dependency(
         visited.add(current_task_id)
         
         # Get all tasks that current_task depends on
-        dependencies = session.exec(
-            select(TaskDependency).where(
-                and_(
-                    TaskDependency.tenant_id == tenant_id,
-                    TaskDependency.task_id == current_task_id
-                )
-            )
-        ).all()
+        dependencies = await TaskDependency.find(
+            TaskDependency.tenant_id == tenant_id,
+            TaskDependency.task_id == current_task_id
+        ).to_list()
         
         for dep in dependencies:
             to_check.append(dep.depends_on_task_id)
@@ -119,112 +113,92 @@ def _would_create_circular_dependency(
     return False
 
 
-def get_dependency(session: Session, tenant_id: int, dependency_id: int) -> Optional[TaskDependency]:
+async def get_dependency(tenant_id: str, dependency_id: str) -> Optional[TaskDependency]:
     """Get a dependency by ID."""
-    return session.exec(
-        select(TaskDependency).where(
-            and_(
-                TaskDependency.id == dependency_id,
-                TaskDependency.tenant_id == tenant_id
-            )
-        )
-    ).first()
+    return await TaskDependency.find_one(
+        TaskDependency.id == PydanticObjectId(dependency_id),
+        TaskDependency.tenant_id == tenant_id
+    )
 
 
-def list_dependencies(
-    session: Session,
-    tenant_id: int,
-    task_id: Optional[int] = None,
-    depends_on_task_id: Optional[int] = None
+async def list_dependencies(
+    tenant_id: str,
+    task_id: Optional[str] = None,
+    depends_on_task_id: Optional[str] = None
 ) -> List[TaskDependency]:
     """List dependencies."""
-    query = select(TaskDependency).where(TaskDependency.tenant_id == tenant_id)
+    conditions = [TaskDependency.tenant_id == tenant_id]
     
     if task_id:
-        query = query.where(TaskDependency.task_id == task_id)
+        conditions.append(TaskDependency.task_id == task_id)
     
     if depends_on_task_id:
-        query = query.where(TaskDependency.depends_on_task_id == depends_on_task_id)
+        conditions.append(TaskDependency.depends_on_task_id == depends_on_task_id)
     
-    return list(session.exec(query.order_by(TaskDependency.created_at.desc())).all())
+    return await TaskDependency.find(*conditions).sort(-TaskDependency.created_at).to_list()
 
 
-def get_task_dependencies(session: Session, tenant_id: int, task_id: int) -> List[Task]:
+async def get_task_dependencies(tenant_id: str, task_id: str) -> List[Task]:
     """Get all tasks that a task depends on (blocking tasks)."""
-    dependencies = list_dependencies(session, tenant_id, task_id=task_id)
+    dependencies = await list_dependencies(tenant_id, task_id=task_id)
     depends_on_task_ids = [d.depends_on_task_id for d in dependencies]
     
     if not depends_on_task_ids:
         return []
     
-    tasks = session.exec(
-        select(Task).where(
-            and_(
-                Task.tenant_id == tenant_id,
-                Task.id.in_(depends_on_task_ids)  # type: ignore
-            )
-        )
-    ).all()
+    tasks = await Task.find(
+        Task.tenant_id == tenant_id,
+        {"_id": {"$in": [PydanticObjectId(tid) for tid in depends_on_task_ids]}}
+    ).to_list()
     
-    return list(tasks)
+    return tasks
 
 
-def get_tasks_depending_on(session: Session, tenant_id: int, task_id: int) -> List[Task]:
+async def get_tasks_depending_on(tenant_id: str, task_id: str) -> List[Task]:
     """Get all tasks that depend on a specific task."""
-    dependencies = list_dependencies(session, tenant_id, depends_on_task_id=task_id)
+    dependencies = await list_dependencies(tenant_id, depends_on_task_id=task_id)
     dependent_task_ids = [d.task_id for d in dependencies]
     
     if not dependent_task_ids:
         return []
     
-    tasks = session.exec(
-        select(Task).where(
-            and_(
-                Task.tenant_id == tenant_id,
-                Task.id.in_(dependent_task_ids)  # type: ignore
-            )
-        )
-    ).all()
+    tasks = await Task.find(
+        Task.tenant_id == tenant_id,
+        {"_id": {"$in": [PydanticObjectId(tid) for tid in dependent_task_ids]}}
+    ).to_list()
     
-    return list(tasks)
+    return tasks
 
 
-def delete_dependency(session: Session, tenant_id: int, dependency_id: int) -> None:
+async def delete_dependency(tenant_id: str, dependency_id: str) -> None:
     """Delete a dependency."""
-    dependency = get_dependency(session, tenant_id, dependency_id)
+    dependency = await get_dependency(tenant_id, dependency_id)
     if not dependency:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dependency not found"
         )
     
-    session.delete(dependency)
-    session.commit()
+    await dependency.delete()
 
 
-def delete_task_dependencies(session: Session, tenant_id: int, task_id: int) -> None:
+async def delete_task_dependencies(tenant_id: str, task_id: str) -> None:
     """Delete all dependencies for a task (both as dependent and as dependency)."""
-    dependencies = session.exec(
-        select(TaskDependency).where(
-            and_(
-                TaskDependency.tenant_id == tenant_id,
-                or_(
-                    TaskDependency.task_id == task_id,
-                    TaskDependency.depends_on_task_id == task_id
-                )
-            )
-        )
-    ).all()
+    dependencies = await TaskDependency.find(
+        TaskDependency.tenant_id == tenant_id,
+        {"$or": [
+            {"task_id": task_id},
+            {"depends_on_task_id": task_id}
+        ]}
+    ).to_list()
     
     for dep in dependencies:
-        session.delete(dep)
-    
-    session.commit()
+        await dep.delete()
 
 
-def check_dependency_blocking(session: Session, tenant_id: int, task_id: int) -> Dict[str, Any]:
+async def check_dependency_blocking(tenant_id: str, task_id: str) -> Dict[str, Any]:
     """Check if a task is blocked by dependencies."""
-    blocking_tasks = get_task_dependencies(session, tenant_id, task_id)
+    blocking_tasks = await get_task_dependencies(tenant_id, task_id)
     
     # Check which blocking tasks are not completed
     incomplete_blockers = [
@@ -238,7 +212,7 @@ def check_dependency_blocking(session: Session, tenant_id: int, task_id: int) ->
         "is_blocked": is_blocked,
         "blocking_tasks": [
             {
-                "id": t.id,
+                "id": str(t.id),
                 "title": t.title,
                 "completion_percentage": t.completion_percentage
             }
@@ -246,15 +220,10 @@ def check_dependency_blocking(session: Session, tenant_id: int, task_id: int) ->
         ],
         "incomplete_blockers": [
             {
-                "id": t.id,
+                "id": str(t.id),
                 "title": t.title,
                 "completion_percentage": t.completion_percentage
             }
             for t in incomplete_blockers
         ]
     }
-
-
-
-
-

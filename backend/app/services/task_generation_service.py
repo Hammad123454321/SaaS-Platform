@@ -4,19 +4,17 @@ Auto-generate onboarding tasks based on modules, industry, and compliance rules.
 """
 from datetime import datetime, timedelta
 from typing import List, Optional
-from sqlmodel import Session, select
 
 from app.models.workflows import OnboardingTask, OnboardingTaskSource
 from app.models.onboarding import BusinessProfile, TenantComplianceRule
 from app.models.entitlement import ModuleEntitlement, ModuleCode
-from app.models.tasks import Task, Project, TaskStatus
+from app.models.tasks import Task, Project, TaskStatus, TaskAssignment
 from app.models.user import User
 
 
-def generate_onboarding_tasks_for_tenant(
-    session: Session,
-    tenant_id: int,
-    assigned_to_user_id: Optional[int] = None
+async def generate_onboarding_tasks_for_tenant(
+    tenant_id: str,
+    assigned_to_user_id: Optional[str] = None
 ) -> List[OnboardingTask]:
     """
     Generate onboarding tasks based on:
@@ -27,27 +25,23 @@ def generate_onboarding_tasks_for_tenant(
     tasks = []
     
     # Get business profile
-    business_profile = session.exec(
-        select(BusinessProfile).where(BusinessProfile.tenant_id == tenant_id)
-    ).first()
+    business_profile = await BusinessProfile.find_one(
+        BusinessProfile.tenant_id == tenant_id
+    )
     
     if not business_profile:
         return tasks  # No business profile, no tasks
     
     # Get enabled modules
-    enabled_modules = session.exec(
-        select(ModuleEntitlement).where(
-            ModuleEntitlement.tenant_id == tenant_id,
-            ModuleEntitlement.enabled == True
-        )
-    ).all()
+    enabled_modules = await ModuleEntitlement.find(
+        ModuleEntitlement.tenant_id == tenant_id,
+        ModuleEntitlement.enabled == True
+    ).to_list()
     
     # Get compliance rules
-    compliance_rules = session.exec(
-        select(TenantComplianceRule).where(
-            TenantComplianceRule.tenant_id == tenant_id
-        )
-    ).all()
+    compliance_rules = await TenantComplianceRule.find(
+        TenantComplianceRule.tenant_id == tenant_id
+    ).to_list()
     
     # Generate tasks from modules
     for module in enabled_modules:
@@ -74,19 +68,15 @@ def generate_onboarding_tasks_for_tenant(
     
     # Save all tasks
     for task in tasks:
-        session.add(task)
-    
-    session.commit()
-    for task in tasks:
-        session.refresh(task)
+        await task.insert()
     
     return tasks
 
 
 def _generate_module_tasks(
     module_code: ModuleCode,
-    tenant_id: int,
-    assigned_to_user_id: Optional[int]
+    tenant_id: str,
+    assigned_to_user_id: Optional[str]
 ) -> List[OnboardingTask]:
     """Generate tasks based on enabled module."""
     tasks = []
@@ -99,26 +89,6 @@ def _generate_module_tasks(
         ModuleCode.HRM: [
             {"title": "Configure HR module settings", "description": "Set up employee management and policies"},
             {"title": "Upload employee handbook", "description": "Add your company's employee handbook"},
-        ],
-        ModuleCode.FINANCE: [
-            {"title": "Connect payment processor", "description": "Set up Stripe or other payment methods"},
-            {"title": "Configure billing settings", "description": "Set up billing cycles and invoicing"},
-        ],
-        ModuleCode.BOOKINGS: [
-            {"title": "Set up booking calendar", "description": "Configure availability and booking rules"},
-            {"title": "Add service offerings", "description": "Define services that can be booked"},
-        ],
-        ModuleCode.POS: [
-            {"title": "Configure POS system", "description": "Set up point of sale hardware and software"},
-            {"title": "Add product catalog", "description": "Set up your product inventory"},
-        ],
-        ModuleCode.WEBSITE: [
-            {"title": "Set up website domain", "description": "Configure your website domain and hosting"},
-            {"title": "Customize website template", "description": "Personalize your website design"},
-        ],
-        ModuleCode.MARKETING: [
-            {"title": "Configure marketing campaigns", "description": "Set up email marketing and campaigns"},
-            {"title": "Connect social media accounts", "description": "Link your social media profiles"},
         ],
     }
     
@@ -133,7 +103,7 @@ def _generate_module_tasks(
             description=task_data.get("description"),
             is_required=True,
             assigned_to_user_id=assigned_to_user_id,
-            due_date=datetime.utcnow() + timedelta(days=7)  # 1 week from now
+            due_date=datetime.utcnow() + timedelta(days=7)
         )
         tasks.append(task)
     
@@ -142,13 +112,12 @@ def _generate_module_tasks(
 
 def _generate_industry_tasks(
     province: str,
-    tenant_id: int,
-    assigned_to_user_id: Optional[int]
+    tenant_id: str,
+    assigned_to_user_id: Optional[str]
 ) -> List[OnboardingTask]:
     """Generate tasks based on industry/province."""
     tasks = []
     
-    # Ontario-specific tasks
     if province == "ON":
         tasks.append(OnboardingTask(
             tenant_id=tenant_id,
@@ -156,35 +125,30 @@ def _generate_industry_tasks(
             source_id="ON",
             title="Complete PAWS training (if applicable)",
             description="Complete Provincial Animal Welfare Services training if you handle animals",
-            is_required=False,  # Not required for all businesses
+            is_required=False,
             assigned_to_user_id=assigned_to_user_id,
             due_date=datetime.utcnow() + timedelta(days=14)
         ))
-    
-    # Add more industry-specific tasks as needed
     
     return tasks
 
 
 def _generate_compliance_tasks(
     rule_code: str,
-    tenant_id: int,
-    assigned_to_user_id: Optional[int]
+    tenant_id: str,
+    assigned_to_user_id: Optional[str]
 ) -> List[OnboardingTask]:
     """Generate tasks based on activated compliance rules."""
     tasks = []
     
     compliance_task_map = {
         "PAWS": [
-            {"title": "Review PAWS requirements", "description": "Familiarize yourself with Provincial Animal Welfare Services requirements"},
+            {"title": "Review PAWS requirements", "description": "Familiarize yourself with PAWS requirements"},
             {"title": "Complete PAWS compliance checklist", "description": "Ensure all PAWS requirements are met"},
         ],
         "WSIB": [
             {"title": "Register for WSIB", "description": "Complete WSIB registration if required"},
             {"title": "Review WSIB coverage", "description": "Verify your WSIB coverage is appropriate"},
-        ],
-        "CFIA": [
-            {"title": "Review CFIA requirements", "description": "Ensure compliance with Canadian Food Inspection Agency regulations"},
         ],
         "PIPEDA": [
             {"title": "Review PIPEDA compliance", "description": "Ensure your privacy practices comply with PIPEDA"},
@@ -212,19 +176,16 @@ def _generate_compliance_tasks(
     return tasks
 
 
-def create_task_from_onboarding_task(
-    session: Session,
+async def create_task_from_onboarding_task(
     onboarding_task: OnboardingTask,
-    project_id: int,
-    created_by_user_id: int
+    project_id: str,
+    created_by_user_id: str
 ) -> Task:
     """Create an actual Task from an OnboardingTask."""
     # Get default status for tenant
-    default_status = session.exec(
-        select(TaskStatus).where(
-            TaskStatus.tenant_id == onboarding_task.tenant_id
-        ).limit(1)
-    ).first()
+    default_status = await TaskStatus.find_one(
+        TaskStatus.tenant_id == onboarding_task.tenant_id
+    )
     
     if not default_status:
         raise ValueError("No task status found for tenant")
@@ -234,32 +195,25 @@ def create_task_from_onboarding_task(
         project_id=project_id,
         title=onboarding_task.title,
         description=onboarding_task.description,
-        status_id=default_status.id,
+        status_id=str(default_status.id),
         is_required=onboarding_task.is_required,
         created_by=created_by_user_id,
         due_date=onboarding_task.due_date.date() if onboarding_task.due_date else None
     )
     
+    await task.insert()
+    
     if onboarding_task.assigned_to_user_id:
         # Assign task to user
-        from app.models.tasks import TaskAssignment
-        session.add(task)
-        session.flush()
         assignment = TaskAssignment(
-            task_id=task.id,
+            task_id=str(task.id),
             user_id=onboarding_task.assigned_to_user_id,
             is_primary=True
         )
-        session.add(assignment)
-    
-    session.add(task)
-    session.commit()
-    session.refresh(task)
+        await assignment.insert()
     
     # Link onboarding task to created task
-    onboarding_task.task_id = task.id
-    session.add(onboarding_task)
-    session.commit()
+    onboarding_task.task_id = str(task.id)
+    await onboarding_task.save()
     
     return task
-

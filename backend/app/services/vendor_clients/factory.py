@@ -1,17 +1,14 @@
 """Factory for creating vendor clients based on module type and credentials."""
 from typing import Optional
 
-from sqlmodel import Session, select
-
 from app.models import ModuleCode, VendorCredential
 from app.services.vendor_clients.base import BaseVendorClient
 
 
 async def create_vendor_client(
     module_code: ModuleCode,
-    tenant_id: int,
-    session: Session,
-    user_id: Optional[int] = None,
+    tenant_id: str,
+    user_id: Optional[str] = None,
 ) -> Optional[BaseVendorClient]:
     """
     Create a vendor client instance for a given module and tenant.
@@ -22,7 +19,6 @@ async def create_vendor_client(
     Args:
         module_code: The module to create a client for
         tenant_id: Tenant ID to get credentials for
-        session: Database session
         user_id: Optional user ID (not used for now)
 
     Returns:
@@ -33,11 +29,10 @@ async def create_vendor_client(
         return None
 
     # For other modules, check VendorCredential
-    stmt = select(VendorCredential).where(
+    creds = await VendorCredential.find_one(
         VendorCredential.tenant_id == tenant_id,
         VendorCredential.vendor == module_code.value,
     )
-    creds = session.exec(stmt).first()
     
     if not creds:
         return None
@@ -49,7 +44,3 @@ async def create_vendor_client(
     #     return HrmClient(...)
 
     return None
-
-
-
-

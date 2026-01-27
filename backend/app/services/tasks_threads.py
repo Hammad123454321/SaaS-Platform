@@ -4,10 +4,11 @@ Communication Threads Service
 Handles nested comment threads for tasks and projects with search functionality.
 """
 import logging
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from sqlmodel import Session, select, and_, or_
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
 from app.models import Task, Project, TaskComment, User
@@ -15,27 +16,32 @@ from app.models import Task, Project, TaskComment, User
 logger = logging.getLogger(__name__)
 
 
-def create_thread(
-    session: Session,
-    tenant_id: int,
-    user_id: int,
+async def create_thread(
+    tenant_id: str,
+    user_id: str,
     comment: str,
-    task_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    parent_id: Optional[int] = None
+    task_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    parent_id: Optional[str] = None
 ) -> TaskComment:
     """Create a new thread/comment (supports nesting)."""
     # Verify task or project exists
     if task_id:
-        task = session.get(Task, task_id)
-        if not task or task.tenant_id != tenant_id:
+        task = await Task.find_one(
+            Task.id == PydanticObjectId(task_id),
+            Task.tenant_id == tenant_id
+        )
+        if not task:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Task not found"
             )
     elif project_id:
-        project = session.get(Project, project_id)
-        if not project or project.tenant_id != tenant_id:
+        project = await Project.find_one(
+            Project.id == PydanticObjectId(project_id),
+            Project.tenant_id == tenant_id
+        )
+        if not project:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Project not found"
@@ -48,8 +54,11 @@ def create_thread(
     
     # Verify parent comment if replying
     if parent_id:
-        parent = session.get(TaskComment, parent_id)
-        if not parent or parent.tenant_id != tenant_id:
+        parent = await TaskComment.find_one(
+            TaskComment.id == PydanticObjectId(parent_id),
+            TaskComment.tenant_id == tenant_id
+        )
+        if not parent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Parent comment not found"
@@ -66,65 +75,64 @@ def create_thread(
         parent_id=parent_id,
         comment=comment
     )
-    session.add(thread)
-    session.commit()
-    session.refresh(thread)
+    await thread.insert()
     return thread
 
 
-def list_threads(
-    session: Session,
-    tenant_id: int,
-    task_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    parent_id: Optional[int] = None,
+async def list_threads(
+    tenant_id: str,
+    task_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    parent_id: Optional[str] = None,
     search: Optional[str] = None,
     include_replies: bool = True
 ) -> List[TaskComment]:
     """List threads/comments with filters."""
-    query = select(TaskComment).where(TaskComment.tenant_id == tenant_id)
+    conditions = [TaskComment.tenant_id == tenant_id]
     
     if task_id:
-        query = query.where(TaskComment.task_id == task_id)
+        conditions.append(TaskComment.task_id == task_id)
     
     if project_id:
-        query = query.where(TaskComment.project_id == project_id)
+        conditions.append(TaskComment.project_id == project_id)
     
     if parent_id is not None:
-        query = query.where(TaskComment.parent_id == parent_id)
-    elif include_replies:
+        conditions.append(TaskComment.parent_id == parent_id)
+    elif not include_replies:
         # Only top-level comments (no parent)
-        query = query.where(TaskComment.parent_id.is_(None))
+        conditions.append(TaskComment.parent_id == None)
     
     if search:
-        query = query.where(TaskComment.comment.ilike(f"%{search}%"))
+        search_regex = re.compile(f".*{re.escape(search)}.*", re.IGNORECASE)
+        conditions.append({"comment": {"$regex": search_regex}})
     
-    return list(session.exec(query.order_by(TaskComment.created_at.asc())).all())
+    return await TaskComment.find(*conditions).sort(+TaskComment.created_at).to_list()
 
 
-def get_thread_with_replies(session: Session, tenant_id: int, thread_id: int) -> Optional[TaskComment]:
+async def get_thread_with_replies(tenant_id: str, thread_id: str) -> Optional[TaskComment]:
     """Get a thread with all nested replies."""
-    thread = session.get(TaskComment, thread_id)
-    if not thread or thread.tenant_id != tenant_id:
+    thread = await TaskComment.find_one(
+        TaskComment.id == PydanticObjectId(thread_id),
+        TaskComment.tenant_id == tenant_id
+    )
+    if not thread:
         return None
-    
-    # Load replies recursively
-    replies = list_threads(session, tenant_id, parent_id=thread_id, include_replies=True)
-    thread.replies = replies
     
     return thread
 
 
-def update_thread(
-    session: Session,
-    tenant_id: int,
-    thread_id: int,
-    user_id: int,
+async def update_thread(
+    tenant_id: str,
+    thread_id: str,
+    user_id: str,
     comment: str
 ) -> TaskComment:
     """Update a thread/comment."""
-    thread = session.get(TaskComment, thread_id)
-    if not thread or thread.tenant_id != tenant_id:
+    thread = await TaskComment.find_one(
+        TaskComment.id == PydanticObjectId(thread_id),
+        TaskComment.tenant_id == tenant_id
+    )
+    if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Thread not found"
@@ -140,16 +148,17 @@ def update_thread(
     thread.comment = comment
     thread.is_edited = True
     thread.updated_at = datetime.utcnow()
-    session.add(thread)
-    session.commit()
-    session.refresh(thread)
+    await thread.save()
     return thread
 
 
-def delete_thread(session: Session, tenant_id: int, thread_id: int, user_id: int) -> None:
+async def delete_thread(tenant_id: str, thread_id: str, user_id: str) -> None:
     """Delete a thread (and all replies if any)."""
-    thread = session.get(TaskComment, thread_id)
-    if not thread or thread.tenant_id != tenant_id:
+    thread = await TaskComment.find_one(
+        TaskComment.id == PydanticObjectId(thread_id),
+        TaskComment.tenant_id == tenant_id
+    )
+    if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Thread not found"
@@ -163,56 +172,38 @@ def delete_thread(session: Session, tenant_id: int, thread_id: int, user_id: int
         )
     
     # Delete all replies first
-    replies = list_threads(session, tenant_id, parent_id=thread_id, include_replies=True)
-    for reply in replies:
-        session.delete(reply)
+    replies = await TaskComment.find(
+        TaskComment.tenant_id == tenant_id,
+        TaskComment.parent_id == thread_id
+    ).to_list()
     
-    session.delete(thread)
-    session.commit()
+    for reply in replies:
+        await reply.delete()
+    
+    await thread.delete()
 
 
-def search_threads(
-    session: Session,
-    tenant_id: int,
+async def search_threads(
+    tenant_id: str,
     search_query: str,
-    task_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    user_id: Optional[int] = None
+    task_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None
 ) -> List[TaskComment]:
     """Search threads/comments."""
-    query = select(TaskComment).where(
-        and_(
-            TaskComment.tenant_id == tenant_id,
-            TaskComment.comment.ilike(f"%{search_query}%")
-        )
-    )
+    search_regex = re.compile(f".*{re.escape(search_query)}.*", re.IGNORECASE)
+    conditions = [
+        TaskComment.tenant_id == tenant_id,
+        {"comment": {"$regex": search_regex}}
+    ]
     
     if task_id:
-        query = query.where(TaskComment.task_id == task_id)
+        conditions.append(TaskComment.task_id == task_id)
     
     if project_id:
-        query = query.where(TaskComment.project_id == project_id)
+        conditions.append(TaskComment.project_id == project_id)
     
     if user_id:
-        query = query.where(TaskComment.user_id == user_id)
+        conditions.append(TaskComment.user_id == user_id)
     
-    return list(session.exec(query.order_by(TaskComment.created_at.desc())).all())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return await TaskComment.find(*conditions).sort(-TaskComment.created_at).to_list()
