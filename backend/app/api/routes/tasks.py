@@ -305,7 +305,7 @@ async def list_records(
                 TaskAssignment.user_id == str(current_user.id)
             ).to_list()
             task_ids = [a.task_id for a in assignments]
-            
+
             if task_ids:
                 tasks = await Task.find(
                     {"_id": {"$in": [PydanticObjectId(tid) for tid in task_ids]}}
@@ -313,25 +313,33 @@ async def list_records(
                 project_ids = list(set(t.project_id for t in tasks))
                 all_projects = await list_projects(current_user.tenant_id)
                 projects = [p for p in all_projects if str(p.id) in project_ids]
-        else:
+            else:
                 projects = []
         else:
             projects = await list_projects(current_user.tenant_id)
-        
+
         result = []
         for p in projects:
             client = await Client.get(p.client_id) if p.client_id else None
-            result.append({
-                "id": str(p.id),
+            result.append(
+                {
+                    "id": str(p.id),
                     "name": p.name,
-                "title": p.name,
+                    "title": p.name,
                     "description": p.description,
                     "client_id": p.client_id,
-                "client": {"id": str(client.id), "first_name": client.first_name, "last_name": client.last_name} if client else None,
+                    "client": {
+                        "id": str(client.id),
+                        "first_name": client.first_name,
+                        "last_name": client.last_name,
+                    }
+                    if client
+                    else None,
                     "budget": float(p.budget) if p.budget else None,
                     "deadline": str(p.deadline) if p.deadline else None,
-            })
-        
+                }
+            )
+
         return {"data": result}
     
     elif resource == "clients":
@@ -341,7 +349,7 @@ async def list_records(
                 TaskAssignment.user_id == str(current_user.id)
             ).to_list()
             task_ids = [a.task_id for a in assignments]
-            
+
             if task_ids:
                 tasks = await Task.find(
                     {"_id": {"$in": [PydanticObjectId(tid) for tid in task_ids]}}
@@ -353,11 +361,11 @@ async def list_records(
                 client_ids = list(set(p.client_id for p in projects if p.client_id))
                 all_clients = await list_clients(current_user.tenant_id)
                 clients = [c for c in all_clients if str(c.id) in client_ids]
-        else:
+            else:
                 clients = []
         else:
             clients = await list_clients(current_user.tenant_id)
-        
+
         return {
             "data": [
                 {
