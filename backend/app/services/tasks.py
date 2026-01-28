@@ -222,11 +222,38 @@ async def delete_project(tenant_id: str, project_id: str) -> None:
 async def create_task(tenant_id: str, user_id: str, task_data: Dict[str, Any]) -> Task:
     """Create a new task."""
     # Verify project exists
-    project = await get_project(tenant_id, task_data["project_id"])
+    project_id = task_data.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project ID is required")
+    
+    project = await get_project(tenant_id, project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     
-    # Verify status exists
+    # Verify status exists - if not provided, use the default "To Do" status
+    status_id = task_data.get("status_id")
+    if not status_id:
+        # Get default status
+        default_status = await TaskStatus.find_one(
+            TaskStatus.tenant_id == tenant_id,
+            TaskStatus.is_default == True,
+            TaskStatus.category == TaskStatusCategory.TODO
+        )
+        if default_status:
+            task_data["status_id"] = str(default_status.id)
+        else:
+            # Ensure defaults exist and retry
+            await ensure_default_statuses(tenant_id)
+            default_status = await TaskStatus.find_one(
+                TaskStatus.tenant_id == tenant_id,
+                TaskStatus.is_default == True,
+                TaskStatus.category == TaskStatusCategory.TODO
+            )
+            if default_status:
+                task_data["status_id"] = str(default_status.id)
+            else:
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create default status")
+    
     status_obj = await TaskStatus.find_one(
         TaskStatus.id == PydanticObjectId(task_data["status_id"]),
         TaskStatus.tenant_id == tenant_id
@@ -507,7 +534,7 @@ async def update_priority(tenant_id: str, priority_id: str, updates: Dict[str, A
 
 
 async def delete_priority(tenant_id: str, priority_id: str) -> None:
-    """Delete a priority."""
+    """Delete a priority. Fails if priority is used by tasks."""
     priority = await TaskPriority.find_one(
         TaskPriority.id == PydanticObjectId(priority_id),
         TaskPriority.tenant_id == tenant_id
@@ -515,6 +542,18 @@ async def delete_priority(tenant_id: str, priority_id: str) -> None:
     
     if not priority:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Priority not found")
+    
+    # Check if priority is used by any tasks
+    tasks_count = await Task.find(
+        Task.tenant_id == tenant_id,
+        Task.priority_id == priority_id
+    ).count()
+    
+    if tasks_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete priority that is used by tasks"
+        )
     
     await priority.delete()
 

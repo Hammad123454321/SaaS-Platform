@@ -77,9 +77,12 @@ async def list_time_entries(
     if project_id:
         filtered_entries = []
         for entry in entries:
-            task = await Task.get(entry.task_id)
-            if task and task.project_id == project_id:
-                filtered_entries.append(entry)
+            try:
+                task = await Task.get(PydanticObjectId(entry.task_id)) if entry.task_id else None
+                if task and task.project_id == project_id:
+                    filtered_entries.append(entry)
+            except Exception:
+                continue
         return filtered_entries
     
     return entries
@@ -201,14 +204,18 @@ async def stop_time_tracker(
             detail="You can only stop your own time tracker"
         )
     
-    # Calculate duration
-    end_time = datetime.utcnow()
-    duration = (end_time - tracker.start_date_time).total_seconds() / 3600  # Convert to hours
+    # Calculate duration - ensure timezone consistency
+    end_time = datetime.now(timezone.utc)
+    # Handle case where start_date_time might be naive (legacy data)
+    start_time = tracker.start_date_time
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+    duration = (end_time - start_time).total_seconds() / 3600  # Convert to hours
     
     tracker.end_date_time = end_time
     tracker.duration = Decimal(str(round(duration, 2)))
     tracker.is_running = False
-    tracker.updated_at = datetime.utcnow()
+    tracker.updated_at = datetime.now(timezone.utc)
     
     # Create time entry if task is associated
     if tracker.task_id:
@@ -284,9 +291,12 @@ async def get_time_report(
     if project_id:
         filtered_entries = []
         for entry in entries:
-            task = await Task.get(entry.task_id)
-            if task and task.project_id == project_id:
-                filtered_entries.append(entry)
+            try:
+                task = await Task.get(PydanticObjectId(entry.task_id)) if entry.task_id else None
+                if task and task.project_id == project_id:
+                    filtered_entries.append(entry)
+            except Exception:
+                continue
         entries = filtered_entries
     
     # Aggregate data
@@ -355,9 +365,12 @@ async def get_time_by_date_range(
     if project_id:
         filtered_entries = []
         for entry in entries:
-            task = await Task.get(entry.task_id)
-            if task and task.project_id == project_id:
-                filtered_entries.append(entry)
+            try:
+                task = await Task.get(PydanticObjectId(entry.task_id)) if entry.task_id else None
+                if task and task.project_id == project_id:
+                    filtered_entries.append(entry)
+            except Exception:
+                continue
         entries = filtered_entries
     
     # Group by date

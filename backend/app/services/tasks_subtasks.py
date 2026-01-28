@@ -155,8 +155,11 @@ async def _apply_status_inheritance(
     if not subtask or not subtask.parent_id:
         return
     
-    # Get new status
-    new_status = await TaskStatus.get(new_status_id)
+    # Get new status - safely handle invalid ObjectId
+    try:
+        new_status = await TaskStatus.get(PydanticObjectId(new_status_id))
+    except Exception:
+        return
     if not new_status:
         return
     
@@ -173,7 +176,10 @@ async def _apply_status_inheritance(
         all_done = True
         for st in subtasks:
             if st.status_id != new_status_id:
-                status_obj = await TaskStatus.get(st.status_id)
+                try:
+                    status_obj = await TaskStatus.get(PydanticObjectId(st.status_id)) if st.status_id else None
+                except Exception:
+                    status_obj = None
                 if status_obj and status_obj.category != TaskStatusCategory.DONE:
                     all_done = False
                     break
@@ -209,7 +215,10 @@ async def _update_parent_completion(tenant_id: str, parent_task_id: str) -> None
     # Also check status-based completion
     done_count = 0
     for st in subtasks:
-        status_obj = await TaskStatus.get(st.status_id)
+        try:
+            status_obj = await TaskStatus.get(PydanticObjectId(st.status_id)) if st.status_id else None
+        except Exception:
+            status_obj = None
         if status_obj and status_obj.category == TaskStatusCategory.DONE:
             done_count += 1
     

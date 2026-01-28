@@ -8,7 +8,7 @@ const onboardingRoutes = ["/onboarding"];
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Check for token in cookies or localStorage (via header)
+  // Check for token in cookies or authorization header
   const token = request.cookies.get("access_token")?.value || 
                 request.headers.get("authorization")?.replace("Bearer ", "");
 

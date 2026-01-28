@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from beanie import PydanticObjectId
 from fastapi import Depends, HTTPException, status
 
 from app.api.deps import get_current_user
@@ -29,18 +30,21 @@ def require_permission(permission: PermissionCode) -> Callable:
                 status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden."
             )
 
+        # Use MongoDB-style $in query for Beanie
         role_permissions = await RolePermission.find(
-            RolePermission.role_id.in_(role_ids)
+            {"role_id": {"$in": role_ids}}
         ).to_list()
-        permission_ids = {rp.permission_id for rp in role_permissions}
+        permission_ids = [rp.permission_id for rp in role_permissions]
 
         if not permission_ids:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden."
             )
 
+        # Convert permission_ids to ObjectIds for querying
+        permission_object_ids = [PydanticObjectId(pid) for pid in permission_ids]
         permission_docs = await Permission.find(
-            Permission.id.in_(list(permission_ids))
+            {"_id": {"$in": permission_object_ids}}
         ).to_list()
         codes = {p.code for p in permission_docs}
 

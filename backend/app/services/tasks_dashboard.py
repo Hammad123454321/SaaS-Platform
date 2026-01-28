@@ -42,10 +42,13 @@ async def get_dashboard_metrics(
     status_counts: Dict[str, int] = {}
     for task in all_tasks:
         if task.status_id:
-            task_status = await TaskStatus.get(task.status_id)
-            if task_status:
-                status_name = task_status.name
-                status_counts[status_name] = status_counts.get(status_name, 0) + 1
+            try:
+                task_status = await TaskStatus.get(PydanticObjectId(task.status_id))
+                if task_status:
+                    status_name = task_status.name
+                    status_counts[status_name] = status_counts.get(status_name, 0) + 1
+            except Exception:
+                continue
     
     # Completion rate
     completed_statuses = await TaskStatus.find(
@@ -76,14 +79,19 @@ async def get_dashboard_metrics(
     priority_counts = {"high": 0, "medium": 0, "low": 0, "none": 0}
     for task in all_tasks:
         if task.priority_id:
-            priority = await TaskPriority.get(task.priority_id)
-            if priority:
-                if priority.level >= 3:
-                    priority_counts["high"] += 1
-                elif priority.level >= 2:
-                    priority_counts["medium"] += 1
+            try:
+                priority = await TaskPriority.get(PydanticObjectId(task.priority_id))
+                if priority:
+                    if priority.level >= 3:
+                        priority_counts["high"] += 1
+                    elif priority.level >= 2:
+                        priority_counts["medium"] += 1
+                    else:
+                        priority_counts["low"] += 1
                 else:
-                    priority_counts["low"] += 1
+                    priority_counts["none"] += 1
+            except Exception:
+                priority_counts["none"] += 1
         else:
             priority_counts["none"] += 1
     
@@ -98,11 +106,17 @@ async def get_dashboard_metrics(
             project_id_val = task.project_id
             project_counts[project_id_val] = project_counts.get(project_id_val, 0) + 1
         
-        # Get project names
+        # Get project names - safely handle invalid ObjectIds
         for proj_id, count in project_counts.items():
-            project = await Project.get(proj_id)
-            if project:
-                workload_distribution[project.name] = count
+            if not proj_id:
+                continue
+            try:
+                project = await Project.get(PydanticObjectId(proj_id))
+                if project:
+                    workload_distribution[project.name] = count
+            except Exception:
+                # Invalid ObjectId, skip this project
+                continue
     
     # Time tracking summary (if user_id provided)
     time_summary: Dict[str, Any] = {}

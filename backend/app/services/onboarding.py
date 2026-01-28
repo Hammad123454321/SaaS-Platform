@@ -86,7 +86,11 @@ async def create_checkout_session(
         raise ValueError("No valid modules selected")
     
     # Get tenant
-    tenant = await Tenant.get(tenant_id)
+    from beanie import PydanticObjectId
+    try:
+        tenant = await Tenant.get(PydanticObjectId(tenant_id))
+    except Exception:
+        tenant = None
     if not tenant:
         raise ValueError("Tenant not found")
     

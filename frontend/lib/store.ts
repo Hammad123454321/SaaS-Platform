@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create, StateStorage } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 type Entitlement = {
   module_code: string;
@@ -27,6 +27,23 @@ type SessionState = {
   setBranding: (branding: { color: string; logoUrl?: string }) => void;
 };
 
+// Custom storage that uses sessionStorage instead of localStorage for security
+// Session data is cleared when the browser tab/window is closed
+const sessionStorageWrapper: StateStorage = {
+  getItem: (name: string): string | null => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem(name);
+  },
+  setItem: (name: string, value: string): void => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(name, value);
+  },
+  removeItem: (name: string): void => {
+    if (typeof window === "undefined") return;
+    sessionStorage.removeItem(name);
+  },
+};
+
 export const useSessionStore = create<SessionState>()(
   persist(
     (set) => ({
@@ -43,6 +60,10 @@ export const useSessionStore = create<SessionState>()(
           document.cookie = "access_token=; path=/; max-age=0";
           document.cookie = "refresh_token=; path=/; max-age=0";
         }
+        // Also clear sessionStorage explicitly
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("session-store");
+        }
         set({
           accessToken: null,
           refreshToken: null,
@@ -56,6 +77,7 @@ export const useSessionStore = create<SessionState>()(
     }),
     {
       name: "session-store",
+      storage: createJSONStorage(() => sessionStorageWrapper),
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,

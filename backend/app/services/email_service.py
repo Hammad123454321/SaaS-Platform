@@ -13,10 +13,42 @@ class EmailService:
     """Service for sending emails via SendGrid."""
     
     def __init__(self):
-        self.client = SendGridAPIClient(api_key=settings.sendgrid_api_key)
-        # Extract email and name from settings
-        email_parts = settings.email_from.split("@")
-        self.from_email = Email(settings.email_from, email_parts[0] if len(email_parts) > 0 else "SaaS Platform")
+        self._client = None
+        self._from_email = None
+        self._initialized = False
+    
+    def _ensure_initialized(self) -> bool:
+        """Lazy initialization to avoid crash on import if API key is missing."""
+        if self._initialized:
+            return self._client is not None
+        
+        self._initialized = True
+        api_key = settings.sendgrid_api_key
+        
+        if not api_key:
+            logger.warning("SendGrid API key not configured. Email functionality disabled.")
+            return False
+        
+        try:
+            self._client = SendGridAPIClient(api_key=api_key)
+            # Extract email and name from settings
+            email_from = settings.email_from or "noreply@example.com"
+            email_parts = email_from.split("@")
+            self._from_email = Email(email_from, email_parts[0] if len(email_parts) > 0 else "SaaS Platform")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize SendGrid client: {e}")
+            return False
+    
+    @property
+    def client(self):
+        self._ensure_initialized()
+        return self._client
+    
+    @property
+    def from_email(self):
+        self._ensure_initialized()
+        return self._from_email
     
     def get_frontend_base_url(self) -> str:
         """Get the frontend base URL from settings."""
@@ -24,6 +56,10 @@ class EmailService:
     
     def send_verification_email(self, to_email: str, verification_token: str, user_name: Optional[str] = None) -> bool:
         """Send email verification link to user."""
+        if not self._ensure_initialized():
+            logger.warning(f"Cannot send verification email to {to_email}: Email service not configured")
+            return False
+        
         try:
             verification_url = f"{settings.frontend_base_url}/auth/verify-email?token={verification_token}"
             
@@ -73,6 +109,10 @@ class EmailService:
     
     def send_team_invitation_email(self, to_email: str, invitation_token: str, inviter_name: str, tenant_name: str, role_name: Optional[str] = None) -> bool:
         """Send team invitation email."""
+        if not self._ensure_initialized():
+            logger.warning(f"Cannot send invitation email to {to_email}: Email service not configured")
+            return False
+        
         try:
             invitation_url = f"{settings.frontend_base_url}/auth/accept-invitation?token={invitation_token}"
             
@@ -132,6 +172,10 @@ class EmailService:
         login_url: str = None
     ) -> bool:
         """Send team member credentials email with auto-generated password."""
+        if not self._ensure_initialized():
+            logger.warning(f"Cannot send credentials email to {to_email}: Email service not configured")
+            return False
+        
         try:
             if login_url is None:
                 login_url = f"{settings.frontend_base_url}/login"

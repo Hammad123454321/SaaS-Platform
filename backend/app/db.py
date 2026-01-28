@@ -175,7 +175,7 @@ async def init_db() -> None:
         tenants = await Tenant.find_all().to_list()
         for tenant in tenants:
             try:
-                await ensure_roles_for_tenant(tenant.id)
+                await ensure_roles_for_tenant(str(tenant.id))
                 logger.info(f"Updated roles for tenant {tenant.id} ({tenant.name})")
             except Exception as e:
                 logger.warning(f"Failed to update roles for tenant {tenant.id}: {e}")

@@ -22,7 +22,9 @@ async def get_admin_stats(
     active_subscriptions = await Subscription.find(Subscription.status == "active").count()
     
     active_subs = await Subscription.find(Subscription.status == "active").to_list()
-    total_revenue = sum(float(s.amount) for s in active_subs if s.amount)
+    from decimal import Decimal
+    total_revenue = sum(Decimal(str(s.amount)) for s in active_subs if s.amount)
+    total_revenue = float(total_revenue)  # Convert back for JSON serialization
     
     return {
         "total_tenants": total_tenants or 0,

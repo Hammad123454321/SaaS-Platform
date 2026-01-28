@@ -56,8 +56,12 @@ async def verify_email_token(token: str) -> Optional[User]:
     if verification.expires_at < datetime.utcnow():
         return None  # Expired
 
-    # Get user
-    user = await User.get(verification.user_id)
+    # Get user - safely handle invalid ObjectId
+    from beanie import PydanticObjectId
+    try:
+        user = await User.get(PydanticObjectId(verification.user_id))
+    except Exception:
+        return None
     if not user:
         return None
 
@@ -71,7 +75,10 @@ async def verify_email_token(token: str) -> Optional[User]:
     # Activate tenant (no longer draft)
     tenant = None
     if user.tenant_id:
-        tenant = await Tenant.get(user.tenant_id)
+        try:
+            tenant = await Tenant.get(PydanticObjectId(user.tenant_id))
+        except Exception:
+            tenant = None
         if tenant:
             tenant.is_draft = False
             await tenant.save()

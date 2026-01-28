@@ -39,9 +39,8 @@ def _create_token(
     if impersonated_by is not None:
         payload["impersonated_by"] = impersonated_by
     
-    logger.info(f"Creating token: iat={payload['iat']} ({now.isoformat()}), exp={payload['exp']} ({exp_time.isoformat()}), expires_delta={expires_delta}, expires_in_minutes={expires_delta.total_seconds() / 60}")
+    logger.debug(f"Creating token: expires_in_minutes={expires_delta.total_seconds() / 60}")
     encoded = jwt.encode(payload, secret, algorithm=settings.jwt_algorithm)
-    logger.info(f"Token created successfully, length={len(encoded)}")
     return encoded
 
 
@@ -86,16 +85,11 @@ def decode_token(token: str, refresh: bool = False) -> Optional[dict[str, Any]]:
         
         if exp_time and iat_time:
             time_until_exp = exp_time - current_time
-            logger.info(f"Token validation (unverified): iat={iat_time} ({datetime.fromtimestamp(iat_time).isoformat()}), exp={exp_time} ({datetime.fromtimestamp(exp_time).isoformat()}), current={current_time} ({datetime.fromtimestamp(current_time).isoformat()}), time_until_exp={time_until_exp} seconds")
             if exp_time < current_time:
-                logger.error(f"Token expired: exp={exp_time} ({datetime.fromtimestamp(exp_time).isoformat()}), current={current_time} ({datetime.fromtimestamp(current_time).isoformat()}), expired_by={current_time - exp_time} seconds")
+                logger.debug(f"Token expired by {current_time - exp_time} seconds")
                 return None
-            else:
-                logger.info(f"Token expiration check passed: valid for {time_until_exp} more seconds")
         
-        # Now verify signature with the secret
-        logger.info(f"Verifying token signature with {secret_type} secret (length={len(secret)})")
-        logger.debug(f"Secret key (first 10 chars): {secret[:10]}...")
+        # Verify signature with the secret
         
         # First verify signature without checking expiration (we already checked it)
         # Then manually verify expiration with leeway
@@ -115,43 +109,25 @@ def decode_token(token: str, refresh: bool = False) -> Optional[dict[str, Any]]:
                 time_until_exp = token_exp - current_time
                 leeway_seconds = 60
                 if time_until_exp < -leeway_seconds:  # Expired beyond leeway
-                    logger.error(f"Token expired beyond leeway: exp={token_exp}, current={current_time}, expired_by={current_time - token_exp} seconds")
                     raise jwt.ExpiredSignatureError("Token has expired")
-                elif time_until_exp < 0:
-                    logger.warning(f"Token expired but within leeway: exp={token_exp}, current={current_time}, expired_by={current_time - token_exp} seconds (allowing with leeway)")
-                else:
-                    logger.info(f"Token is valid: expires in {time_until_exp} seconds")
             
-            logger.info(f"Token decoded and verified successfully. Using {secret_type} secret")
             return decoded
         except jwt.InvalidSignatureError:
             raise  # Re-raise signature errors
         except jwt.ExpiredSignatureError:
             raise  # Re-raise expiration errors
         
-    except jwt.ExpiredSignatureError as e:
-        logger.error(f"Token has expired: {e}")
-        # Log detailed expiration info
-        try:
-            unverified = jwt.decode(token, options={"verify_signature": False, "verify_exp": False})
-            exp_time = unverified.get("exp")
-            current_time = int(datetime.utcnow().timestamp())
-            if exp_time:
-                expired_by = current_time - exp_time
-                logger.error(f"Token exp={exp_time} ({datetime.fromtimestamp(exp_time).isoformat()}), current={current_time} ({datetime.fromtimestamp(current_time).isoformat()}), expired_by={expired_by} seconds")
-        except:
-            pass
+    except jwt.ExpiredSignatureError:
+        logger.debug("Token has expired")
         return None
-    except jwt.InvalidSignatureError as e:
-        logger.error(f"Token signature is invalid - secret key mismatch! Error: {e}")
-        logger.error(f"Using {secret_type} secret key (length={len(secret)}, first 10 chars: {secret[:10]}...)")
-        logger.error("This usually means the token was signed with a different secret key than the one being used to verify it.")
+    except jwt.InvalidSignatureError:
+        logger.warning("Token signature verification failed")
         return None
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"Invalid token: {e}")
+    except jwt.InvalidTokenError:
+        logger.warning("Invalid token")
         return None
-    except jwt.PyJWTError as e:
-        logger.warning(f"JWT error: {e}")
+    except jwt.PyJWTError:
+        logger.warning("JWT processing error")
         return None
 
 
