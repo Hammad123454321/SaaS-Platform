@@ -29,18 +29,30 @@ jobs:
 
       - name: Deploy
         run: |
+          # Sync code from this commit to the server
           eval $RSYNC_CMD \
             --exclude '.git' --exclude 'node_modules' --exclude '__pycache__' \
             --exclude '*.pyc' --exclude '.env*' --exclude 'venv' --exclude '.next' \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/saas_platform/
-          
+
+          # On the server: always force the repo to match origin/main (Option 1 behavior)
           eval $SSH_CMD ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
             cd ~/saas_platform
+
+            if [ -d .git ]; then
+              git fetch origin || true
+              git reset --hard origin/main || true
+              git clean -fd || true
+            fi
+
             [ ! -f .env ] && [ -f .env.example ] && cp .env.example .env
+
             docker-compose down || true
             docker-compose build && docker-compose up -d frontend backend
+
             sleep 15
             docker-compose exec -T backend python -c "from app.db import init_db; init_db()" || true
+
             # Setup nginx on host
             sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
             sudo cp nginx/nginx.conf /etc/nginx/nginx.conf

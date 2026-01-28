@@ -36,8 +36,9 @@ class BusinessProfileCreate(BaseModel):
 
 
 class BusinessProfileResponse(BaseModel):
-    id: int
-    tenant_id: int
+    # Mongo-backed IDs are strings, not integers
+    id: str
+    tenant_id: str
     legal_business_name: str
     operating_name: Optional[str]
     province: str
@@ -63,8 +64,9 @@ class OwnerConfirmationRequest(BaseModel):
 
 
 class OwnerConfirmationResponse(BaseModel):
-    user_id: int
-    tenant_id: int
+    # Mongo-backed IDs are strings, not integers
+    user_id: str
+    tenant_id: str
     confirmed_at: datetime
     responsibility_disclaimer_accepted: bool
     
@@ -73,8 +75,9 @@ class OwnerConfirmationResponse(BaseModel):
 
 
 class RoleTemplateResponse(BaseModel):
-    id: int
-    tenant_id: int
+    # Mongo-backed IDs are strings, not integers
+    id: str
+    tenant_id: str
     name: str
     created_at: datetime
     updated_at: datetime
@@ -89,8 +92,9 @@ class RoleCreate(BaseModel):
 
 
 class RoleResponse(BaseModel):
-    id: int
-    tenant_id: int
+    # Mongo-backed IDs are strings, not integers
+    id: str
+    tenant_id: str
     name: str
     created_at: datetime
     updated_at: datetime
@@ -101,15 +105,17 @@ class RoleResponse(BaseModel):
 
 class TeamInvitationCreate(BaseModel):
     email: EmailStr
-    role_id: Optional[int] = None
+    # Role IDs are Mongo string IDs
+    role_id: Optional[str] = None
 
 
 class TeamInvitationResponse(BaseModel):
-    id: int
-    tenant_id: int
-    invited_by_user_id: int
+    # Mongo-backed IDs are strings, not integers
+    id: str
+    tenant_id: str
+    invited_by_user_id: str
     email: str
-    role_id: Optional[int]
+    role_id: Optional[str]
     expires_at: datetime
     accepted_at: Optional[datetime]
     created_at: datetime
