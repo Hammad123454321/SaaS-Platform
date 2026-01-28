@@ -127,8 +127,11 @@ async def send_team_member_credentials_email(
     
     # Get role name
     role_name = None
-    if user.roles:
-        role_name = user.roles[0].name if user.roles else None
+    user_roles = await UserRole.find(UserRole.user_id == str(user.id)).to_list()
+    if user_roles:
+        role = await Role.get(user_roles[0].role_id)
+        if role:
+            role_name = role.name
     
     inviter_name = inviter.email.split("@")[0] if inviter else "Admin"
     

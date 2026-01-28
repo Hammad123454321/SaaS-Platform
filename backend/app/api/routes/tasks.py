@@ -13,8 +13,8 @@ from beanie import PydanticObjectId
 logger = logging.getLogger(__name__)
 
 from app.api.authz import require_permission
-from app.models import User, ModuleCode, ModuleEntitlement, Task, Project, TaskStatus, TaskPriority, Client
-from app.models.role import PermissionCode
+from app.models import User, ModuleCode, ModuleEntitlement, Task, Project, TaskStatus, TaskPriority, Client, UserRole
+from app.models.role import PermissionCode, Role
 from app.models.tasks import TaskAssignment
 from app.services.task_access_control import (
     can_user_create_task,
@@ -71,10 +71,10 @@ router = APIRouter(prefix="/modules/tasks", tags=["tasks"])
 async def _require_tasks_entitlement(tenant_id: str) -> None:
     """Check if Tasks module is enabled for tenant."""
     entitlement = await ModuleEntitlement.find_one(
-        ModuleEntitlement.tenant_id == tenant_id,
-        ModuleEntitlement.module_code == ModuleCode.TASKS,
+            ModuleEntitlement.tenant_id == tenant_id,
+            ModuleEntitlement.module_code == ModuleCode.TASKS,
         ModuleEntitlement.enabled == True,
-    )
+        )
     
     if not entitlement:
         raise HTTPException(
@@ -83,11 +83,16 @@ async def _require_tasks_entitlement(tenant_id: str) -> None:
         )
 
 
-def _is_staff_only(user: User) -> bool:
+async def _is_staff_only(user: User) -> bool:
     """Check if user is staff (not admin). Staff can only access their assigned tasks."""
     if user.is_super_admin:
         return False
-    role_names = [role.name for role in user.roles] if user.roles else []
+    user_roles = await UserRole.find(UserRole.user_id == str(user.id)).to_list()
+    role_names = []
+    for ur in user_roles:
+        role = await Role.get(ur.role_id)
+        if role:
+            role_names.append(role.name)
     # If user has company_admin or admin role, they're not staff-only
     return not any(name in ["company_admin", "admin"] for name in role_names)
 
@@ -272,7 +277,7 @@ async def list_records(
     await _require_tasks_entitlement(current_user.tenant_id)
     
     # Check if user is staff-only (not admin)
-    is_staff = _is_staff_only(current_user)
+    is_staff = await _is_staff_only(current_user)
     
     if resource == "tasks":
         # Staff can only see tasks assigned to them
@@ -308,7 +313,7 @@ async def list_records(
                 project_ids = list(set(t.project_id for t in tasks))
                 all_projects = await list_projects(current_user.tenant_id)
                 projects = [p for p in all_projects if str(p.id) in project_ids]
-            else:
+        else:
                 projects = []
         else:
             projects = await list_projects(current_user.tenant_id)
@@ -318,13 +323,13 @@ async def list_records(
             client = await Client.get(p.client_id) if p.client_id else None
             result.append({
                 "id": str(p.id),
-                "name": p.name,
+                    "name": p.name,
                 "title": p.name,
-                "description": p.description,
-                "client_id": p.client_id,
+                    "description": p.description,
+                    "client_id": p.client_id,
                 "client": {"id": str(client.id), "first_name": client.first_name, "last_name": client.last_name} if client else None,
-                "budget": float(p.budget) if p.budget else None,
-                "deadline": str(p.deadline) if p.deadline else None,
+                    "budget": float(p.budget) if p.budget else None,
+                    "deadline": str(p.deadline) if p.deadline else None,
             })
         
         return {"data": result}
@@ -348,7 +353,7 @@ async def list_records(
                 client_ids = list(set(p.client_id for p in projects if p.client_id))
                 all_clients = await list_clients(current_user.tenant_id)
                 clients = [c for c in all_clients if str(c.id) in client_ids]
-            else:
+        else:
                 clients = []
         else:
             clients = await list_clients(current_user.tenant_id)
@@ -408,7 +413,7 @@ async def create_record(
     """Create a record."""
     await _require_tasks_entitlement(current_user.tenant_id)
     
-    is_staff = _is_staff_only(current_user)
+    is_staff = await _is_staff_only(current_user)
     
     # Staff can only create tasks, not clients/projects/statuses/priorities
     if is_staff and resource not in ["tasks"]:
@@ -428,7 +433,12 @@ async def create_record(
         assignee_ids = payload.get("assignee_ids") or payload.get("user_id", [])
         
         # Staff can only create tasks assigned to themselves
-        role_names = [r.name.lower() for r in current_user.roles] if current_user.roles else []
+        user_roles = await UserRole.find(UserRole.user_id == str(current_user.id)).to_list()
+        role_names = []
+        for ur in user_roles:
+            role = await Role.get(ur.role_id)
+            if role:
+                role_names.append(role.name.lower())
         if "staff" in role_names:
             assignee_ids = [str(current_user.id)]
         
@@ -513,7 +523,7 @@ async def update_record(
     """Update a record."""
     await _require_tasks_entitlement(current_user.tenant_id)
     
-    is_staff = _is_staff_only(current_user)
+    is_staff = await _is_staff_only(current_user)
     
     if resource == "tasks":
         task = await get_task(current_user.tenant_id, record_id)
@@ -636,7 +646,7 @@ async def delete_record(
     """Delete a record."""
     await _require_tasks_entitlement(current_user.tenant_id)
     
-    is_staff = _is_staff_only(current_user)
+    is_staff = await _is_staff_only(current_user)
     
     if is_staff:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Staff cannot delete records")
@@ -677,7 +687,7 @@ async def delete_record(
     
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown resource: {resource}")
-
+    
 
 # ========== Task-specific Endpoints ==========
 @router.post("/tasks/{task_id}/favorite")
@@ -733,10 +743,10 @@ async def get_task_comments(
         user = await User.get(c.user_id) if c.user_id else None
         result.append({
             "id": str(c.id),
-            "comment": c.comment,
-            "user_id": c.user_id,
+                "comment": c.comment,
+                "user_id": c.user_id,
             "user_name": user.email if user else None,
-            "created_at": str(c.created_at),
+                "created_at": str(c.created_at),
         })
     
     return {"data": result}
@@ -854,9 +864,9 @@ async def add_time_entry(
     from app.services.tasks_time import create_time_entry
     
     time_data = {
-        "hours": payload.get("hours", 0),
-        "date": payload.get("date"),
-        "description": payload.get("description"),
+            "hours": payload.get("hours", 0),
+            "date": payload.get("date"),
+            "description": payload.get("description"),
         "is_billable": payload.get("is_billable", True),
     }
     
@@ -1073,7 +1083,7 @@ async def get_tasks_dashboard(
     await _require_tasks_entitlement(current_user.tenant_id)
     from app.services.tasks_dashboard import get_dashboard_metrics
     
-    is_staff = _is_staff_only(current_user)
+    is_staff = await _is_staff_only(current_user)
     user_id = str(current_user.id) if is_staff else None
     
     metrics = await get_dashboard_metrics(current_user.tenant_id, user_id=user_id, project_id=project_id)
@@ -1089,7 +1099,7 @@ async def get_kanban_view(
     """Get kanban board view."""
     await _require_tasks_entitlement(current_user.tenant_id)
     
-    is_staff = _is_staff_only(current_user)
+    is_staff = await _is_staff_only(current_user)
     assignee_id = str(current_user.id) if is_staff else None
     
     # Get statuses

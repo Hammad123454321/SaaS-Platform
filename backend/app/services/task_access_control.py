@@ -8,13 +8,25 @@ from app.models.user import User
 from app.models.role import Role
 from app.models.permissions import UserPermission
 from app.models.tasks import Task, Project
+from app.models import UserRole
 from app.services.owner_service import is_user_owner
 
 
-def can_user_access_task_management(user: User) -> bool:
+async def _get_user_role_names(user: User) -> list[str]:
+    """Helper to fetch role names for a user."""
+    user_roles = await UserRole.find(UserRole.user_id == str(user.id)).to_list()
+    role_names = []
+    for ur in user_roles:
+        role = await Role.get(ur.role_id)
+        if role:
+            role_names.append(role.name.lower())
+    return role_names
+
+
+async def can_user_access_task_management(user: User) -> bool:
     """Check if user can access task management module at all."""
     # Accountant has read-only access, others have full access
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Accountant, Staff, Manager, Owner, company_admin all can access
     # Only users with no roles cannot access
@@ -23,7 +35,7 @@ def can_user_access_task_management(user: User) -> bool:
 
 async def can_user_create_task(user: User) -> bool:
     """Check if user can create tasks."""
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Owner, Manager, Staff can create tasks
     # Accountant cannot create (read-only)
@@ -35,7 +47,7 @@ async def can_user_create_task(user: User) -> bool:
 
 async def can_user_update_task(user: User, task: Task) -> bool:
     """Check if user can update a task."""
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Owner and Manager have full access
     is_owner = await is_user_owner(str(user.id), user.tenant_id)
@@ -52,7 +64,7 @@ async def can_user_update_task(user: User, task: Task) -> bool:
 
 async def can_user_change_task_status(user: User) -> bool:
     """Check if user can change task status."""
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Owner, Manager, Staff can change status
     # Accountant cannot
@@ -68,7 +80,7 @@ async def can_user_delete_task(user: User, task: Task) -> bool:
     if task.is_required:
         return False
     
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Only Owner and Manager can delete
     is_owner = await is_user_owner(str(user.id), user.tenant_id)
@@ -80,7 +92,7 @@ async def can_user_delete_task(user: User, task: Task) -> bool:
 
 async def can_user_create_project(user: User) -> bool:
     """Check if user can create projects."""
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Owner and Manager can always create projects
     is_owner = await is_user_owner(str(user.id), user.tenant_id)
@@ -100,7 +112,7 @@ async def can_user_create_project(user: User) -> bool:
 
 async def can_user_update_project(user: User, project: Project) -> bool:
     """Check if user can update a project."""
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Owner and Manager have full access
     is_owner = await is_user_owner(str(user.id), user.tenant_id)
@@ -123,7 +135,7 @@ async def can_user_update_project(user: User, project: Project) -> bool:
 
 async def can_user_delete_project(user: User, project: Project) -> bool:
     """Check if user can delete a project."""
-    role_names = [r.name.lower() for r in user.roles] if user.roles else []
+    role_names = await _get_user_role_names(user)
     
     # Only Owner and Manager can delete
     is_owner = await is_user_owner(str(user.id), user.tenant_id)

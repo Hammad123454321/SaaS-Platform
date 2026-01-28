@@ -236,7 +236,12 @@ async def login(payload: LoginRequest, response: Response):
 
     subject = f"{result.id}:{result.tenant_id}"
     # Collect role names for JWT claim
-    role_names = [r.name for r in result.roles]
+    user_roles = await UserRole.find(UserRole.user_id == str(result.id)).to_list()
+    role_names = []
+    for ur in user_roles:
+        role = await Role.get(ur.role_id)
+        if role:
+            role_names.append(role.name)
     access = create_access_token(subject, roles=role_names)
     refresh = create_refresh_token(subject)
     
@@ -249,11 +254,16 @@ async def login(payload: LoginRequest, response: Response):
 
 
 @router.get("/me", response_model=UserRead)
-def me(
+async def me(
     current_user: User = Depends(get_current_user),
 ) -> UserRead:
-    roles = [r.name for r in current_user.roles]
-    return UserRead.model_validate({**current_user.model_dump(), "roles": roles})
+    user_roles = await UserRole.find(UserRole.user_id == str(current_user.id)).to_list()
+    role_names = []
+    for ur in user_roles:
+        role = await Role.get(ur.role_id)
+        if role:
+            role_names.append(role.name)
+    return UserRead.model_validate({**current_user.model_dump(), "roles": role_names})
 
 
 @router.get("/onboarding-status")
@@ -465,7 +475,12 @@ async def impersonate(
         )
 
     subject = f"{target.id}:{target.tenant_id}"
-    role_names = [r.name for r in target.roles]
+    user_roles = await UserRole.find(UserRole.user_id == str(target.id)).to_list()
+    role_names = []
+    for ur in user_roles:
+        role = await Role.get(ur.role_id)
+        if role:
+            role_names.append(role.name)
     access = create_access_token(
         subject, roles=role_names, impersonated_by=str(current_user.id)
     )
