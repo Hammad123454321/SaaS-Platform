@@ -117,7 +117,7 @@ function LoginForm() {
         setTimeout(() => {
           window.location.href = destination;
         }, 500);
-      } catch (err) {
+      } catch (err: any) {
         // If onboarding check fails, redirect to login with error message
         console.error("Failed to check onboarding status:", err);
         const errorMessage = err?.response?.data?.detail || "Failed to verify onboarding status. Please try again.";

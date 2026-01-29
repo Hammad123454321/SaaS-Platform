@@ -30,7 +30,7 @@ export default function DashboardPage() {
           return;
         }
         setCheckingOnboarding(false);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to check onboarding status:", err);
         // On error, redirect to login with error message
         const errorMessage = err?.response?.data?.detail || "Failed to verify onboarding status. Please try again.";
