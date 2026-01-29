@@ -253,17 +253,44 @@ async def login(payload: LoginRequest, response: Response):
     }
 
 
-@router.get("/me", response_model=UserRead)
+@router.get("/me")
 async def me(
     current_user: User = Depends(get_current_user),
-) -> UserRead:
-    user_roles = await UserRole.find(UserRole.user_id == str(current_user.id)).to_list()
+) -> dict:
+    """Get current user info with roles."""
+    from fastapi import Response
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    user_id_str = str(current_user.id)
+    logger.info(f"/auth/me called for user_id={user_id_str}, email={current_user.email}")
+    
+    user_roles = await UserRole.find(UserRole.user_id == user_id_str).to_list()
+    logger.info(f"Found {len(user_roles)} UserRole records for user_id={user_id_str}")
+    
     role_names = []
     for ur in user_roles:
         role = await Role.get(ur.role_id)
         if role:
             role_names.append(role.name)
-    return UserRead.model_validate({**current_user.model_dump(), "roles": role_names})
+            logger.info(f"  Role: {role.name} (id={ur.role_id})")
+        else:
+            logger.warning(f"  Role not found for role_id={ur.role_id}")
+    
+    logger.info(f"Final roles for user: {role_names}")
+    
+    response_data = {
+        "id": user_id_str,
+        "tenant_id": str(current_user.tenant_id) if current_user.tenant_id else "",
+        "email": current_user.email,
+        "is_active": current_user.is_active,
+        "is_super_admin": current_user.is_super_admin,
+        "roles": role_names,
+    }
+    logger.info(f"Returning response: {response_data}")
+    logger.info(f"Response will be sent with status 200")
+    return response_data
 
 
 @router.get("/onboarding-status")

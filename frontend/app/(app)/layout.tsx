@@ -11,9 +11,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, accessToken } = useSessionStore();
+  const [isHydrated, setIsHydrated] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
+  // Wait for Zustand to hydrate from sessionStorage
   useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    // Don't do anything until Zustand has hydrated
+    if (!isHydrated) return;
+
     // Redirect to login if not authenticated
     if (!accessToken || !user) {
       router.push("/login");
@@ -45,11 +54,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     };
     
     checkOnboarding();
-  }, [accessToken, user, router, pathname]);
+  }, [isHydrated, accessToken, user, router, pathname]);
 
-  // Don't render if not authenticated or checking onboarding
-  if (!accessToken || !user || checkingOnboarding) {
-    return null;
+  // Show loading while hydrating or checking onboarding
+  if (!isHydrated || (!accessToken || !user || checkingOnboarding)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return <AppShell>{children}</AppShell>;

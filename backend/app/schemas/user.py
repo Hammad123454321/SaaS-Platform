@@ -3,8 +3,9 @@ from typing import Optional
 
 
 class UserRead(BaseModel):
-    id: int
-    tenant_id: int
+    # Mongo-backed IDs are strings, not integers
+    id: str
+    tenant_id: str
     email: EmailStr
     is_active: bool
     is_super_admin: bool

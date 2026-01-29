@@ -9,7 +9,7 @@ type Entitlement = {
 };
 
 export type UserInfo = {
-  id?: number;
+  id?: string | number;  // Mongo IDs are strings
   email: string;
   is_super_admin?: boolean;
   roles?: string[];

@@ -3,14 +3,14 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { api } from "@/lib/api";
-import { useSessionStore } from "@/lib/store";
+import { useSessionStore, UserInfo } from "@/lib/store";
 
 export const dynamic = 'force-dynamic';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setSession, accessToken } = useSessionStore();
+  const { setSession, clearSession, accessToken } = useSessionStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -60,31 +60,69 @@ function LoginForm() {
         document.cookie = `refresh_token=${refreshToken}; path=/; max-age=604800; SameSite=Lax`;
       }
       
-      // Set session BEFORE calling /auth/me so the interceptor can use it
+      // Clear old session data first to avoid conflicts
+      clearSession();
+      
+      // Wait a moment for session to clear
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Set session with tokens only (user will be added after /auth/me)
       setSession({
         accessToken,
         refreshToken,
         user: null, // Will be updated after /auth/me call
       });
       
-      // Call /auth/me with explicit Authorization header
-      const me = await api.get("/auth/me", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      // Wait for session to persist
+      await new Promise(resolve => setTimeout(resolve, 50));
       
-      // Update session with user data
+      // Call /auth/me with explicit Authorization header
+      let userData: UserInfo | null = null;
+      try {
+        const apiBaseURL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+        const baseURL = apiBaseURL.endsWith('/api/v1') 
+          ? apiBaseURL 
+          : `${apiBaseURL.replace(/\/$/, '')}/api/v1`;
+        
+        const fetchResponse = await fetch(`${baseURL}/auth/me`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          cache: 'no-store', // Prevent caching
+        });
+        
+        if (!fetchResponse.ok) {
+          const errorText = await fetchResponse.text();
+          throw new Error(`HTTP ${fetchResponse.status}: ${errorText}`);
+        }
+        
+        const meData = await fetchResponse.json();
+        
+        if (meData) {
+          userData = { 
+            id: meData.id,
+            email: meData.email, 
+            is_super_admin: meData.is_super_admin, 
+            roles: meData.roles || [] 
+          };
+        }
+      } catch (meError: any) {
+        console.error("[Login] /auth/me failed:", meError?.message);
+        // Continue without user data - it can be fetched later on dashboard
+      }
+      
+      // Update session with user data and wait for persistence
       setSession({
         accessToken,
         refreshToken,
-        user: { 
-          id: me.data.id,
-          email: me.data.email, 
-          is_super_admin: me.data.is_super_admin, 
-          roles: me.data.roles || [] 
-        },
+        user: userData,
       });
+      
+      // Give Zustand persist time to write to sessionStorage
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // If password change is required, redirect to first-login page
       if (passwordChangeRequired) {
