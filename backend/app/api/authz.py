@@ -18,8 +18,8 @@ def require_permission(permission: PermissionCode) -> Callable:
         if current_user.is_super_admin:
             return current_user
 
-        # Development mode override: bypass billing permission checks
-        if is_development() and permission == PermissionCode.VIEW_BILLING:
+        # Development mode override: bypass billing and entitlements permission checks
+        if is_development() and permission in (PermissionCode.VIEW_BILLING, PermissionCode.MANAGE_ENTITLEMENTS):
             return current_user
 
         # Look up role permissions via Beanie relationships

@@ -6,6 +6,7 @@ from app.models import ModuleEntitlement, ModuleCode, User, Tenant
 from app.schemas import EntitlementRead, EntitlementToggleRequest
 from app.models.role import PermissionCode
 from app.services.audit import log_audit
+from app.config import is_development
 
 router = APIRouter(prefix="/entitlements", tags=["entitlements"])
 
@@ -70,6 +71,19 @@ async def toggle_entitlement(
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Failed to sync users to {module_code.value}: {e}")
+        
+        # Initialize module-specific resources (e.g., Tasks module)
+        if module_code == ModuleCode.TASKS:
+            try:
+                from app.services.onboarding import initialize_tasks_module
+                await initialize_tasks_module(tenant_id)
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"Initialized Tasks module for tenant {tenant_id}")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to initialize Tasks module for tenant {tenant_id}: {e}")
     
     await log_audit(
         tenant_id=tenant_id,
