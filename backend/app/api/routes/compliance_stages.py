@@ -111,7 +111,17 @@ async def create_financial_setup(
         wsib_class=payload.wsib_class
     )
     
-    return FinancialSetupResponse(**financial_setup.model_dump())
+    return FinancialSetupResponse(
+        id=str(financial_setup.id),
+        tenant_id=financial_setup.tenant_id,
+        payroll_type=financial_setup.payroll_type.value if financial_setup.payroll_type else None,
+        pay_schedule=financial_setup.pay_schedule.value if financial_setup.pay_schedule else None,
+        wsib_class=financial_setup.wsib_class.value if financial_setup.wsib_class else None,
+        is_confirmed=financial_setup.is_confirmed,
+        confirmed_at=financial_setup.confirmed_at,
+        created_at=financial_setup.created_at,
+        updated_at=financial_setup.updated_at,
+    )
 
 
 @router.get("/financial-setup", response_model=FinancialSetupResponse)
@@ -131,7 +141,17 @@ async def get_financial_setup(
             detail="Financial setup not found."
         )
     
-    return FinancialSetupResponse(**financial_setup.model_dump())
+    return FinancialSetupResponse(
+        id=str(financial_setup.id),
+        tenant_id=financial_setup.tenant_id,
+        payroll_type=financial_setup.payroll_type.value if financial_setup.payroll_type else None,
+        pay_schedule=financial_setup.pay_schedule.value if financial_setup.pay_schedule else None,
+        wsib_class=financial_setup.wsib_class.value if financial_setup.wsib_class else None,
+        is_confirmed=financial_setup.is_confirmed,
+        confirmed_at=financial_setup.confirmed_at,
+        created_at=financial_setup.created_at,
+        updated_at=financial_setup.updated_at,
+    )
 
 
 @router.post("/financial-setup/confirm", response_model=FinancialSetupResponse)
@@ -159,7 +179,17 @@ async def confirm_financial_setup_endpoint(
         confirmed_by_user_id=str(current_user.id)
     )
     
-    return FinancialSetupResponse(**financial_setup.model_dump())
+    return FinancialSetupResponse(
+        id=str(financial_setup.id),
+        tenant_id=financial_setup.tenant_id,
+        payroll_type=financial_setup.payroll_type.value if financial_setup.payroll_type else None,
+        pay_schedule=financial_setup.pay_schedule.value if financial_setup.pay_schedule else None,
+        wsib_class=financial_setup.wsib_class.value if financial_setup.wsib_class else None,
+        is_confirmed=financial_setup.is_confirmed,
+        confirmed_at=financial_setup.confirmed_at,
+        created_at=financial_setup.created_at,
+        updated_at=financial_setup.updated_at,
+    )
 
 
 # ========== Stage 4: HR Policies ==========
