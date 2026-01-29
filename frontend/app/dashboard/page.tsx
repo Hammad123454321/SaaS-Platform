@@ -32,8 +32,10 @@ export default function DashboardPage() {
         setCheckingOnboarding(false);
       } catch (err) {
         console.error("Failed to check onboarding status:", err);
-        // On error, allow access (fail open)
-        setCheckingOnboarding(false);
+        // On error, redirect to login with error message
+        const errorMessage = err?.response?.data?.detail || "Failed to verify onboarding status. Please try again.";
+        router.push(`/login?error=${encodeURIComponent(errorMessage)}`);
+        return;
       }
     };
     

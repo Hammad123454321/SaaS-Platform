@@ -17,10 +17,16 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
 
   // Pre-fill email from query params (e.g., from signup redirect)
+  // Also check for error message from redirects
   useEffect(() => {
     const emailParam = searchParams.get("email");
     if (emailParam) {
       setEmail(emailParam);
+    }
+    
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      setMessage(decodeURIComponent(errorParam));
     }
   }, [searchParams]);
 
@@ -112,12 +118,15 @@ function LoginForm() {
           window.location.href = destination;
         }, 500);
       } catch (err) {
-        // If onboarding check fails, default to dashboard (fail open)
-        const redirect = searchParams.get("redirect");
-        const destination = redirect || "/dashboard";
+        // If onboarding check fails, redirect to login with error message
+        console.error("Failed to check onboarding status:", err);
+        const errorMessage = err?.response?.data?.detail || "Failed to verify onboarding status. Please try again.";
+        const loginUrl = new URL("/login", window.location.origin);
+        loginUrl.searchParams.set("error", encodeURIComponent(errorMessage));
         setTimeout(() => {
-          window.location.href = destination;
+          window.location.href = loginUrl.toString();
         }, 500);
+        return;
       }
     } catch (err: any) {
       setMessage(err?.response?.data?.detail ?? "Login failed. Please check your credentials.");
