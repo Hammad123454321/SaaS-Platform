@@ -4,6 +4,7 @@ from typing import Optional
 from app.config import is_development
 from app.models import User, ModuleEntitlement
 from app.models.onboarding import BusinessProfile, OwnerConfirmation
+from app.models.compliance import FinancialSetup
 
 
 async def is_onboarding_complete(user: User) -> tuple[bool, Optional[str]]:
@@ -50,8 +51,14 @@ async def is_onboarding_complete(user: User) -> tuple[bool, Optional[str]]:
     if not enabled_modules or len(enabled_modules) == 0:
         return False, "module_selection"
     
-    # Stage 4: Compliance (skip billing in dev, but check other compliance)
-    # For now, we'll consider compliance optional if business profile exists
+    # Stage 4: Financial setup must be confirmed (LAST STEP - REQUIRED)
+    financial_setup = await FinancialSetup.find_one(
+        FinancialSetup.tenant_id == tenant_id
+    )
+    if not financial_setup:
+        return False, "compliance"
+    if not financial_setup.is_confirmed:
+        return False, "compliance"
     
     # Stage 5: Onboarding tasks are optional for completion
     
