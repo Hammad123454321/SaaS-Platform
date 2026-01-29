@@ -1,5 +1,5 @@
-import { create, StateStorage } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { create } from "zustand";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 
 type Entitlement = {
   module_code: string;
