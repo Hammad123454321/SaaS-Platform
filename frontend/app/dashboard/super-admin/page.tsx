@@ -48,7 +48,7 @@ export default function SuperAdminDashboard() {
   };
 
   // Fetch data from APIs
-  const { data: stats, isLoading: statsLoading } = useAdminStats();
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useAdminStats();
   const { data: growthData, isLoading: growthLoading } = useAdminGrowthData();
   const { data: revenueData, isLoading: revenueLoading } = useAdminRevenueData();
   const { data: modulePopularity, isLoading: popularityLoading } = useAdminModulePopularity();
@@ -187,6 +187,11 @@ export default function SuperAdminDashboard() {
         <div className="glass rounded-2xl p-12 text-center">
           <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-500">Loading platform data...</p>
+        </div>
+      ) : statsError ? (
+        <div className="glass rounded-2xl p-12 text-center">
+          <p className="text-rose-600 text-lg font-medium mb-2">Failed to load dashboard data</p>
+          <p className="text-gray-500">Please refresh the page or try again later.</p>
         </div>
       ) : (
         <div className="space-y-6">

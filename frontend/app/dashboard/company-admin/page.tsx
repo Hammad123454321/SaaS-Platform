@@ -102,7 +102,7 @@ export default function CompanyAdminDashboard() {
   };
 
   // Fetch data from APIs
-  const { data: stats, isLoading: statsLoading } = useCompanyStats();
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useCompanyStats();
   const { data: moduleUsage, isLoading: moduleUsageLoading } = useCompanyModuleUsage();
   const { data: taskTrends, isLoading: taskTrendsLoading } = useCompanyTaskTrends();
   const { data: teamMembers, isLoading: teamLoading } = useCompanyTeamOverview(5);
@@ -235,6 +235,11 @@ export default function CompanyAdminDashboard() {
         <div className="glass rounded-2xl p-12 text-center">
           <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-500">Loading dashboard...</p>
+        </div>
+      ) : statsError ? (
+        <div className="glass rounded-2xl p-12 text-center">
+          <p className="text-rose-600 text-lg font-medium mb-2">Failed to load dashboard data</p>
+          <p className="text-gray-500">Please refresh the page or try again later.</p>
         </div>
       ) : (
         <div className="space-y-6">

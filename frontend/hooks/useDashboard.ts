@@ -130,6 +130,8 @@ export function useCompanyStats() {
       return res.data;
     },
     staleTime: 30000, // 30 seconds
+    retry: 1,
+    retryOnMount: false,
   });
 }
 
@@ -220,6 +222,8 @@ export function useStaffStats() {
       return res.data;
     },
     staleTime: 30000,
+    retry: 1,
+    retryOnMount: false,
   });
 }
 
@@ -277,6 +281,8 @@ export function useAdminStats() {
       return res.data;
     },
     staleTime: 30000,
+    retry: 1,
+    retryOnMount: false,
   });
 }
 
