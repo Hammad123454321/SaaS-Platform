@@ -239,7 +239,12 @@ async def confirm_owner_role(
         user_agent=user_agent
     )
     
-    return OwnerConfirmationResponse(**confirmation.model_dump())
+    return OwnerConfirmationResponse(
+        user_id=str(confirmation.user_id),
+        tenant_id=str(confirmation.tenant_id),
+        confirmed_at=confirmation.confirmed_at,
+        responsibility_disclaimer_accepted=confirmation.responsibility_disclaimer_accepted,
+    )
 
 
 @router.get("/owner/status")
@@ -274,7 +279,16 @@ async def seed_role_templates_endpoint(
         )
     
     roles = await seed_role_templates(tenant_id)
-    return [RoleTemplateResponse(**role.model_dump()) for role in roles]
+    return [
+        RoleTemplateResponse(
+            id=str(role.id),
+            tenant_id=str(role.tenant_id),
+            name=role.name,
+            created_at=role.created_at,
+            updated_at=role.updated_at,
+        )
+        for role in roles
+    ]
 
 
 @router.get("/roles/templates", response_model=List[RoleTemplateResponse])
@@ -284,7 +298,16 @@ async def get_role_templates_endpoint(
     """Get role templates for tenant."""
     tenant_id = str(current_user.tenant_id)
     roles = await get_role_templates(tenant_id)
-    return [RoleTemplateResponse(**role.model_dump()) for role in roles]
+    return [
+        RoleTemplateResponse(
+            id=str(role.id),
+            tenant_id=str(role.tenant_id),
+            name=role.name,
+            created_at=role.created_at,
+            updated_at=role.updated_at,
+        )
+        for role in roles
+    ]
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
@@ -318,7 +341,13 @@ async def create_role(
     )
     await role.insert()
     
-    return RoleResponse(**role.model_dump())
+    return RoleResponse(
+        id=str(role.id),
+        tenant_id=str(role.tenant_id) if role.tenant_id else "",
+        name=role.name,
+        created_at=role.created_at,
+        updated_at=role.updated_at,
+    )
 
 
 @router.get("/roles", response_model=List[RoleResponse])
@@ -328,7 +357,16 @@ async def list_roles(
     """List all roles for tenant."""
     tenant_id = str(current_user.tenant_id)
     roles = await Role.find(Role.tenant_id == tenant_id).to_list()
-    return [RoleResponse(**role.model_dump()) for role in roles]
+    return [
+        RoleResponse(
+            id=str(role.id),
+            tenant_id=str(role.tenant_id) if role.tenant_id else "",
+            name=role.name,
+            created_at=role.created_at,
+            updated_at=role.updated_at,
+        )
+        for role in roles
+    ]
 
 
 # ========== Stage 2: Team Invitations ==========

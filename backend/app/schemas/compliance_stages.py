@@ -20,8 +20,8 @@ class FinancialSetupCreate(BaseModel):
 
 
 class FinancialSetupResponse(BaseModel):
-    id: int
-    tenant_id: int
+    id: str
+    tenant_id: str
     payroll_type: Optional[str]
     pay_schedule: Optional[str]
     wsib_class: Optional[str]
