@@ -183,8 +183,11 @@ export function ProjectsView() {
               <div>
                 <label className="text-sm text-gray-600 font-medium">Client *</label>
                 <Select
-                  value={formData.client_id?.toString() || ""}
-                  onValueChange={(value) => setFormData({ ...formData, client_id: value ? parseInt(value) : undefined })}
+                  value={formData.client_id ? formData.client_id.toString() : ""}
+                  onValueChange={(value) => {
+                    const clientId = value ? parseInt(value, 10) : undefined;
+                    setFormData(prev => ({ ...prev, client_id: clientId }));
+                  }}
                   required
                 >
                   <SelectTrigger className="mt-1 bg-white border-gray-300 text-gray-900">
