@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { taskDependenciesApi, TaskDependencyFormData } from "@/lib/api/taskDependencies";
 import { toast } from "sonner";
 
-export function useTaskDependencies(taskId: number) {
+export function useTaskDependencies(taskId: string) {
   return useQuery({
     queryKey: ["task-dependencies", taskId],
     queryFn: () => taskDependenciesApi.list(taskId),
@@ -10,7 +10,7 @@ export function useTaskDependencies(taskId: number) {
   });
 }
 
-export function useBlockingTasks(taskId: number) {
+export function useBlockingTasks(taskId: string) {
   return useQuery({
     queryKey: ["blocking-tasks", taskId],
     queryFn: () => taskDependenciesApi.getBlocking(taskId),
@@ -22,7 +22,7 @@ export function useCreateTaskDependency() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, data }: { taskId: number; data: TaskDependencyFormData }) =>
+    mutationFn: ({ taskId, data }: { taskId: string; data: TaskDependencyFormData }) =>
       taskDependenciesApi.create(taskId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["task-dependencies", variables.taskId] });
@@ -39,7 +39,7 @@ export function useDeleteTaskDependency() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (dependencyId: number) => taskDependenciesApi.delete(dependencyId),
+    mutationFn: (dependencyId: string) => taskDependenciesApi.delete(dependencyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-dependencies"] });
       queryClient.invalidateQueries({ queryKey: ["blocking-tasks"] });

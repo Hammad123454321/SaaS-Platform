@@ -1,11 +1,11 @@
 export interface Project {
-  id: number;
+  id: string;
   title: string;
   name?: string;
   description?: string;
-  client_id: number;
+  client_id: string;
   client?: {
-    id: number;
+    id: string;
     first_name: string;
     last_name: string;
     email: string;
@@ -23,7 +23,7 @@ export interface ProjectFormData {
   title: string;
   name?: string;
   description?: string;
-  client_id: number;
+  client_id: string;
   budget?: number;
   start_date?: string;
   end_date?: string;

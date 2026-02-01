@@ -174,8 +174,8 @@ export function MilestonesView() {
             <div>
               <label className="text-sm text-gray-600 font-medium">Project *</label>
               <Select
-                value={formData.project_id?.toString() || ""}
-                onValueChange={(value) => setFormData({ ...formData, project_id: parseInt(value) })}
+                value={formData.project_id || undefined}
+                onValueChange={(value) => setFormData({ ...formData, project_id: value })}
                 required
               >
                 <SelectTrigger className="mt-1 bg-white border-gray-300 text-gray-900">
@@ -183,7 +183,7 @@ export function MilestonesView() {
                 </SelectTrigger>
                 <SelectContent>
                   {projects?.map((project) => (
-                    <SelectItem key={project.id} value={project.id.toString()}>
+                    <SelectItem key={project.id} value={project.id}>
                       {project.name || project.title}
                     </SelectItem>
                   ))}

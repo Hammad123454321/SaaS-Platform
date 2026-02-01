@@ -11,7 +11,7 @@ export const projectsApi = {
     return response.data.data;
   },
 
-  get: async (id: number): Promise<Project> => {
+  get: async (id: string): Promise<Project> => {
     const response = await apiClient.get<ApiResponse<Project>>(
       `/modules/tasks/records/${id}`,
       { params: { resource: "projects" } }
@@ -28,7 +28,7 @@ export const projectsApi = {
     return response.data.data;
   },
 
-  update: async (id: number, data: Partial<ProjectFormData>): Promise<Project> => {
+  update: async (id: string, data: Partial<ProjectFormData>): Promise<Project> => {
     const response = await apiClient.patch<ApiResponse<Project>>(
       `/modules/tasks/records/${id}`,
       data,
@@ -37,7 +37,7 @@ export const projectsApi = {
     return response.data.data;
   },
 
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/records/${id}`, {
       params: { resource: "projects" },
     });

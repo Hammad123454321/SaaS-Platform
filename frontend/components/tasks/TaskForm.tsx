@@ -184,8 +184,8 @@ export function TaskForm({
               <FormItem>
                 <FormLabel>Project *</FormLabel>
                 <Select
-                  onValueChange={(value) => field.onChange(Number(value))}
-                  value={field.value ? field.value.toString() : undefined}
+                  onValueChange={(value) => field.onChange(value)}
+                  value={field.value || undefined}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -194,7 +194,7 @@ export function TaskForm({
                   </FormControl>
                   <SelectContent>
                     {projects.filter(p => p.id).map((project) => (
-                      <SelectItem key={project.id} value={project.id.toString()}>
+                      <SelectItem key={project.id} value={project.id}>
                         {project.name || project.title}
                       </SelectItem>
                     ))}
@@ -212,8 +212,8 @@ export function TaskForm({
               <FormItem>
                 <FormLabel>Status *</FormLabel>
                 <Select
-                  onValueChange={(value) => field.onChange(Number(value))}
-                  value={field.value ? field.value.toString() : undefined}
+                  onValueChange={(value) => field.onChange(value)}
+                  value={field.value || undefined}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -222,7 +222,7 @@ export function TaskForm({
                   </FormControl>
                   <SelectContent>
                     {statuses.filter(s => s.id).map((status) => (
-                      <SelectItem key={status.id} value={status.id.toString()}>
+                      <SelectItem key={status.id} value={status.id}>
                         {status.name || status.title}
                       </SelectItem>
                     ))}
@@ -243,9 +243,9 @@ export function TaskForm({
                 <FormLabel>Priority</FormLabel>
                 <Select
                   onValueChange={(value) =>
-                    field.onChange(value === "none" ? undefined : Number(value))
+                    field.onChange(value === "none" ? undefined : value)
                   }
-                  value={field.value ? field.value.toString() : "none"}
+                  value={field.value ?? "none"}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -255,7 +255,7 @@ export function TaskForm({
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {priorities.filter(p => p.id).map((priority) => (
-                      <SelectItem key={priority.id} value={priority.id.toString()}>
+                      <SelectItem key={priority.id} value={priority.id}>
                         {priority.name || priority.title}
                       </SelectItem>
                     ))}
@@ -374,4 +374,3 @@ export function TaskForm({
     </Form>
   );
 }
-

@@ -28,7 +28,7 @@ export function useUpdateTag() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<TagFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<TagFormData> }) =>
       tagsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -44,7 +44,7 @@ export function useDeleteTag() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => tagsApi.delete(id),
+    mutationFn: (id: string) => tagsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       toast.success("Tag deleted successfully!");

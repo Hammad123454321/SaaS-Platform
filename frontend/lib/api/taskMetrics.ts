@@ -12,7 +12,7 @@ export interface TaskMetrics {
 }
 
 export interface EmployeeProgress {
-  user_id: number;
+  user_id: string;
   user_name: string;
   total_tasks: number;
   completed_tasks: number;

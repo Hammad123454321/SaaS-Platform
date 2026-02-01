@@ -1,5 +1,5 @@
 export interface Status {
-  id: number;
+  id: string;
   title: string;
   name?: string;
   color: string;

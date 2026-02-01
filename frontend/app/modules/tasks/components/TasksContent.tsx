@@ -36,7 +36,7 @@ interface TasksContentProps {
   isLoading: boolean;
   error: string | null;
   user: UserInfo | null;
-  onTaskClick?: (taskId: number) => void;
+  onTaskClick?: (taskId: string) => void;
 }
 
 export function TasksContent({
@@ -105,4 +105,3 @@ export function TasksContent({
       );
   }
 }
-

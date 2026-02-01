@@ -2,7 +2,7 @@ import apiClient from "./client";
 import { ApiResponse } from "@/types/api";
 
 export interface Tag {
-  id: number;
+  id: string;
   name: string;
   color?: string;
   created_at: string;
@@ -30,7 +30,7 @@ export const tagsApi = {
     return response.data.data;
   },
 
-  update: async (id: number, data: Partial<TagFormData>): Promise<Tag> => {
+  update: async (id: string, data: Partial<TagFormData>): Promise<Tag> => {
     const response = await apiClient.patch<ApiResponse<Tag>>(
       `/modules/tasks/tags/${id}`,
       data
@@ -38,19 +38,19 @@ export const tagsApi = {
     return response.data.data;
   },
 
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/tags/${id}`);
   },
 
-  addToTask: async (taskId: number, tagId: number): Promise<void> => {
+  addToTask: async (taskId: string, tagId: string): Promise<void> => {
     await apiClient.post(`/modules/tasks/tasks/${taskId}/tags`, { tag_id: tagId });
   },
 
-  removeFromTask: async (taskId: number, tagId: number): Promise<void> => {
+  removeFromTask: async (taskId: string, tagId: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/tasks/${taskId}/tags/${tagId}`);
   },
 
-  getTaskTags: async (taskId: number): Promise<Tag[]> => {
+  getTaskTags: async (taskId: string): Promise<Tag[]> => {
     const response = await apiClient.get<ApiResponse<Tag[]>>(
       `/modules/tasks/tasks/${taskId}/tags`
     );

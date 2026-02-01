@@ -10,7 +10,7 @@ export function useProjects() {
   });
 }
 
-export function useProject(id: number) {
+export function useProject(id: string) {
   return useQuery({
     queryKey: ["project", id],
     queryFn: () => projectsApi.get(id),
@@ -38,7 +38,7 @@ export function useUpdateProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<ProjectFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<ProjectFormData> }) =>
       projectsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -55,7 +55,7 @@ export function useDeleteProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => projectsApi.delete(id),
+    mutationFn: (id: string) => projectsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["projects-dropdown"] });

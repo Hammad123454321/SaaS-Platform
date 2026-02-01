@@ -23,7 +23,7 @@ export function RecurringTasksView() {
   const [showForm, setShowForm] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState<any>(null);
   const [deletingRecurring, setDeletingRecurring] = useState<any>(null);
-  const [formData, setFormData] = useState<Partial<RecurringTaskFormData & { task_id: number }>>({
+  const [formData, setFormData] = useState<Partial<RecurringTaskFormData & { task_id: string }>>({
     task_id: undefined,
     recurrence_pattern: "weekly",
     recurrence_interval: 1,
@@ -165,8 +165,8 @@ export function RecurringTasksView() {
               <div>
                 <label className="text-sm text-gray-200/80">Task *</label>
                 <Select
-                  value={formData.task_id?.toString() || ""}
-                  onValueChange={(value) => setFormData({ ...formData, task_id: parseInt(value) })}
+                  value={formData.task_id || undefined}
+                  onValueChange={(value) => setFormData({ ...formData, task_id: value })}
                   required
                 >
                   <SelectTrigger className="mt-1 bg-white/5 border-white/10 text-white">
@@ -174,7 +174,7 @@ export function RecurringTasksView() {
                   </SelectTrigger>
                   <SelectContent>
                     {tasks?.map((task) => (
-                      <SelectItem key={task.id} value={task.id.toString()}>
+                      <SelectItem key={task.id} value={task.id}>
                         {task.title}
                       </SelectItem>
                     ))}

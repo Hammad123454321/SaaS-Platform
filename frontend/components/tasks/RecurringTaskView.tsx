@@ -12,7 +12,7 @@ import { useTaskAccess } from "@/hooks/tasks/useTaskAccess";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface RecurringTaskViewProps {
-  taskId: number;
+  taskId: string;
 }
 
 export function RecurringTaskView({ taskId }: RecurringTaskViewProps) {

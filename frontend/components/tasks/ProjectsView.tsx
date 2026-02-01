@@ -183,10 +183,9 @@ export function ProjectsView() {
               <div>
                 <label className="text-sm text-gray-600 font-medium">Client *</label>
                 <Select
-                  value={formData.client_id ? formData.client_id.toString() : ""}
+                  value={formData.client_id || undefined}
                   onValueChange={(value) => {
-                    const clientId = value ? parseInt(value, 10) : undefined;
-                    setFormData(prev => ({ ...prev, client_id: clientId }));
+                    setFormData(prev => ({ ...prev, client_id: value || undefined }));
                   }}
                   required
                 >
@@ -194,11 +193,14 @@ export function ProjectsView() {
                     <SelectValue placeholder="Select client (required)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients?.map((client) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.first_name} {client.last_name}
-                      </SelectItem>
-                    ))}
+                    {clients?.map((client) => {
+                      const clientIdStr = String(client.id);
+                      return (
+                        <SelectItem key={client.id} value={clientIdStr}>
+                          {client.first_name} {client.last_name}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
                 {clients?.length === 0 && (
@@ -256,4 +258,3 @@ export function ProjectsView() {
     </div>
   );
 }
-

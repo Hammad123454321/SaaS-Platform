@@ -20,10 +20,10 @@ export default function TasksModulePage() {
   const { user } = useSessionStore();
   const [activeTab, setActiveTab] = useState<Tab>("tasks");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("list");
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   const {
     tasks,
@@ -47,7 +47,7 @@ export default function TasksModulePage() {
     setShowCreateModal(true);
   };
 
-  const handleEditTask = (taskId: number) => {
+  const handleEditTask = (taskId: string) => {
     setEditingTaskId(taskId);
     setShowCreateModal(true);
   };
@@ -62,7 +62,7 @@ export default function TasksModulePage() {
     setEditingTaskId(null);
   };
 
-  const handleTaskClick = (taskId: number) => {
+  const handleTaskClick = (taskId: string) => {
     setSelectedTaskId(taskId);
     setShowTaskModal(true);
   };

@@ -29,7 +29,7 @@ export function useUpdateStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<StatusFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<StatusFormData> }) =>
       statusesApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["statuses"] });
@@ -45,7 +45,7 @@ export function useDeleteStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => statusesApi.delete(id),
+    mutationFn: (id: string) => statusesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["statuses"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });

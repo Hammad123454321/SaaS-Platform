@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { recurringTasksApi, RecurringTaskFormData } from "@/lib/api/recurringTasks";
 import { toast } from "sonner";
 
-export function useRecurringTask(taskId: number) {
+export function useRecurringTask(taskId: string) {
   return useQuery({
     queryKey: ["recurring-task", taskId],
     queryFn: () => recurringTasksApi.get(taskId),
@@ -21,7 +21,7 @@ export function useCreateRecurringTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, data }: { taskId: number; data: RecurringTaskFormData }) =>
+    mutationFn: ({ taskId, data }: { taskId: string; data: RecurringTaskFormData }) =>
       recurringTasksApi.create(taskId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["recurring-task", variables.taskId] });
@@ -38,7 +38,7 @@ export function useUpdateRecurringTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, data }: { taskId: number; data: Partial<RecurringTaskFormData> }) =>
+    mutationFn: ({ taskId, data }: { taskId: string; data: Partial<RecurringTaskFormData> }) =>
       recurringTasksApi.update(taskId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["recurring-task", variables.taskId] });
@@ -55,7 +55,7 @@ export function useDeleteRecurringTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (taskId: number) => recurringTasksApi.delete(taskId),
+    mutationFn: (taskId: string) => recurringTasksApi.delete(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurring-tasks"] });
       toast.success("Recurring task deleted successfully!");

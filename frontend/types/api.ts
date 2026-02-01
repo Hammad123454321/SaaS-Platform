@@ -13,13 +13,13 @@ export interface PaginatedResponse<T> {
 }
 
 export interface DropdownItem {
-  id: number;
+  id: string;
   name: string;
   title?: string;
   color?: string;
   email?: string;
   status?: number;
-  client_id?: number;
+  client_id?: string;
 }
 
 

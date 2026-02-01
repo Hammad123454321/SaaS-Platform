@@ -7,9 +7,9 @@ import { getDateGroup } from "@/lib/date";
 
 interface ListViewProps {
   tasks: Task[];
-  onTaskClick?: (taskId: number) => void;
-  onEdit?: (taskId: number) => void;
-  onDelete?: (taskId: number) => void;
+  onTaskClick?: (taskId: string) => void;
+  onEdit?: (taskId: string) => void;
+  onDelete?: (taskId: string) => void;
 }
 
 export function ListView({
@@ -30,7 +30,7 @@ export function ListView({
 
     // Separate parent tasks from subtasks
     const parentTasks: Task[] = [];
-    const subtasksByParentId: Record<number, Task[]> = {};
+    const subtasksByParentId: Record<string, Task[]> = {};
 
     tasks.forEach((task) => {
       // Check if task has parent_id (it's a subtask)
@@ -110,7 +110,6 @@ export function ListView({
     </div>
   );
 }
-
 
 
 

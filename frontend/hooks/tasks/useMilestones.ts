@@ -2,14 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { milestonesApi, MilestoneFormData } from "@/lib/api/milestones";
 import { toast } from "sonner";
 
-export function useMilestones(projectId?: number) {
+export function useMilestones(projectId?: string) {
   return useQuery({
     queryKey: ["milestones", projectId],
     queryFn: () => milestonesApi.list(projectId),
   });
 }
 
-export function useMilestone(id: number) {
+export function useMilestone(id: string) {
   return useQuery({
     queryKey: ["milestone", id],
     queryFn: () => milestonesApi.get(id),
@@ -36,7 +36,7 @@ export function useUpdateMilestone() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<MilestoneFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<MilestoneFormData> }) =>
       milestonesApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["milestones"] });
@@ -52,7 +52,7 @@ export function useDeleteMilestone() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => milestonesApi.delete(id),
+    mutationFn: (id: string) => milestonesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["milestones"] });
       toast.success("Milestone deleted successfully!");

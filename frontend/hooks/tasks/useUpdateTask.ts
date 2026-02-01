@@ -7,7 +7,7 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<TaskFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<TaskFormData> }) =>
       tasksApi.update(id, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });

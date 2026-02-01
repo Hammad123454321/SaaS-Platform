@@ -29,7 +29,7 @@ export function useUpdatePriority() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<PriorityFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<PriorityFormData> }) =>
       prioritiesApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["priorities"] });
@@ -45,7 +45,7 @@ export function useDeletePriority() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => prioritiesApi.delete(id),
+    mutationFn: (id: string) => prioritiesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["priorities"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });

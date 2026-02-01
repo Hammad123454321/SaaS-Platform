@@ -11,7 +11,7 @@ export const clientsApi = {
     return response.data.data;
   },
 
-  get: async (id: number): Promise<Client> => {
+  get: async (id: string): Promise<Client> => {
     const response = await apiClient.get<ApiResponse<Client>>(
       `/modules/tasks/records/${id}`,
       { params: { resource: "clients" } }
@@ -28,7 +28,7 @@ export const clientsApi = {
     return response.data.data;
   },
 
-  update: async (id: number, data: Partial<ClientFormData>): Promise<Client> => {
+  update: async (id: string, data: Partial<ClientFormData>): Promise<Client> => {
     const response = await apiClient.patch<ApiResponse<Client>>(
       `/modules/tasks/records/${id}`,
       data,
@@ -37,7 +37,7 @@ export const clientsApi = {
     return response.data.data;
   },
 
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/records/${id}`, {
       params: { resource: "clients" },
     });

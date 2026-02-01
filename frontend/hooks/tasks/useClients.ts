@@ -10,7 +10,7 @@ export function useClients() {
   });
 }
 
-export function useClient(id: number) {
+export function useClient(id: string) {
   return useQuery({
     queryKey: ["client", id],
     queryFn: () => clientsApi.get(id),
@@ -37,7 +37,7 @@ export function useUpdateClient() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<ClientFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<ClientFormData> }) =>
       clientsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
@@ -53,7 +53,7 @@ export function useDeleteClient() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => clientsApi.delete(id),
+    mutationFn: (id: string) => clientsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success("Client deleted successfully!");

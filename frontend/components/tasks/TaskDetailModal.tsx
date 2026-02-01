@@ -25,7 +25,7 @@ import { TaskDependenciesView } from "./TaskDependenciesView";
 import { RecurringTaskView } from "./RecurringTaskView";
 
 interface TaskDetailModalProps {
-  taskId: number;
+  taskId: string;
   isOpen: boolean;
   onClose: () => void;
   onUpdate?: () => void;
@@ -234,7 +234,7 @@ function SubtasksView({
   subtasks,
   onUpdate,
 }: {
-  taskId: number;
+  taskId: string;
   subtasks: any[];
   onUpdate: () => void;
 }) {
@@ -344,7 +344,7 @@ function TimeTrackingView({
   onStopTracker,
   onUpdate,
 }: {
-  taskId: number;
+  taskId: string;
   timeEntries: any[];
   activeTracker: any;
   onStartTracker: () => void;
@@ -422,7 +422,7 @@ function DocumentsView({
   documents,
   onUpdate,
 }: {
-  taskId: number;
+  taskId: string;
   documents: any[];
   onUpdate: () => void;
 }) {
@@ -494,7 +494,7 @@ function ThreadsView({
   threads,
   onUpdate,
 }: {
-  taskId: number;
+  taskId: string;
   threads: any[];
   onUpdate: () => void;
 }) {
@@ -568,7 +568,6 @@ function ThreadsView({
     </div>
   );
 }
-
 
 
 

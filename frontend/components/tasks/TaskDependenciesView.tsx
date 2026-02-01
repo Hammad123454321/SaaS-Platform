@@ -11,7 +11,7 @@ import { TaskDependencyFormData } from "@/lib/api/taskDependencies";
 import { useTaskAccess } from "@/hooks/tasks/useTaskAccess";
 
 interface TaskDependenciesViewProps {
-  taskId: number;
+  taskId: string;
 }
 
 export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
@@ -48,7 +48,7 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
     });
   };
 
-  const handleDelete = async (dependencyId: number) => {
+  const handleDelete = async (dependencyId: string) => {
     await deleteDependency.mutateAsync(dependencyId);
   };
 
@@ -108,8 +108,8 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
             <div>
               <label className="text-sm text-gray-600 font-medium">Depends On *</label>
               <Select
-                value={formData.depends_on_task_id?.toString() || ""}
-                onValueChange={(value) => setFormData({ ...formData, depends_on_task_id: parseInt(value) })}
+                value={formData.depends_on_task_id || undefined}
+                onValueChange={(value) => setFormData({ ...formData, depends_on_task_id: value })}
                 required
               >
                 <SelectTrigger className="mt-1 bg-white border-gray-300 text-gray-900">
@@ -117,7 +117,7 @@ export function TaskDependenciesView({ taskId }: TaskDependenciesViewProps) {
                 </SelectTrigger>
                 <SelectContent>
                   {availableTasks.map((task) => (
-                    <SelectItem key={task.id} value={task.id.toString()}>
+                    <SelectItem key={task.id} value={task.id}>
                       {task.title}
                     </SelectItem>
                   ))}

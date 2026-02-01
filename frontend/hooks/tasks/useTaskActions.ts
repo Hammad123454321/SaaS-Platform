@@ -6,7 +6,7 @@ export function useTaskActions() {
   const queryClient = useQueryClient();
 
   const toggleFavorite = useMutation({
-    mutationFn: ({ taskId, isFavorite }: { taskId: number; isFavorite: boolean }) =>
+    mutationFn: ({ taskId, isFavorite }: { taskId: string; isFavorite: boolean }) =>
       tasksApi.toggleFavorite(taskId, isFavorite),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -19,7 +19,7 @@ export function useTaskActions() {
   });
 
   const togglePinned = useMutation({
-    mutationFn: ({ taskId, isPinned }: { taskId: number; isPinned: boolean }) =>
+    mutationFn: ({ taskId, isPinned }: { taskId: string; isPinned: boolean }) =>
       tasksApi.togglePinned(taskId, isPinned),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -30,7 +30,7 @@ export function useTaskActions() {
   });
 
   const duplicate = useMutation({
-    mutationFn: (taskId: number) => tasksApi.duplicate(taskId),
+    mutationFn: (taskId: string) => tasksApi.duplicate(taskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["kanban"] });

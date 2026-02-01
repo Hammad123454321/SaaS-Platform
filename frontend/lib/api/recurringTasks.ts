@@ -2,8 +2,8 @@ import apiClient from "./client";
 import { ApiResponse } from "@/types/api";
 
 export interface RecurringTask {
-  id: number;
-  task_id: number;
+  id: string;
+  task_id: string;
   recurrence_pattern: "daily" | "weekly" | "monthly" | "yearly" | "custom";
   recurrence_interval: number;
   recurrence_days?: number[];
@@ -24,7 +24,7 @@ export interface RecurringTaskFormData {
 }
 
 export const recurringTasksApi = {
-  get: async (taskId: number): Promise<RecurringTask | null> => {
+  get: async (taskId: string): Promise<RecurringTask | null> => {
     try {
       const response = await apiClient.get<ApiResponse<RecurringTask>>(
         `/modules/tasks/tasks/${taskId}/recurring`
@@ -42,7 +42,7 @@ export const recurringTasksApi = {
     return response.data.data;
   },
 
-  create: async (taskId: number, data: RecurringTaskFormData): Promise<RecurringTask> => {
+  create: async (taskId: string, data: RecurringTaskFormData): Promise<RecurringTask> => {
     const response = await apiClient.post<ApiResponse<RecurringTask>>(
       `/modules/tasks/tasks/${taskId}/recurring`,
       data
@@ -50,7 +50,7 @@ export const recurringTasksApi = {
     return response.data.data;
   },
 
-  update: async (taskId: number, data: Partial<RecurringTaskFormData>): Promise<RecurringTask> => {
+  update: async (taskId: string, data: Partial<RecurringTaskFormData>): Promise<RecurringTask> => {
     const response = await apiClient.patch<ApiResponse<RecurringTask>>(
       `/modules/tasks/tasks/${taskId}/recurring`,
       data
@@ -58,7 +58,7 @@ export const recurringTasksApi = {
     return response.data.data;
   },
 
-  delete: async (taskId: number): Promise<void> => {
+  delete: async (taskId: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/tasks/${taskId}/recurring`);
   },
 };

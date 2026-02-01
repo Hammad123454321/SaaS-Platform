@@ -15,7 +15,7 @@ export const tasksApi = {
   },
 
   // Get single task
-  get: async (id: number): Promise<Task> => {
+  get: async (id: string): Promise<Task> => {
     const response = await apiClient.get<ApiResponse<Task>>(
       `/modules/tasks/records/${id}`,
       {
@@ -38,7 +38,7 @@ export const tasksApi = {
   },
 
   // Update task
-  update: async (id: number, data: Partial<TaskFormData>): Promise<Task> => {
+  update: async (id: string, data: Partial<TaskFormData>): Promise<Task> => {
     const response = await apiClient.patch<ApiResponse<Task>>(
       `/modules/tasks/records/${id}`,
       data,
@@ -50,7 +50,7 @@ export const tasksApi = {
   },
 
   // Delete task
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/records/${id}`, {
       params: { resource: "tasks" },
     });
@@ -65,7 +65,7 @@ export const tasksApi = {
   },
 
   // Kanban view
-  getKanban: async (projectId?: number): Promise<Record<string, KanbanColumn>> => {
+  getKanban: async (projectId?: string): Promise<Record<string, KanbanColumn>> => {
     const response = await apiClient.get<ApiResponse<Record<string, KanbanColumn>>>(
       "/modules/tasks/kanban",
       {
@@ -76,7 +76,7 @@ export const tasksApi = {
   },
 
   // Move task in kanban
-  moveTask: async (taskId: number, statusId: number): Promise<void> => {
+  moveTask: async (taskId: string, statusId: string): Promise<void> => {
     await apiClient.patch(
       `/modules/tasks/kanban/${taskId}/move`,
       null,
@@ -87,7 +87,7 @@ export const tasksApi = {
   },
 
   // Task actions
-  toggleFavorite: async (taskId: number, isFavorite: boolean): Promise<void> => {
+  toggleFavorite: async (taskId: string, isFavorite: boolean): Promise<void> => {
     await apiClient.patch(
       `/modules/tasks/tasks/${taskId}/favorite`,
       null,
@@ -97,7 +97,7 @@ export const tasksApi = {
     );
   },
 
-  togglePinned: async (taskId: number, isPinned: boolean): Promise<void> => {
+  togglePinned: async (taskId: string, isPinned: boolean): Promise<void> => {
     await apiClient.patch(
       `/modules/tasks/tasks/${taskId}/pinned`,
       null,
@@ -107,21 +107,21 @@ export const tasksApi = {
     );
   },
 
-  duplicate: async (taskId: number): Promise<Task> => {
+  duplicate: async (taskId: string): Promise<Task> => {
     const response = await apiClient.post<ApiResponse<Task>>(
       `/modules/tasks/tasks/${taskId}/duplicate`
     );
     return response.data.data;
   },
 
-  bulkDelete: async (taskIds: number[]): Promise<void> => {
+  bulkDelete: async (taskIds: string[]): Promise<void> => {
     await apiClient.post("/modules/tasks/tasks/bulk-delete", {
       task_ids: taskIds,
     });
   },
 
   // Upload media
-  uploadMedia: async (taskId: number, file: File): Promise<void> => {
+  uploadMedia: async (taskId: string, file: File): Promise<void> => {
     const formData = new FormData();
     formData.append("file", file);
     await apiClient.post(

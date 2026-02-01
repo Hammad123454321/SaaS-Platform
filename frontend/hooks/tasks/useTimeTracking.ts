@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { timeTrackingApi, TimeEntryFormData } from "@/lib/api/timeTracking";
 import { toast } from "sonner";
 
-export function useTimeEntries(taskId?: number, userId?: number) {
+export function useTimeEntries(taskId?: string, userId?: string) {
   return useQuery({
     queryKey: ["time-entries", taskId, userId],
     queryFn: () => timeTrackingApi.listEntries(taskId, userId),
@@ -21,7 +21,7 @@ export function useStartTracker() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, message }: { taskId: number; message?: string }) =>
+    mutationFn: ({ taskId, message }: { taskId: string; message?: string }) =>
       timeTrackingApi.startTracker(taskId, message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-tracker"] });
@@ -38,7 +38,7 @@ export function useStopTracker() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (trackerId: number) => timeTrackingApi.stopTracker(trackerId),
+    mutationFn: (trackerId: string) => timeTrackingApi.stopTracker(trackerId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-tracker"] });
       queryClient.invalidateQueries({ queryKey: ["time-entries"] });

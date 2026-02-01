@@ -16,7 +16,7 @@ export function TimeTrackerView() {
   const stopTracker = useStopTracker();
   const { data: timeEntries } = useTimeEntries();
 
-  const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>();
   const [elapsedTime, setElapsedTime] = useState<string>("00:00:00");
 
   // Live timer for active tracker
@@ -120,15 +120,15 @@ export function TimeTrackerView() {
             <div>
               <label className="text-sm text-gray-600 font-medium mb-2 block">Select Task</label>
               <Select
-                value={selectedTaskId?.toString() || ""}
-                onValueChange={(value) => setSelectedTaskId(value ? parseInt(value) : undefined)}
+                value={selectedTaskId || undefined}
+                onValueChange={(value) => setSelectedTaskId(value || undefined)}
               >
                 <SelectTrigger className="bg-white border-gray-300 text-gray-900">
                   <SelectValue placeholder="Choose a task to track" />
                 </SelectTrigger>
                 <SelectContent>
                   {tasks?.map((task) => (
-                    <SelectItem key={task.id} value={task.id.toString()}>
+                    <SelectItem key={task.id} value={task.id}>
                       {task.title}
                     </SelectItem>
                   ))}

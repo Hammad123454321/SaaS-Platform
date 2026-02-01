@@ -4,7 +4,7 @@ import { taskFormSchema, TaskFormData } from "@/lib/schemas/task";
 import { useCreateTask } from "./useCreateTask";
 import { useUpdateTask } from "./useUpdateTask";
 
-export function useTaskForm(taskId?: number) {
+export function useTaskForm(taskId?: string) {
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
 
@@ -13,8 +13,8 @@ export function useTaskForm(taskId?: number) {
     defaultValues: {
       title: "",
       description: "",
-      project_id: 0,
-      status_id: 0,
+      project_id: "",
+      status_id: "",
       priority_id: undefined,
       due_date: undefined,
       start_date: undefined,

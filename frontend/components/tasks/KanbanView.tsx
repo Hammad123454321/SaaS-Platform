@@ -35,15 +35,15 @@ import {
 import { KanbanColumn as KanbanColumnType } from "@/types/task";
 
 interface KanbanViewProps {
-  projectId?: number;
-  onTaskClick?: (taskId: number) => void;
+  projectId?: string;
+  onTaskClick?: (taskId: string) => void;
 }
 
 export function KanbanView({ projectId, onTaskClick }: KanbanViewProps) {
   const { data: columns, isLoading, error } = useKanban(projectId);
   const moveTask = useMoveTask();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
-  const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -56,7 +56,7 @@ export function KanbanView({ projectId, onTaskClick }: KanbanViewProps) {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const taskId = Number(active.id);
+    const taskId = String(active.id);
     
     // Find the task being dragged
     if (columns) {
@@ -78,11 +78,11 @@ export function KanbanView({ projectId, onTaskClick }: KanbanViewProps) {
 
     if (!over) return;
 
-    const taskId = Number(active.id);
-    const targetStatusId = Number(over.id);
+    const taskId = String(active.id);
+    const targetStatusId = String(over.id);
 
     // Find current status
-    let currentStatusId: number | null = null;
+    let currentStatusId: string | null = null;
     if (columns) {
       for (const [statusName, column] of Object.entries(columns)) {
         if (column.tasks.some((t) => t.id === taskId)) {
@@ -153,7 +153,7 @@ function KanbanColumn({
   onTaskClick,
 }: {
   column: KanbanColumnType;
-  onTaskClick?: (taskId: number) => void;
+  onTaskClick?: (taskId: string) => void;
 }) {
   const taskIds = useMemo(() => column.tasks.map((t) => t.id), [column.tasks]);
 
@@ -174,7 +174,7 @@ function KanbanColumn({
         <SortableContext
           items={taskIds}
           strategy={verticalListSortingStrategy}
-          id={column.status_id.toString()}
+          id={column.status_id}
         >
           <div className="flex-1 space-y-2 overflow-y-auto max-h-[calc(100vh-250px)]">
             {column.tasks.map((task) => (
@@ -322,5 +322,4 @@ function TaskCardContent({ task }: { task: Task }) {
     </>
   );
 }
-
 

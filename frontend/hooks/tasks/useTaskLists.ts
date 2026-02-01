@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { taskListsApi, TaskListFormData } from "@/lib/api/taskLists";
 import { toast } from "sonner";
 
-export function useTaskLists(projectId?: number) {
+export function useTaskLists(projectId?: string) {
   return useQuery({
     queryKey: ["task-lists", projectId],
     queryFn: () => taskListsApi.list(projectId),
@@ -28,7 +28,7 @@ export function useUpdateTaskList() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<TaskListFormData> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Partial<TaskListFormData> }) =>
       taskListsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-lists"] });
@@ -44,7 +44,7 @@ export function useDeleteTaskList() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => taskListsApi.delete(id),
+    mutationFn: (id: string) => taskListsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-lists"] });
       toast.success("Task list deleted successfully!");

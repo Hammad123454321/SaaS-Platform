@@ -20,7 +20,7 @@ export const prioritiesApi = {
     return response.data.data;
   },
 
-  update: async (id: number, data: Partial<PriorityFormData>): Promise<Priority> => {
+  update: async (id: string, data: Partial<PriorityFormData>): Promise<Priority> => {
     const response = await apiClient.patch<ApiResponse<Priority>>(
       `/modules/tasks/records/${id}`,
       data,
@@ -29,7 +29,7 @@ export const prioritiesApi = {
     return response.data.data;
   },
 
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/records/${id}`, {
       params: { resource: "priorities" },
     });

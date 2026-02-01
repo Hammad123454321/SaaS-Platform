@@ -2,10 +2,10 @@ import apiClient from "./client";
 import { ApiResponse } from "@/types/api";
 
 export interface Milestone {
-  id: number;
+  id: string;
   name: string;
   description?: string;
-  project_id: number;
+  project_id: string;
   due_date?: string;
   completed_at?: string;
   created_at: string;
@@ -15,12 +15,12 @@ export interface Milestone {
 export interface MilestoneFormData {
   name: string;
   description?: string;
-  project_id: number;
+  project_id: string;
   due_date?: string;
 }
 
 export const milestonesApi = {
-  list: async (project_id?: number): Promise<Milestone[]> => {
+  list: async (project_id?: string): Promise<Milestone[]> => {
     const params: any = {};
     if (project_id) params.project_id = project_id;
     const response = await apiClient.get<ApiResponse<Milestone[]>>(
@@ -30,7 +30,7 @@ export const milestonesApi = {
     return response.data.data;
   },
 
-  get: async (id: number): Promise<Milestone> => {
+  get: async (id: string): Promise<Milestone> => {
     const response = await apiClient.get<ApiResponse<Milestone>>(
       `/modules/tasks/milestones/${id}`
     );
@@ -45,7 +45,7 @@ export const milestonesApi = {
     return response.data.data;
   },
 
-  update: async (id: number, data: Partial<MilestoneFormData>): Promise<Milestone> => {
+  update: async (id: string, data: Partial<MilestoneFormData>): Promise<Milestone> => {
     const response = await apiClient.patch<ApiResponse<Milestone>>(
       `/modules/tasks/milestones/${id}`,
       data
@@ -53,11 +53,11 @@ export const milestonesApi = {
     return response.data.data;
   },
 
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/modules/tasks/milestones/${id}`);
   },
 
-  getStats: async (id: number): Promise<any> => {
+  getStats: async (id: string): Promise<any> => {
     const response = await apiClient.get(`/modules/tasks/milestones/${id}/stats`);
     return response.data.data;
   },
