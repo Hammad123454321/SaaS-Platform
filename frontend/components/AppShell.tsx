@@ -42,13 +42,6 @@ export function AppShell({ children }: Props) {
     const bootstrap = async () => {
       const tokenStr: any = accessToken ?? "";
       if (!tokenStr) {
-        // Redirect to login if no token (unless already on auth pages)
-        if (typeof window !== "undefined" && 
-            !window.location.pathname.startsWith("/login") && 
-            !window.location.pathname.startsWith("/signup") &&
-            !window.location.pathname.startsWith("/reset")) {
-          window.location.href = "/login";
-        }
         return;
       }
       try {

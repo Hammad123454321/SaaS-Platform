@@ -24,7 +24,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (!isHydrated) return;
 
     // Redirect to login if not authenticated
-    if (!accessToken || !user) {
+    if (!accessToken) {
       router.push("/login");
       return;
     }
@@ -57,7 +57,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, [isHydrated, accessToken, user, router, pathname]);
 
   // Show loading while hydrating or checking onboarding
-  if (!isHydrated || (!accessToken || !user || checkingOnboarding)) {
+  if (!isHydrated || !accessToken || checkingOnboarding) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -67,7 +67,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return <AppShell>{children}</AppShell>;
 }
-
 
 
 
