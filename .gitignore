@@ -33,7 +33,6 @@ frontend/.env.test.local
 frontend/.env.production.local
 
 # Env / Secrets
-.env
 backend/.env
 ai_service/.env
 *.env
@@ -56,3 +55,4 @@ db_data/
 .cache/
 .pytest_cache/
 Code v2.0.1 Upload this on server/
+config.bat
