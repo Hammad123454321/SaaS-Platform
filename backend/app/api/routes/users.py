@@ -35,7 +35,7 @@ async def list_users(
             role = await Role.get(ur.role_id)
             if role:
                 role_names.append(role.name)
-        result.append(UserRead.model_validate({**user.model_dump(), "roles": role_names}))
+        result.append(UserRead.model_validate({**user.model_dump(), "id": str(user.id), "roles": role_names}))
     
     return result
 
@@ -89,7 +89,7 @@ async def create_user(
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to provision user {user.email} to modules: {e}")
     
-    return UserRead.model_validate({**user.model_dump(), "roles": role_names})
+    return UserRead.model_validate({**user.model_dump(), "id": str(user.id), "roles": role_names})
 
 
 @router.get("/{user_id}", response_model=UserRead)
@@ -115,7 +115,7 @@ async def get_user(
         if role:
             role_names.append(role.name)
     
-    return UserRead.model_validate({**user.model_dump(), "roles": role_names})
+    return UserRead.model_validate({**user.model_dump(), "id": str(user.id), "roles": role_names})
 
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -175,7 +175,7 @@ async def update_user(
         if role:
             role_names.append(role.name)
     
-    return UserRead.model_validate({**user.model_dump(), "roles": role_names})
+    return UserRead.model_validate({**user.model_dump(), "id": str(user.id), "roles": role_names})
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
