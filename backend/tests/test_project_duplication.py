@@ -2,104 +2,103 @@
 Tests for Project and Task Duplication.
 """
 import pytest
-from unittest.mock import Mock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
-from app.services.tasks_duplication import (
-    duplicate_project,
-    duplicate_task,
-)
+from app.services import tasks_duplication
 
 
-def test_duplicate_project(mock_session, mock_project, mock_task):
-    """Test duplicating a project."""
-    from app.models import Project, Task
-    
-    # Mock get project
-    mock_session.get.return_value = mock_project
-    
-    # Mock create_project
-    new_project = Mock(spec=Project)
-    new_project.id = 2
-    new_project.name = f"{mock_project.name} (Copy)"
-    
-    # Mock list tasks
-    mock_session.exec.return_value.all.return_value = [mock_task]
-    
-    with patch("app.services.tasks_duplication.create_project") as mock_create_project:
-        mock_create_project.return_value = new_project
-        
-        with patch("app.services.tasks_duplication.create_task") as mock_create_task:
-            new_task = Mock(spec=Task)
-            new_task.id = 2
-            mock_create_task.return_value = new_task
-            
-            result = duplicate_project(
-                mock_session,
-                mock_project.tenant_id,
-                mock_project.id,
-                None,
-                1
-            )
-            
-            assert result is not None
-            assert result.id == new_project.id
+class DummyQuery:
+    def __init__(self, result):
+        self._result = result
+
+    async def to_list(self):
+        return self._result
 
 
-def test_duplicate_task(mock_session, mock_task):
-    """Test duplicating a task."""
-    from app.models.tasks import Task
-    
-    # Mock get_task
-    def get_task_side_effect(session, tenant_id, task_id):
-        if task_id == mock_task.id:
-            return mock_task
-        return None
-    
-    with patch("app.services.tasks_duplication.get_task") as mock_get_task:
-        mock_get_task.side_effect = get_task_side_effect
-        
-        with patch("app.services.tasks_duplication.create_task") as mock_create_task:
-            new_task = Mock(spec=Task)
-            new_task.id = 2
-            new_task.title = f"{mock_task.title} (Copy)"
-            mock_create_task.return_value = new_task
-            
-            result = duplicate_task(
-                mock_session,
-                mock_task.tenant_id,
-                mock_task.id,
-                None,
-                True,
-                1
-            )
-            
-            assert result is not None
-            assert result.id == new_task.id
+@pytest.mark.asyncio
+async def test_duplicate_project(monkeypatch):
+    valid_project_id = "507f1f77bcf86cd799439011"
+    original_project = SimpleNamespace(
+        id=valid_project_id,
+        tenant_id="tenant-1",
+        name="Project A",
+        description="",
+        client_id=None,
+        budget=None,
+        start_date=None,
+        deadline=None,
+        status=None,
+    )
+    new_project = SimpleNamespace(id="proj-2")
+    original_task = SimpleNamespace(id="task-1")
+
+    class DummyProjectModel:
+        id = object()
+        tenant_id = object()
+
+        @staticmethod
+        async def find_one(*args, **kwargs):
+            return original_project
+
+    class DummyTaskModel:
+        tenant_id = object()
+        project_id = object()
+        parent_id = object()
+
+        @staticmethod
+        def find(*args, **kwargs):
+            return None
+
+    monkeypatch.setattr(tasks_duplication, "Project", DummyProjectModel)
+    monkeypatch.setattr(tasks_duplication, "Task", DummyTaskModel)
+    monkeypatch.setattr(tasks_duplication, "create_project", AsyncMock(return_value=new_project))
+
+    call_count = {"count": 0}
+
+    def fake_find(*args, **kwargs):
+        call_count["count"] += 1
+        if call_count["count"] == 1:
+            return DummyQuery([original_task])
+        return DummyQuery([])
+
+    monkeypatch.setattr(tasks_duplication.Task, "find", fake_find)
+    monkeypatch.setattr(tasks_duplication, "_duplicate_task", AsyncMock(return_value=SimpleNamespace(id="task-2")))
+
+    result = await tasks_duplication.duplicate_project("tenant-1", valid_project_id, "user-1")
+    assert result == new_project
 
 
+@pytest.mark.asyncio
+async def test_duplicate_task_with_subtasks(monkeypatch):
+    original_task = SimpleNamespace(
+        id="task-1",
+        title="Task A",
+        description="",
+        notes="",
+        status_id=None,
+        priority_id=None,
+        project_id="proj-1",
+        start_date=None,
+        due_date=None,
+        completion_percentage=0,
+        billing_type=None,
+        client_can_discuss=False,
+        assignee_ids=[],
+    )
+    new_task = SimpleNamespace(id="task-2")
 
+    monkeypatch.setattr(tasks_duplication, "get_task", AsyncMock(return_value=original_task))
+    monkeypatch.setattr(tasks_duplication, "create_task", AsyncMock(return_value=new_task))
+    class DummyTaskModel:
+        tenant_id = object()
+        parent_id = object()
 
+        @staticmethod
+        def find(*args, **kwargs):
+            return DummyQuery([])
 
+    monkeypatch.setattr(tasks_duplication, "Task", DummyTaskModel)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    result = await tasks_duplication.duplicate_task_with_subtasks("tenant-1", "task-1", "user-1")
+    assert result == new_task

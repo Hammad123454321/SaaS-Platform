@@ -20,12 +20,22 @@ DEFAULT_ROLES: list[RoleDef] = [
             PermissionCode.MANAGE_VENDOR_CREDENTIALS,
             PermissionCode.VIEW_BILLING,
             PermissionCode.ACCESS_MODULES,  # Required to access module features like Tasks
+            PermissionCode.POS_ACCESS,
+            PermissionCode.POS_PROCESS_SALES,
+            PermissionCode.POS_MANAGE_REGISTERS,
+            PermissionCode.POS_MANAGE_REFUNDS,
+            PermissionCode.POS_MANAGE_INVENTORY,
+            PermissionCode.POS_MANAGE_CATALOG,
+            PermissionCode.POS_VIEW_ANALYTICS,
         ],
     ),
     RoleDef(
         "staff",
         permissions=[
             PermissionCode.ACCESS_MODULES,
+            PermissionCode.POS_ACCESS,
+            PermissionCode.POS_PROCESS_SALES,
+            PermissionCode.POS_MANAGE_REGISTERS,
         ],
     ),
 ]

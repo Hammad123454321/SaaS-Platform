@@ -12,6 +12,7 @@ export type UserInfo = {
   id?: string | number;  // Mongo IDs are strings
   email: string;
   is_super_admin?: boolean;
+  is_owner?: boolean;
   roles?: string[];
 };
 
@@ -88,4 +89,3 @@ export const useSessionStore = create<SessionState>()(
     }
   )
 );
-

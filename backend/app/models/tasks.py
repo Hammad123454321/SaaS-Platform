@@ -9,7 +9,8 @@ from typing import Optional, List
 from enum import Enum
 
 from beanie import Document
-from pydantic import Field
+from pydantic import Field, field_validator
+from bson.decimal128 import Decimal128
 
 
 # ========== Enums ==========
@@ -128,6 +129,13 @@ class Project(Document):
             "tenant_id",
             "client_id",
         ]
+
+    @field_validator("budget", mode="before")
+    @classmethod
+    def _coerce_budget_decimal128(cls, value):
+        if isinstance(value, Decimal128):
+            return value.to_decimal()
+        return value
 
 
 class TaskStatus(Document):

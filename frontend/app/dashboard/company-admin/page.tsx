@@ -8,12 +8,14 @@ import {
   Users, CheckSquare, CreditCard, LayoutDashboard, 
   Plus, Bell, Bot, Send, ArrowRight, Sparkles,
   TrendingUp, Calendar, LogOut, Mail, Loader2, X,
-  MessageSquare
+  MessageSquare, DollarSign, Receipt, Wallet
 } from "lucide-react";
 
 // Charts
 import { ModuleUsageChart } from "@/components/dashboard/charts/ModuleUsageChart";
 import { TaskTrendChart } from "@/components/dashboard/charts/TaskTrendChart";
+import { PosSalesTrendChart } from "@/components/dashboard/charts/PosSalesTrendChart";
+import { PosPaymentBreakdownChart } from "@/components/dashboard/charts/PosPaymentBreakdownChart";
 
 // Widgets
 import { StatCard } from "@/components/dashboard/widgets/StatCard";
@@ -38,6 +40,13 @@ import {
   sendAIChatMessage,
   AIChatMessage,
 } from "@/hooks/useDashboard";
+import {
+  usePosAnalyticsKpis,
+  usePosAnalyticsTrends,
+  usePosAnalyticsTopProducts,
+  usePosAnalyticsPayments,
+} from "@/hooks/usePos";
+import { formatCurrency } from "@/lib/pos-utils";
 
 export default function CompanyAdminDashboard() {
   const { user, entitlements, clearSession } = useSessionStore();
@@ -49,6 +58,11 @@ export default function CompanyAdminDashboard() {
     { role: "assistant", content: "Hello! I'm your AI business assistant. I can help you manage tasks, check your data, and provide insights. How can I help you today?" }
   ]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const today = new Date();
+  const defaultEnd = today.toISOString().slice(0, 10);
+  const defaultStart = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [posStartDate, setPosStartDate] = useState(defaultStart);
+  const [posEndDate, setPosEndDate] = useState(defaultEnd);
 
   // Scroll to bottom when chat updates
   useEffect(() => {
@@ -110,6 +124,12 @@ export default function CompanyAdminDashboard() {
   const { data: deadlines, isLoading: deadlinesLoading } = useCompanyUpcomingDeadlines(5);
   const { data: activity, isLoading: activityLoading } = useCompanyActivity(10);
   const { data: modules, isLoading: modulesLoading } = useCompanyModules();
+  const isOwner = !!user?.is_owner;
+
+  const { data: posKpis } = usePosAnalyticsKpis(isOwner ? posStartDate : "", isOwner ? posEndDate : "");
+  const { data: posTrends } = usePosAnalyticsTrends(isOwner ? posStartDate : "", isOwner ? posEndDate : "");
+  const { data: posTopProducts } = usePosAnalyticsTopProducts(isOwner ? posStartDate : "", isOwner ? posEndDate : "");
+  const { data: posPayments } = usePosAnalyticsPayments(isOwner ? posStartDate : "", isOwner ? posEndDate : "");
 
   const loading = statsLoading;
 
@@ -441,6 +461,103 @@ export default function CompanyAdminDashboard() {
               </div>
             </div>
           </div>
+
+          {isOwner && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">POS Analytics</h3>
+                  <p className="text-sm text-gray-500">Owner-only sales performance</p>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={posStartDate}
+                    onChange={(e) => setPosStartDate(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                  />
+                  <input
+                    type="date"
+                    value={posEndDate}
+                    onChange={(e) => setPosEndDate(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  title="Gross Sales"
+                  value={formatCurrency(posKpis?.gross_sales_cents || 0)}
+                  icon={<DollarSign className="h-6 w-6 text-white" />}
+                  gradient="from-purple-500 to-pink-500"
+                />
+                <StatCard
+                  title="Net Sales"
+                  value={formatCurrency(posKpis?.net_sales_cents || 0)}
+                  icon={<Wallet className="h-6 w-6 text-white" />}
+                  gradient="from-emerald-500 to-teal-500"
+                />
+                <StatCard
+                  title="Refunds"
+                  value={formatCurrency(posKpis?.refunds_cents || 0)}
+                  icon={<Receipt className="h-6 w-6 text-white" />}
+                  gradient="from-rose-500 to-orange-500"
+                />
+                <StatCard
+                  title="Avg Order"
+                  value={formatCurrency(posKpis?.avg_order_cents || 0)}
+                  icon={<TrendingUp className="h-6 w-6 text-white" />}
+                  gradient="from-blue-500 to-cyan-500"
+                />
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="glass rounded-2xl p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-semibold text-gray-900">Sales Trend</h4>
+                    <span className="text-sm text-gray-500">Daily</span>
+                  </div>
+                  {posTrends && posTrends.length > 0 ? (
+                    <PosSalesTrendChart data={posTrends} />
+                  ) : (
+                    <div className="h-[220px] flex items-center justify-center text-gray-400">
+                      No sales data
+                    </div>
+                  )}
+                </div>
+                <div className="glass rounded-2xl p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-semibold text-gray-900">Payment Methods</h4>
+                  </div>
+                  {posPayments && posPayments.length > 0 ? (
+                    <PosPaymentBreakdownChart data={posPayments} />
+                  ) : (
+                    <div className="h-[220px] flex items-center justify-center text-gray-400">
+                      No payment data
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="glass rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-gray-900">Top Products</h4>
+                </div>
+                <div className="space-y-3">
+                  {(posTopProducts || []).map((item: any) => (
+                    <div key={`${item.product_id}-${item.variant_id}`} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700">{item.name}</span>
+                      <span className="text-gray-900 font-medium">{formatCurrency(item.sales_cents)}</span>
+                    </div>
+                  ))}
+                  {posTopProducts?.length === 0 && (
+                    <p className="text-sm text-gray-500">No product data available.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* AI Insights Section */}
           <div className="grid gap-4 lg:grid-cols-2">

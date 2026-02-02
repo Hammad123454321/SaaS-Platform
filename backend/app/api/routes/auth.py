@@ -286,6 +286,7 @@ async def me(
         "email": current_user.email,
         "is_active": current_user.is_active,
         "is_super_admin": current_user.is_super_admin,
+        "is_owner": current_user.is_owner,
         "roles": role_names,
     }
     logger.info(f"Returning response: {response_data}")
@@ -582,4 +583,3 @@ def get_verification_status(
         email_verified=current_user.email_verified,
         email=current_user.email
     )
-

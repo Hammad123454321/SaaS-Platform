@@ -2,137 +2,85 @@
 Tests for Time Tracking operations.
 """
 import pytest
-from unittest.mock import Mock
-from datetime import date, datetime
-from decimal import Decimal
-from fastapi import HTTPException
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
-from app.services.tasks_time import (
-    create_time_entry,
-    list_time_entries,
-    start_time_tracker,
-    stop_time_tracker,
-    get_time_report,
-)
+from app.services import tasks_time
+
+VALID_TASK_ID = "507f1f77bcf86cd799439012"
 
 
-def test_create_time_entry(mock_session, mock_task, mock_user):
-    """Test creating a time entry."""
-    from app.models.tasks import TimeEntry
-    
-    time_data = {
-        "hours": Decimal("2.5"),
-        "date": date.today(),
-        "description": "Worked on task",
-        "is_billable": True,
-    }
-    
-    mock_session.get.return_value = mock_task
-    
-    created_entry = Mock(spec=TimeEntry)
-    created_entry.id = 1
-    created_entry.hours = time_data["hours"]
-    
-    def add_side_effect(obj):
-        if isinstance(obj, TimeEntry):
-            obj.id = 1
-    
-    mock_session.add.side_effect = add_side_effect
-    
-    result = create_time_entry(
-        mock_session,
-        mock_task.tenant_id,
-        mock_task.id,
-        mock_user.id,
-        time_data
-    )
-    
+@pytest.mark.asyncio
+async def test_create_time_entry_success(monkeypatch):
+    task = SimpleNamespace(id=VALID_TASK_ID, tenant_id="tenant-1")
+
+    class DummyTaskModel:
+        id = object()
+        tenant_id = object()
+
+        @staticmethod
+        async def find_one(*args, **kwargs):
+            return task
+
+    inserts = []
+
+    class DummyTimeEntry:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def insert(self):
+            inserts.append(self.kwargs)
+
+    monkeypatch.setattr(tasks_time, "Task", DummyTaskModel)
+    monkeypatch.setattr(tasks_time, "TimeEntry", DummyTimeEntry)
+
+    result = await tasks_time.create_time_entry("tenant-1", VALID_TASK_ID, "user-1", {"hours": 1})
     assert result is not None
-    mock_session.add.assert_called()
-    mock_session.commit.assert_called()
+    assert len(inserts) == 1
 
 
-def test_start_time_tracker(mock_session, mock_user, mock_task):
-    """Test starting a time tracker."""
-    from app.models.tasks import TimeTracker
-    
-    # Mock no active tracker
-    mock_session.exec.return_value.first.return_value = None
-    mock_session.get.return_value = mock_task
-    
-    created_tracker = Mock(spec=TimeTracker)
-    created_tracker.id = 1
-    created_tracker.is_running = True
-    
-    def add_side_effect(obj):
-        if isinstance(obj, TimeTracker):
-            obj.id = 1
-            obj.is_running = True
-    
-    mock_session.add.side_effect = add_side_effect
-    
-    result = start_time_tracker(
-        mock_session,
-        mock_user.tenant_id,
-        mock_user.id,
-        mock_task.id,
-        "Working on task"
-    )
-    
-    assert result is not None
-    assert result.is_running is True
-    mock_session.add.assert_called()
-    mock_session.commit.assert_called()
+@pytest.mark.asyncio
+async def test_start_and_stop_time_tracker(monkeypatch):
+    class DummyTaskModel:
+        id = object()
+        tenant_id = object()
 
+        @staticmethod
+        async def find_one(*args, **kwargs):
+            return SimpleNamespace(id=VALID_TASK_ID, tenant_id="tenant-1")
 
-def test_stop_time_tracker(mock_session, mock_user):
-    """Test stopping a time tracker."""
-    from app.models.tasks import TimeTracker
-    
-    tracker = Mock(spec=TimeTracker)
-    tracker.id = 1
-    tracker.is_running = True
-    tracker.start_date_time = datetime.utcnow()
-    tracker.task_id = 1
-    tracker.user_id = mock_user.id
-    
-    mock_session.get.return_value = tracker
-    
-    result = stop_time_tracker(
-        mock_session,
-        mock_user.tenant_id,
-        tracker.id,
-        mock_user.id
-    )
-    
+    class DummyTrackerModel:
+        tenant_id = object()
+        user_id = object()
+        is_running = object()
+        id = object()
+
+        @staticmethod
+        async def find_one(*args, **kwargs):
+            return None
+
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+            self.id = "507f1f77bcf86cd799439013"
+
+        async def insert(self):
+            return None
+
+        async def save(self):
+            return None
+
+    monkeypatch.setattr(tasks_time, "Task", DummyTaskModel)
+    monkeypatch.setattr(tasks_time, "TimeTracker", DummyTrackerModel)
+    monkeypatch.setattr(tasks_time, "create_time_entry", AsyncMock(return_value=None))
+
+    tracker = await tasks_time.start_time_tracker("tenant-1", "user-1", VALID_TASK_ID, "Working")
+    assert tracker.is_running is True
+
+    # Patch find_one to return tracker for stop
+    async def find_one_stop(*args, **kwargs):
+        return tracker
+
+    monkeypatch.setattr(DummyTrackerModel, "find_one", find_one_stop)
+
+    result = await tasks_time.stop_time_tracker("tenant-1", "507f1f77bcf86cd799439013", "user-1")
     assert result.is_running is False
-    mock_session.add.assert_called()
-    mock_session.commit.assert_called()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

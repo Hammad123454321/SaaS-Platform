@@ -4,7 +4,7 @@ from beanie import PydanticObjectId
 from fastapi import Depends, HTTPException, status
 
 from app.api.deps import get_current_user
-from app.models import Permission, RolePermission, UserRole, User
+from app.models import Permission, RolePermission, UserRole, User, Role
 from app.models.role import PermissionCode
 from app.config import is_development
 
@@ -30,31 +30,31 @@ def require_permission(permission: PermissionCode) -> Callable:
                 status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden."
             )
 
-        # Use MongoDB-style $in query for Beanie
+        # Use MongoDB-style $in query for Beanie (RolePermission mapping)
         role_permissions = await RolePermission.find(
             {"role_id": {"$in": role_ids}}
         ).to_list()
         permission_ids = [rp.permission_id for rp in role_permissions]
 
-        if not permission_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden."
-            )
+        if permission_ids:
+            permission_object_ids = [PydanticObjectId(pid) for pid in permission_ids]
+            permission_docs = await Permission.find(
+                {"_id": {"$in": permission_object_ids}}
+            ).to_list()
+            codes = {p.code for p in permission_docs}
+            if permission.value in codes:
+                return current_user
 
-        # Convert permission_ids to ObjectIds for querying
-        permission_object_ids = [PydanticObjectId(pid) for pid in permission_ids]
-        permission_docs = await Permission.find(
-            {"_id": {"$in": permission_object_ids}}
-        ).to_list()
-        codes = {p.code for p in permission_docs}
-
-        if permission.value in codes:
+        # Fallback to permission_codes stored directly on Role documents
+        role_object_ids = [PydanticObjectId(rid) for rid in role_ids]
+        roles = await Role.find({"_id": {"$in": role_object_ids}}).to_list()
+        role_codes = {code for role in roles for code in role.permission_codes}
+        if permission.value in role_codes:
             return current_user
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
 
     return _checker
-
 
 
 

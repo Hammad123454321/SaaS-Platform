@@ -45,6 +45,7 @@ export function AppShell({ children }: Props) {
               id: me.data.id,
               email: me.data.email,
               is_super_admin: me.data.is_super_admin,
+              is_owner: me.data.is_owner,
               roles: me.data.roles || [],
             },
           });
@@ -86,4 +87,3 @@ export function AppShell({ children }: Props) {
     </div>
   );
 }
-

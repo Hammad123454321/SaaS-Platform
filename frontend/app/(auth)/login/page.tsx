@@ -106,6 +106,7 @@ function LoginForm() {
             id: meData.id,
             email: meData.email, 
             is_super_admin: meData.is_super_admin, 
+            is_owner: meData.is_owner,
             roles: meData.roles || [] 
           };
         }
@@ -246,4 +247,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-

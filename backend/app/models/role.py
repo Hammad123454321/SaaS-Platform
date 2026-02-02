@@ -14,6 +14,13 @@ class PermissionCode(StrEnum):
     ACCESS_MODULES = "access_modules"
     IMPERSONATE_USER = "impersonate_user"
     VIEW_PLATFORM_STATS = "view_platform_stats"
+    POS_ACCESS = "pos_access"
+    POS_PROCESS_SALES = "pos_process_sales"
+    POS_MANAGE_REGISTERS = "pos_manage_registers"
+    POS_MANAGE_REFUNDS = "pos_manage_refunds"
+    POS_MANAGE_INVENTORY = "pos_manage_inventory"
+    POS_MANAGE_CATALOG = "pos_manage_catalog"
+    POS_VIEW_ANALYTICS = "pos_view_analytics"
 
     @property
     def description(self) -> str:
@@ -25,6 +32,13 @@ class PermissionCode(StrEnum):
             self.ACCESS_MODULES: "Access module data and actions",
             self.IMPERSONATE_USER: "Impersonate tenant users (audited)",
             self.VIEW_PLATFORM_STATS: "View platform-wide statistics (Super Admin only)",
+            self.POS_ACCESS: "Access the POS module",
+            self.POS_PROCESS_SALES: "Create and finalize POS sales",
+            self.POS_MANAGE_REGISTERS: "Open/close POS registers and cash movements",
+            self.POS_MANAGE_REFUNDS: "Process POS refunds and returns",
+            self.POS_MANAGE_INVENTORY: "Adjust inventory and view stock",
+            self.POS_MANAGE_CATALOG: "Manage POS catalog items and pricing",
+            self.POS_VIEW_ANALYTICS: "View POS analytics and reports",
         }
         return descriptions[self]
 

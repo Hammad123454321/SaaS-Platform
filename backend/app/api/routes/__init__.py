@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import health, auth, entitlements, billing, vendor, modules, ai, onboarding, admin, company, users, tasks, onboarding_stages, compliance_stages, workflows_stages, dashboard
+from app.api.routes import health, auth, entitlements, billing, vendor, modules, ai, onboarding, admin, company, users, tasks, pos, onboarding_stages, compliance_stages, workflows_stages, dashboard
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -9,6 +9,7 @@ api_router.include_router(entitlements.router)
 api_router.include_router(billing.router)
 api_router.include_router(vendor.router)
 api_router.include_router(tasks.router)  # Tasks module has dedicated routes - must be before modules.router
+api_router.include_router(pos.router)  # POS module has dedicated routes - must be before modules.router
 api_router.include_router(modules.router)
 api_router.include_router(ai.router)
 api_router.include_router(onboarding.router)
@@ -19,4 +20,3 @@ api_router.include_router(admin.router)
 api_router.include_router(company.router)
 api_router.include_router(users.router)
 api_router.include_router(dashboard.router)  # Dashboard APIs
-
