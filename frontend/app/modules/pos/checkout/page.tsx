@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { usePosSale } from "@/hooks/usePos";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+export const dynamic = "force-dynamic";
 
 type PaymentLine = {
   method: "cash" | "card" | "other";
@@ -35,7 +36,7 @@ type ShippingAddress = {
   country: string;
 };
 
-export default function POSCheckoutPage() {
+function POSCheckoutContent() {
   const router = useRouter();
   const params = useSearchParams();
   const saleId = params.get("saleId");
@@ -656,5 +657,17 @@ export default function POSCheckoutPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function POSCheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 text-sm text-gray-500">Loading checkout…</div>
+      }
+    >
+      <POSCheckoutContent />
+    </Suspense>
   );
 }

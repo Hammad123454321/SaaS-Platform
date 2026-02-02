@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useFinancialSetup, useCreateFinancialSetup, useConfirmFinancialSetup } from "@/hooks/compliance/useFinancialSetup";
@@ -74,25 +74,15 @@ export default function OnboardingPage() {
   const { mutate: createFinancialSetupMutate } = useCreateFinancialSetup();
   const { mutate: confirmFinancialSetupMutate } = useConfirmFinancialSetup();
 
-  // Check verification status and owner status on mount
-  useEffect(() => {
-    checkVerificationStatus();
-    checkOwnerStatus();
-    loadRoles();
-    loadInvitations();
-    loadFinancialSetup();
-    checkDevelopmentMode();
-  }, []);
-
-  const checkDevelopmentMode = () => {
+  const checkDevelopmentMode = useCallback(() => {
     // Check if we're in development mode (check environment or API)
     const isDev = process.env.NODE_ENV === "development" || 
                   window.location.hostname === "localhost" ||
                   window.location.hostname === "127.0.0.1";
     setIsDevelopmentMode(isDev);
-  };
+  }, []);
 
-  const checkVerificationStatus = async () => {
+  const checkVerificationStatus = useCallback(async () => {
     try {
       const res = await api.get("/auth/verification-status");
       if (!res.data.email_verified) {
@@ -109,9 +99,9 @@ export default function OnboardingPage() {
         console.error("Failed to check verification status:", err);
       }
     }
-  };
+  }, [router]);
 
-  const checkOwnerStatus = async () => {
+  const checkOwnerStatus = useCallback(async () => {
     try {
       const res = await api.get("/onboarding/owner/status");
       setOwnerStatus(res.data);
@@ -121,9 +111,9 @@ export default function OnboardingPage() {
     } catch (err) {
       console.error("Failed to check owner status:", err);
     }
-  };
+  }, []);
 
-  const loadBusinessProfile = async () => {
+  const loadBusinessProfile = useCallback(async () => {
     try {
       const res = await api.get("/onboarding/business-profile");
       setBusinessProfile({
@@ -145,27 +135,27 @@ export default function OnboardingPage() {
         console.error("Failed to load business profile:", err);
       }
     }
-  };
+  }, []);
 
-  const loadRoles = async () => {
+  const loadRoles = useCallback(async () => {
     try {
       const res = await api.get("/onboarding/roles");
       setRoles(res.data);
     } catch (err) {
       console.error("Failed to load roles:", err);
     }
-  };
+  }, []);
 
-  const loadInvitations = async () => {
+  const loadInvitations = useCallback(async () => {
     try {
       const res = await api.get("/onboarding/invitations");
       setInvitations(res.data);
     } catch (err) {
       console.error("Failed to load invitations:", err);
     }
-  };
+  }, []);
   
-  const loadFinancialSetup = async () => {
+  const loadFinancialSetup = useCallback(async () => {
     try {
       const res = await api.get("/compliance/financial-setup");
       setFinancialSetup({
@@ -179,7 +169,17 @@ export default function OnboardingPage() {
         console.error("Failed to load financial setup:", err);
       }
     }
-  };
+  }, []);
+
+  // Check verification status and owner status on mount
+  useEffect(() => {
+    checkVerificationStatus();
+    checkOwnerStatus();
+    loadRoles();
+    loadInvitations();
+    loadFinancialSetup();
+    checkDevelopmentMode();
+  }, [checkVerificationStatus, checkOwnerStatus, loadRoles, loadInvitations, loadFinancialSetup, checkDevelopmentMode]);
 
   const handleEnableModules = async () => {
     if (selectedModules.length === 0) {
@@ -277,7 +277,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     loadBusinessProfile();
-  }, []);
+  }, [loadBusinessProfile]);
 
   const handleBusinessProfileSubmit = async () => {
     if (!businessProfile.legal_business_name || !businessProfile.province) {

@@ -918,7 +918,7 @@ export default function POSManagementPage() {
                     )}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {transfer.from_location_id} -> {transfer.to_location_id}
+                    {transfer.from_location_id} {"->"} {transfer.to_location_id}
                   </div>
                 </div>
               ))}

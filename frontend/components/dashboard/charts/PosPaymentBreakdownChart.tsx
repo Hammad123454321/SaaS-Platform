@@ -5,7 +5,7 @@ import { formatCurrency } from "@/lib/pos-utils";
 
 const COLORS = ["#9333ea", "#3b82f6", "#22c55e", "#f97316", "#ec4899"]; // purple, blue, green, orange, pink
 
-interface PaymentItem {
+interface PaymentItem extends Record<string, unknown> {
   method: string;
   amount_cents: number;
 }

@@ -14,6 +14,7 @@ from app.models.pos import (
     FulfillmentStatus,
     CampaignStatus,
     LoyaltyLedgerReason,
+    FeedbackStatus,
     PurchaseOrderStatus,
     StockTransferStatus,
     StockCountStatus,

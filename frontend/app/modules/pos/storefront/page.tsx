@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import Image from "next/image";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/pos-utils";
 import { Button } from "@/components/ui/button";
@@ -99,12 +100,14 @@ export default function POSStorefrontPreview() {
         {(products || []).map((product) => (
           <Card key={`${product.product_id}-${product.variant_id || "base"}`} className="p-4 space-y-2">
             {product.image_url && (
-              <div className="h-32 w-full overflow-hidden rounded-md bg-gray-100">
-                <img
+              <div className="relative h-32 w-full overflow-hidden rounded-md bg-gray-100">
+                <Image
                   src={product.image_url}
                   alt={product.name}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
+                  fill
+                  sizes="(max-width: 640px) 100vw, 33vw"
+                  className="object-cover"
+                  unoptimized
                 />
               </div>
             )}

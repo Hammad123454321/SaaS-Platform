@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { api } from "@/lib/api";
 import Link from "next/link";
 
@@ -17,13 +17,7 @@ function VerifyEmailForm() {
   const [message, setMessage] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
 
-  useEffect(() => {
-    if (token) {
-      verifyEmail(token);
-    }
-  }, [token]);
-
-  const verifyEmail = async (verificationToken: string) => {
+  const verifyEmail = useCallback(async (verificationToken: string) => {
     setStatus("verifying");
     try {
       const res = await api.post("/auth/verify-email", { token: verificationToken });
@@ -38,7 +32,13 @@ function VerifyEmailForm() {
       setStatus("error");
       setMessage(err?.response?.data?.detail || "Verification failed. The link may be invalid or expired.");
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    if (token) {
+      verifyEmail(token);
+    }
+  }, [token, verifyEmail]);
 
   const handleResend = async () => {
     if (!email) {
@@ -71,7 +71,7 @@ function VerifyEmailForm() {
               </div>
               <h1 className="text-2xl font-semibold text-gray-900">Check Your Email</h1>
               <p className="text-sm text-gray-600">
-                We've sent a verification link to <strong>{email || "your email"}</strong>
+                We&apos;ve sent a verification link to <strong>{email || "your email"}</strong>
               </p>
               <p className="mt-2 text-xs text-gray-500">
                 Please click the link in the email to verify your account. The link will expire in 24 hours.
@@ -166,4 +166,3 @@ export default function VerifyEmailPage() {
     </Suspense>
   );
 }
-

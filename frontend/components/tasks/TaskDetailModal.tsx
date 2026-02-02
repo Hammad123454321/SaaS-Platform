@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import {
   X,
@@ -46,14 +46,7 @@ export function TaskDetailModal({
   const [threads, setThreads] = useState<any[]>([]);
   const [activeTracker, setActiveTracker] = useState<any>(null);
 
-  useEffect(() => {
-    if (isOpen && taskId) {
-      loadTaskData();
-      loadActiveTracker();
-    }
-  }, [isOpen, taskId]);
-
-  const loadTaskData = async () => {
+  const loadTaskData = useCallback(async () => {
     setLoading(true);
     try {
       const [taskRes, subtasksRes, timeRes, docsRes, threadsRes] = await Promise.all([
@@ -74,16 +67,23 @@ export function TaskDetailModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskId]);
 
-  const loadActiveTracker = async () => {
+  const loadActiveTracker = useCallback(async () => {
     try {
       const res = await api.get("/modules/tasks/time-tracker/active");
       setActiveTracker(res.data?.data);
     } catch (err) {
       setActiveTracker(null);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && taskId) {
+      loadTaskData();
+      loadActiveTracker();
+    }
+  }, [isOpen, taskId, loadTaskData, loadActiveTracker]);
 
   const handleStartTracker = async () => {
     try {
@@ -568,7 +568,6 @@ function ThreadsView({
     </div>
   );
 }
-
 
 
 

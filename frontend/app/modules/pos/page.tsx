@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Plus, Minus } from "lucide-react";
 import { usePosCategories, usePosProducts } from "@/hooks/usePos";
@@ -119,8 +120,8 @@ export default function POSNewSalePage() {
           variant_id: item.variant_id,
           quantity: item.quantity,
           discount_type: item.discount_type,
-          discount_bps: item.discount_type === "percent" ? item.discount_value * 100 : undefined,
-          discount_cents: item.discount_type === "fixed" ? item.discount_value : undefined,
+          discount_bps: item.discount_type === "percent" ? (item.discount_value ?? 0) * 100 : undefined,
+          discount_cents: item.discount_type === "fixed" ? item.discount_value ?? 0 : undefined,
         })),
         order_discount: orderDiscountValue
           ? {
@@ -173,12 +174,14 @@ export default function POSNewSalePage() {
               className="p-4 flex flex-col gap-2"
             >
               {product.image_url && (
-                <div className="h-24 w-full overflow-hidden rounded-md bg-gray-100">
-                  <img
+                <div className="relative h-24 w-full overflow-hidden rounded-md bg-gray-100">
+                  <Image
                     src={product.image_url}
                     alt={product.name}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
+                    fill
+                    sizes="(max-width: 640px) 100vw, 50vw"
+                    className="object-cover"
+                    unoptimized
                   />
                 </div>
               )}

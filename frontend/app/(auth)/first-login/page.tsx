@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useSessionStore } from "@/lib/store";
@@ -22,7 +22,7 @@ export default function FirstLoginPage() {
   const [loading, setLoading] = useState(false);
   
   const { data: hrPoliciesData, isLoading: loadingPolicies } = useHRPolicies();
-  const hrPolicies = hrPoliciesData || [];
+  const hrPolicies = useMemo(() => hrPoliciesData || [], [hrPoliciesData]);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -256,4 +256,3 @@ export default function FirstLoginPage() {
     </div>
   );
 }
-
